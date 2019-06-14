@@ -1,0 +1,11 @@
+node_modules
+coverage
+dist
+lib
+es
+package-lock.json
+yarn.lock
+*.swp
+*.log
+.env
+stats.json

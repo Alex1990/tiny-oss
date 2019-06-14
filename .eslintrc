@@ -1,0 +1,18 @@
+{
+  "extends": "airbnb-base",
+  "env": {
+    "browser": true,
+    "node": true,
+    "jest": true
+  },
+  "globals": {
+    $: true,
+    TinyOSS: true
+  },
+  "rules": {
+    "import/no-extraneous-dependencies": 0,
+    "no-cond-assign": 0,
+    "no-plusplus": 0,
+    "no-bitwise": 0
+  }
+}

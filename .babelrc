@@ -1,0 +1,28 @@
+{
+  "presets": [
+    ["@babel/preset-env", {
+      "targets": {
+        "browsers": ["last 4 versions", "ie >= 9", ">= 0.5%"]
+      },
+      "loose": true
+    }]
+  ],
+  "plugins": [
+    "@babel/plugin-proposal-object-rest-spread",
+    "@babel/plugin-transform-runtime"
+  ],
+  "env": {
+    "commonjs": {
+      "plugins": [
+        ["@babel/plugin-transform-modules-commonjs", { "loose": true }]
+      ]
+    },
+    "test": {
+      "presets": [
+        ["@babel/preset-env", {
+          "targets": { node: "current" }
+        }]
+      ]
+    }
+  }
+}
