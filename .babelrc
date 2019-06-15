@@ -4,6 +4,7 @@
       "targets": {
         "browsers": ["last 4 versions", "ie >= 10", ">= 0.5%"]
       },
+      "modules": false,
       "loose": true
     }]
   ],

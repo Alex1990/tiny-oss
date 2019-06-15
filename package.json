@@ -19,11 +19,11 @@
     "test:watch": "npm test -- --watch",
     "test:cov": "npm test -- --coverage",
     "build": "npm run clean && npm run build:es && npm run build:commonjs && npm run build:umd && npm run build:umd:min",
-    "build:commonjs": "cross-env BABEL_ENV=production babel src --out-dir lib",
-    "build:es": "cross-env BABEL_ENV=es babel src --out-dir es",
-    "build:umd": "cross-env BABEL_ENV=es NODE_ENV=development webpack",
-    "build:umd:min": "cross-env BABEL_ENV=es NODE_ENV=production webpack",
-    "bundle:stats": "cross-env BABEL_ENV=es NODE_ENV=production webpack --profile --json > stats.json",
+    "build:commonjs": "cross-env BABEL_ENV=commonjs babel src --out-dir lib",
+    "build:es": "cross-env babel src --out-dir es",
+    "build:umd": "cross-env NODE_ENV=development webpack",
+    "build:umd:min": "cross-env NODE_ENV=production webpack",
+    "bundle:stats": "cross-env NODE_ENV=production webpack --profile --json > stats.json",
     "serve": "node example/server.js"
   },
   "repository": {
