@@ -1,6 +1,8 @@
 # tiny-oss
 
-A tiny aliyun oss sdk for browser. Less than 10kb (min+gziped).
+A tiny aliyun oss sdk for browser. Less than 10kb (min+gzipped).
+
+**English | [简体中文](README_zh-CN.md)**
 
 ## Installation
 
@@ -57,26 +59,43 @@ new TinyOSS(options)
 
 ### options
 
+Please check [Browser.js offical document](https://help.aliyun.com/document_detail/64095.html?spm=a2c4g.11186623.6.1122.27976928XhTpTr).
+
 * accessKeyId
 * accessKeySecret
-* region
 * bucket
 * endpoint
+* region
+* internal
+* secure
+* timeout
 
 ### put(objectName, blob)
 
-Upload the blob. It returns a Promise object, if the blob is uploaded, the Promise object will be resolved. It some error happened, the Promise object will be rejected with an Error.
+Upload the blob.
 
-* **objectName**: The file name.
-* **blob**: The file.
+#### Arguments
+
+* **objectName (String)**: The object name.
+* **blob (Blob|File)**: The object to be uploaded.
+
+#### Return
+
+* **(Promise)**
 
 ### signatureUrl(objectName, options)
 
-Get a signature url to download file.
+Get a signature url to download the file.
 
-* **objectName**: The file name.
-* **options**:
-  + **options.expires**: The url will be expired after `expires` seconds.
+#### Arguments
+
+* **objectName (String)**: The object name.
+* **[options (Object)]**:
+  + **[options.expires (Number)]**: The url expires (unit: seconds).
+
+#### Return
+
+* **(String)**
 
 ## LICENSE
 
