@@ -48,6 +48,19 @@ new TinyOSS(options)
 
 ### put(objectName, blob)
 
+Upload the blob. It returns a Promise object, if the blob is uploaded, the Promise object will be resolved. It some error happened, the Promise object will be rejected with an Error.
+
+* **objectName**: The file name.
+* **blob**: The file.
+
+### signatureUrl(objectName, options)
+
+Get a signature url to download file.
+
+* **objectName**: The file name.
+* **options**:
+  + **options.expires**: The url will be expired after `expires` seconds.
+
 ## LICENSE
 
 MIT

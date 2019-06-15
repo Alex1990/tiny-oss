@@ -2,8 +2,8 @@ import md5 from 'md5';
 import base64js from 'base64-js';
 import Digest from '../../vendor/digest';
 
-function isBlob(obj) {
-  return Object.prototype.toString.call(obj) === '[object Blob]';
+function unix() {
+  return Math.round(Date.now() / 1000);
 }
 
 function blobToBuffer(blob) {
@@ -83,41 +83,51 @@ function getCanonicalizedResource(bucket = '', objectName = '') {
   return result;
 }
 
-function getAuthorization(options = {}) {
+function getSignature(options = {}) {
   const {
-    verb,
+    type = 'header',
+    verb = '',
     contentMd5 = '',
+    expires = unix() + 3600,
     bucket,
     objectName,
-    accessKeyId,
     accessKeySecret,
-    headers,
+    headers = {},
   } = options;
-  const date = headers['x-oss-date'];
-  const contentType = headers['Content-Type'];
-
-  const data = ([
+  const date = headers['x-oss-date'] || '';
+  const contentType = headers['Content-Type'] || '';
+  const data = [
     verb,
     contentMd5,
     contentType,
-    date,
-    `${getCanonicalizedOSSHeaders(headers)}${getCanonicalizedResource(bucket, objectName)}`,
-  ]).join('\n');
+  ];
+
+  if (type === 'header') {
+    data.push(date);
+  } else {
+    data.push(expires);
+  }
+
+  const canonicalizedOSSHeaders = getCanonicalizedOSSHeaders(headers);
+  const canonicalizedResource = getCanonicalizedResource(bucket, objectName);
+
+  data.push(`${canonicalizedOSSHeaders}${canonicalizedResource}`);
+
+  const text = data.join('\n');
   const hmac = new Digest.HMAC_SHA1();
   hmac.setKey(accessKeySecret);
-  hmac.update(data);
+  hmac.update(text);
   const hashBuf = new Uint8Array(hmac.finalize());
   const signature = base64js.fromByteArray(hashBuf);
-
-  return `OSS ${accessKeyId}:${signature}`;
+  return signature;
 }
 
 export {
-  isBlob,
+  unix,
   blobToBuffer,
   assertOptions,
   getContentMd5,
   getCanonicalizedOSSHeaders,
   getCanonicalizedResource,
-  getAuthorization,
+  getSignature,
 };

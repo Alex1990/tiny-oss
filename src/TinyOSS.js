@@ -1,9 +1,10 @@
 import ajax from './utils/ajax';
 import {
+  unix,
   blobToBuffer,
   assertOptions,
   getContentMd5,
-  getAuthorization,
+  getSignature,
 } from './utils';
 
 export default class TinyOSS {
@@ -56,7 +57,7 @@ export default class TinyOSS {
             accessKeyId,
             accessKeySecret,
           } = this.opts;
-          const authorization = getAuthorization({
+          const signature = getSignature({
             verb,
             contentMd5,
             headers,
@@ -66,7 +67,7 @@ export default class TinyOSS {
             accessKeySecret,
           });
 
-          headers.Authorization = authorization;
+          headers.Authorization = `OSS ${accessKeyId}:${signature}`;
           const protocol = this.opts.secure ? 'https' : 'http';
           const url = `${protocol}://${this.host}/${objectName}`;
 
@@ -80,5 +81,29 @@ export default class TinyOSS {
         .then(resolve)
         .catch(reject);
     });
+  }
+
+  signatureUrl(objectName, { expires = 3600 } = {}) {
+    const {
+      accessKeyId,
+      accessKeySecret,
+      bucket,
+    } = this.opts;
+    const expireUnix = unix() + expires;
+    const signature = getSignature({
+      type: 'url',
+      verb: 'GET',
+      accessKeyId,
+      accessKeySecret,
+      bucket,
+      objectName,
+      expires: expireUnix,
+    });
+    const protocol = this.opts.secure ? 'https' : 'http';
+    let url = `${protocol}://${this.host}/${objectName}`;
+    url += `?OSSAccessKeyId=${accessKeyId}`;
+    url += `&Expires=${expireUnix}`;
+    url += `&Signature=${encodeURIComponent(signature)}`;
+    return url;
   }
 }
