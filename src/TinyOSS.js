@@ -1,3 +1,4 @@
+import objectAssign from 'object-assign';
 import ajax from './utils/ajax';
 import {
   unix,
@@ -11,7 +12,7 @@ export default class TinyOSS {
   constructor(options = {}) {
     assertOptions(options);
 
-    this.opts = Object.assign({
+    this.opts = objectAssign({
       region: 'oss-cn-hangzhou',
       internal: false,
       cname: false,

@@ -15,14 +15,8 @@ $(() => {
           console.error(err);
         });
 
-      oss.signatureUrl(objectName)
-        .then((url) => {
-          console.log('download url: ', url);
-        })
-        .catch((err) => {
-          console.log('get download url failed');
-          console.error(err);
-        });
+      const url = oss.signatureUrl(objectName);
+      console.log('download url: ', url);
     },
   });
 });
