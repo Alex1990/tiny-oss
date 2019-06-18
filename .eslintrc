@@ -6,7 +6,10 @@
     "jest": true
   },
   "globals": {
-    $: true,
+    mocha: true,
+    chai: true,
+    axios: true,
+    OSS: true,
     TinyOSS: true
   },
   "rules": {
