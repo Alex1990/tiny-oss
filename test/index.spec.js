@@ -2,7 +2,9 @@ function getObjectName() {
   return Math.random().toString(16).slice(2) + Date.now();
 }
 
-describe('TinyOSS', () => {
+describe('TinyOSS', function () {
+  this.timeout(30000);
+
   it('should throw if missing options', () => {
     function init() {
       return new TinyOSS();
