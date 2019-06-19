@@ -1,7 +1,5 @@
 # tiny-oss
 
-[![Build Status](https://travis-ci.org/Alex1990/tiny-oss.svg?branch=master)](https://travis-ci.org/Alex1990/tiny-oss)
-
 A tiny aliyun oss sdk for browser. Less than 10kb (min+gzipped).
 
 **English | [简体中文](README_zh-CN.md)**
