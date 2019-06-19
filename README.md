@@ -63,10 +63,10 @@ Please check [Browser.js offical document](https://help.aliyun.com/document_deta
 
 * accessKeyId
 * accessKeySecret
+* stsToken
 * bucket
 * endpoint
 * region
-* internal
 * secure
 * timeout
 

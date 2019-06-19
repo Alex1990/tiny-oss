@@ -63,10 +63,10 @@ new TinyOSS(options)
 
 * accessKeyId
 * accessKeySecret
+* stsToken
 * bucket
 * endpoint
 * region
-* internal
 * secure
 * timeout
 

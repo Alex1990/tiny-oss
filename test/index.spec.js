@@ -1,5 +1,5 @@
 function getObjectName() {
-  return Math.random().toString(16) + Date.now();
+  return Math.random().toString(16).slice(2) + Date.now();
 }
 
 describe('TinyOSS', () => {
@@ -37,7 +37,7 @@ describe('TinyOSS', () => {
   });
 
   it('put', (done) => {
-    const content = 'hello 你好';
+    const content = 'put: hello 你好';
     const objectName = getObjectName();
     let oss = null;
     let tinyOss = null;
@@ -79,7 +79,7 @@ describe('TinyOSS', () => {
   });
 
   it('signatureUrl', (done) => {
-    const content = 'hello 你好';
+    const content = 'signatureUrl: hello 你好';
     const objectName = getObjectName();
     let oss = null;
     let tinyOss = null;
@@ -101,6 +101,92 @@ describe('TinyOSS', () => {
         oss = new OSS({
           accessKeyId,
           accessKeySecret,
+          region,
+          bucket,
+        });
+        const blob = new Blob([content], { type: 'text/plain' });
+        return oss.put(objectName, blob);
+      })
+      .then(() => {
+        const url = tinyOss.signatureUrl(objectName);
+        return axios.get(url, { responseType: 'text' })
+          .then((res) => {
+            expect(res.data).to.equal(content);
+            done();
+          });
+      })
+      .catch((err) => {
+        done(err);
+      });
+  });
+
+  it('put stsToken', (done) => {
+    const content = 'put stsToken: hello 你好';
+    const objectName = getObjectName();
+    let oss = null;
+    let tinyOss = null;
+
+    axios.get('/api/sts')
+      .then((res) => {
+        const {
+          stsToken,
+          region,
+          bucket,
+        } = res.data;
+        tinyOss = new TinyOSS({
+          accessKeyId: stsToken.credentials.AccessKeyId,
+          accessKeySecret: stsToken.credentials.AccessKeySecret,
+          stsToken: stsToken.credentials.SecurityToken,
+          region,
+          bucket,
+        });
+        oss = new OSS({
+          accessKeyId: stsToken.credentials.AccessKeyId,
+          accessKeySecret: stsToken.credentials.AccessKeySecret,
+          stsToken: stsToken.credentials.SecurityToken,
+          region,
+          bucket,
+        });
+        const blob = new Blob([content], { type: 'text/plain' });
+        return tinyOss.put(objectName, blob);
+      })
+      .then(() => {
+        const url = oss.signatureUrl(objectName);
+        return axios.get(url, { responseType: 'text' })
+          .then((res) => {
+            expect(res.data).to.equal(content);
+            done();
+          });
+      })
+      .catch((err) => {
+        done(err);
+      });
+  });
+
+  it('signatureUrl stsToken', (done) => {
+    const content = 'signatureUrl: hello 你好';
+    const objectName = getObjectName();
+    let oss = null;
+    let tinyOss = null;
+
+    axios.get('/api/sts')
+      .then((res) => {
+        const {
+          stsToken,
+          region,
+          bucket,
+        } = res.data;
+        tinyOss = new TinyOSS({
+          accessKeyId: stsToken.credentials.AccessKeyId,
+          accessKeySecret: stsToken.credentials.AccessKeySecret,
+          stsToken: stsToken.credentials.SecurityToken,
+          region,
+          bucket,
+        });
+        oss = new OSS({
+          accessKeyId: stsToken.credentials.AccessKeyId,
+          accessKeySecret: stsToken.credentials.AccessKeySecret,
+          stsToken: stsToken.credentials.SecurityToken,
           region,
           bucket,
         });

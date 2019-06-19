@@ -2,8 +2,19 @@ import md5 from 'md5';
 import base64js from 'base64-js';
 import Digest from '../../vendor/digest';
 
-function unix() {
-  return Math.round(Date.now() / 1000);
+function isDate(obj) {
+  return obj && Object.prototype.toString.call(obj) === '[object Date]' && obj.toString !== 'Invalid Date';
+}
+
+function unix(date) {
+  let d;
+  if (date) {
+    d = new Date(date);
+  }
+  if (!isDate(d)) {
+    d = new Date();
+  }
+  return Math.round(d.getTime() / 1000);
 }
 
 function blobToBuffer(blob) {
@@ -69,18 +80,41 @@ function getCanonicalizedOSSHeaders(headers) {
   return result;
 }
 
-function getCanonicalizedResource(bucket = '', objectName = '') {
-  let result = '';
+function getCanonicalizedResource(bucket = '', objectName = '', parameters) {
+  let resourcePath = '';
   if (bucket) {
-    result += `/${bucket}`;
+    resourcePath += `/${bucket}`;
   }
   if (objectName) {
     if (objectName.charAt(0) !== '/') {
-      result += '/';
+      resourcePath += '/';
     }
-    result += objectName;
+    resourcePath += objectName;
   }
-  return result;
+
+  let canonicalizedResource = `${resourcePath}`;
+  let separatorString = '?';
+
+  if (parameters) {
+    const compareFunc = (entry1, entry2) => {
+      if (entry1[0] > entry2[0]) {
+        return 1;
+      } if (entry1[0] < entry2[0]) {
+        return -1;
+      }
+      return 0;
+    };
+    const processFunc = (key) => {
+      canonicalizedResource += separatorString + key;
+      if (parameters[key]) {
+        canonicalizedResource += `=${parameters[key]}`;
+      }
+      separatorString = '&';
+    };
+    Object.keys(parameters).sort(compareFunc).forEach(processFunc);
+  }
+
+  return canonicalizedResource;
 }
 
 function getSignature(options = {}) {
@@ -93,6 +127,7 @@ function getSignature(options = {}) {
     objectName,
     accessKeySecret,
     headers = {},
+    subResource,
   } = options;
   const date = headers['x-oss-date'] || '';
   const contentType = headers['Content-Type'] || '';
@@ -109,7 +144,7 @@ function getSignature(options = {}) {
   }
 
   const canonicalizedOSSHeaders = getCanonicalizedOSSHeaders(headers);
-  const canonicalizedResource = getCanonicalizedResource(bucket, objectName);
+  const canonicalizedResource = getCanonicalizedResource(bucket, objectName, subResource);
 
   data.push(`${canonicalizedOSSHeaders}${canonicalizedResource}`);
 
