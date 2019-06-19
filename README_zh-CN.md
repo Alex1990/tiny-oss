@@ -1,5 +1,7 @@
 # tiny-oss
 
+[![Build Status](https://travis-ci.org/Alex1990/tiny-oss.svg?branch=master)](https://travis-ci.org/Alex1990/tiny-oss)
+
 用于浏览器端的阿里云 OSS 极简版 SDK。小于 10kb (min+gzipped)
 
 **[English](README.md) | 简体中文**
