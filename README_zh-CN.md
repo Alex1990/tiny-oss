@@ -24,6 +24,8 @@ yarn add tiny-oss
 const oss = new TinyOSS({
   accessKeyId: 'your accessKeyId',
   accessKeySecret: 'your accessKeySecret',
+  // 推荐在浏览器端使用 stsToken 参数
+  stsToken: 'security token',
   region: 'oss-cn-beijing',
   bucket: 'your bucket'
 });
@@ -33,6 +35,8 @@ const blob = new Blob(['hello world'], { type: 'text/plain' });
 // 上传
 oss.put('hello-world', blob);
 ```
+
+更多配置参数或方法参考 [API](#api)。
 
 ## 兼容性
 
