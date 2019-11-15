@@ -80,6 +80,45 @@ describe('TinyOSS', function () {
       });
   });
 
+  it('putSymlink', (done) => {
+    const content = 'putSymlink: hello 你好';
+    const objectName = getObjectName();
+    const targetObjectName = getObjectName();
+    let tinyOss = null;
+
+    axios.get('/api/oss-config')
+      .then((res) => {
+        const {
+          accessKeyId,
+          accessKeySecret,
+          region,
+          bucket,
+        } = res.data;
+        tinyOss = new TinyOSS({
+          accessKeyId,
+          accessKeySecret,
+          region,
+          bucket,
+        });
+        const blob = new Blob([content], { type: 'text/plain' });
+        return Promise.all([
+          tinyOss.put(targetObjectName, blob),
+          tinyOss.putSymlink(objectName, targetObjectName),
+        ]);
+      })
+      .then(() => {
+        const url = tinyOss.signatureUrl(objectName);
+        return axios.get(url, { responseType: 'text' })
+          .then((res) => {
+            expect(res.data).to.equal(content);
+            done();
+          });
+      })
+      .catch((err) => {
+        done(err);
+      });
+  });
+
   it('signatureUrl', (done) => {
     const content = 'signatureUrl: hello 你好';
     const objectName = getObjectName();

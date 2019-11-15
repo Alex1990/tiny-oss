@@ -87,6 +87,19 @@ new TinyOSS(options)
 
 * **(Promise)**
 
+### putSymlink(objectName, targetObjectName)
+
+创建一个软链接。
+
+#### 参数
+
+* **objectName (String)**: 软链接对象名称。
+* **targetObjectName (String)**: 软链接目标对象名称。
+
+#### 返回值
+
+* **(Promise)**
+
 ### signatureUrl(objectName, options)
 
 获取一个签名的 URL，可用于下载文件。

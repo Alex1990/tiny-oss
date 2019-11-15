@@ -87,6 +87,19 @@ Upload the blob.
 
 * **(Promise)**
 
+### putSymlink(objectName, targetObjectName)
+
+Create a symlink.
+
+#### Arguments
+
+* **objectName (String)**: The symlink object name.
+* **targetObjectName (String)**: The target object name.
+
+#### Return
+
+* **(Promise)**
+
 ### signatureUrl(objectName, options)
 
 Get a signature url to download the file.

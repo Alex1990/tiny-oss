@@ -90,6 +90,47 @@ export default class TinyOSS {
     });
   }
 
+  // https://help.aliyun.com/document_detail/45126.html
+  putSymlink(objectName, targetObjectName) {
+    const {
+      accessKeyId,
+      accessKeySecret,
+      stsToken,
+      bucket,
+    } = this.opts;
+    const verb = 'PUT';
+    const headers = {
+      'x-oss-date': new Date().toGMTString(),
+      'x-oss-symlink-target': encodeURI(targetObjectName),
+    };
+
+    if (stsToken) {
+      headers['x-oss-security-token'] = stsToken;
+    }
+
+    const signature = getSignature({
+      verb,
+      headers,
+      bucket,
+      objectName,
+      accessKeyId,
+      accessKeySecret,
+      subResource: {
+        symlink: '',
+      },
+    });
+
+    headers.Authorization = `OSS ${accessKeyId}:${signature}`;
+    const protocol = this.opts.secure ? 'https' : 'http';
+    const url = `${protocol}://${this.host}/${objectName}?symlink`;
+
+    return ajax(url, {
+      method: verb,
+      headers,
+      timeout: this.opts.timeout,
+    });
+  }
+
   signatureUrl(objectName, options = {}) {
     const {
       expires = 1800,
