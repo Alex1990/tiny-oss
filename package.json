@@ -1,6 +1,6 @@
 {
   "name": "tiny-oss",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A tiny aliyun oss sdk for browser",
   "main": "lib/index.js",
   "engines": {
