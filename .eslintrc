@@ -13,6 +13,7 @@
     TinyOSS: true
   },
   "rules": {
+    "func-names": 0,
     "import/no-extraneous-dependencies": 0,
     "no-cond-assign": 0,
     "no-plusplus": 0,
