@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>put method</title>
+</head>
+<body>
+  <div>
+    <h2>put method</h2>
+    <p><strong>The below form data will be stored in your browser localStorage.</strong></p>
+    <form id="form">
+      <p>
+        <label>
+          accessKeyId <input id="accessKeyId" />
+        </label>
+      </p>
+      <p>
+        <label>
+          accessKeySecret <input id="accessKeySecret" />
+        </label>
+      </p>
+      <p>
+        <label>
+          region <input id="region" />
+        </label>
+      </p>
+      <p>
+        <label>
+          bucket <input id="bucket" />
+        </label>
+      </p>
+      <p>
+        <label>
+          file <input type="file" id="file" />
+        </label>
+      </p>
+      <p>
+        <label>
+          objectName <input id="objectName" />
+        </label>
+      </p>
+      <p>
+        <button>Upload</button>
+      </p>
+    </form>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/tiny-oss/dist/tiny-oss.js"></script>
+  <script>
+    (function () {
+      var $ = function (id) {
+        return document.getElementById(id)
+      }
+
+      var ossOptions = null
+      try {
+        ossOptions = window.localStorage.getItem('ossOptions')
+        ossOptions = JSON.parse(ossOptions)
+      } catch (err) {
+        window.localStorage.removeItem('ossOptions')
+        console.error(err)
+        ossOptions = null
+      }
+      if (ossOptions) {
+        $('accessKeyId').value = ossOptions.accessKeyId
+        $('accessKeySecret').value = ossOptions.accessKeySecret
+        $('region').value = ossOptions.region
+        $('bucket').value = ossOptions.bucket
+      }
+
+      $('file').addEventListener('change', function (e) {
+        $('objectName').value = e.target.files[0].name
+      })
+
+      $('form').addEventListener('submit', function (e) {
+        e.preventDefault()
+        var accessKeyId = $('accessKeyId').value
+        var accessKeySecret = $('accessKeySecret').value
+        var region = $('region').value
+        var bucket = $('bucket').value
+
+        if (accessKeyId && accessKeySecret && region && bucket) {
+          var ossOptions = {
+            accessKeyId: accessKeyId,
+            accessKeySecret: accessKeySecret,
+            region: region,
+            bucket: bucket
+          }
+          window.localStorage.setItem('ossOptions', JSON.stringify(ossOptions))
+
+          var oss = new TinyOSS(ossOptions)
+
+          var objectName = $('objectName').value
+          var fileInput = $('file')
+          var file = fileInput.files[0]
+
+          oss.put(objectName, file)
+            .then(function (res) {
+              console.log('upload success: ', res)
+            }, function (err) {
+              console.error('upload error: ', err)
+            })
+        }
+      })
+    })()
+  </script>
+</body>
+</html>
