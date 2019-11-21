@@ -41,7 +41,7 @@ export default class TinyOSS {
     }
   }
 
-  put(objectName, blob) {
+  put(objectName, blob, options = {}) {
     return new Promise((resolve, reject) => {
       blobToBuffer(blob)
         .then((buf) => {
@@ -83,6 +83,7 @@ export default class TinyOSS {
             headers,
             data: blob,
             timeout: this.opts.timeout,
+            onprogress: options.onprogress,
           });
         })
         .then(resolve)

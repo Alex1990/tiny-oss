@@ -1,6 +1,6 @@
 # tiny-oss
 
-用于浏览器端的阿里云 OSS 极简版 SDK。小于 10kb (min+gzipped)
+用于浏览器端的阿里云 OSS 极简版 SDK，专注于上传功能。小于 10kb (min+gzipped)。
 
 **[English](README.md) | 简体中文**
 
@@ -20,6 +20,8 @@ yarn add tiny-oss
 
 ## 使用
 
+### 基础使用
+
 ```js
 const oss = new TinyOSS({
   accessKeyId: 'your accessKeyId',
@@ -34,6 +36,19 @@ const blob = new Blob(['hello world'], { type: 'text/plain' });
 
 // 上传
 oss.put('hello-world', blob);
+```
+
+### 上传进度
+
+你可以指定第三个参数用于监听上传进度：
+
+```js
+// Upload progress
+oss.put('hello-world', blob, {
+  onprogress (e) {
+    console.log('total: ', e.total, ', uploaded: ', e.loaded);
+  }
+});
 ```
 
 更多配置参数或方法参考 [API](#api)。
@@ -74,7 +89,7 @@ new TinyOSS(options)
 * secure
 * timeout
 
-### put(objectName, blob)
+### put(objectName, blob, options)
 
 上传。
 
@@ -82,6 +97,8 @@ new TinyOSS(options)
 
 * **objectName (String)**：对象名称。
 * **blob (Blob|File)**: 被上传的对象。
+* **[options (Object)]**
+  + **[onprogress (Function)]**: 上传进度事件监听器，接受一个 [progress event](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/progress_event) 对象作为参数。
 
 #### 返回值
 
