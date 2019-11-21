@@ -6,11 +6,10 @@ export default function ajax(url, options = {}) {
       headers = {},
       method = 'get',
       timeout = 0,
+      onprogress,
     } = options;
 
     const xhr = new XMLHttpRequest();
-
-    xhr.open(method, url, async);
 
     let timerId;
 
@@ -24,6 +23,11 @@ export default function ajax(url, options = {}) {
       reject(new Error('unknown error'));
     };
 
+    if (xhr.upload) {
+      // Note: the progress event must be located before the xhr.open method
+      xhr.upload.onprogress = onprogress;
+    }
+
     xhr.onreadystatechange = () => {
       if (xhr.readyState === 4) {
         if (timeout) clearTimeout(timerId);
@@ -35,6 +39,8 @@ export default function ajax(url, options = {}) {
         }
       }
     };
+
+    xhr.open(method, url, async);
 
     Object.keys(headers).forEach((key) => {
       xhr.setRequestHeader(key, headers[key]);

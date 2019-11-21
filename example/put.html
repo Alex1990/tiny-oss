@@ -47,6 +47,7 @@
     </form>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/tiny-oss/dist/tiny-oss.js"></script>
+  <!-- <script src="/dist/tiny-oss.js"></script> -->
   <script>
     (function () {
       var $ = function (id) {
@@ -95,9 +96,14 @@
           var fileInput = $('file')
           var file = fileInput.files[0]
 
-          oss.put(objectName, file)
-            .then(function (res) {
-              console.log('upload success: ', res)
+          oss
+            .put(objectName, file, {
+              onprogress (e) {
+                console.log('total: ', e.total, ', uploaded: ', e.loaded)
+              }
+            })
+            .then(function () {
+              console.log('upload success')
             }, function (err) {
               console.error('upload error: ', err)
             })

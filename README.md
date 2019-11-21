@@ -1,6 +1,6 @@
 # tiny-oss
 
-A tiny aliyun oss sdk for browser. Less than 10kb (min+gzipped).
+A tiny aliyun oss sdk for browser which focus on uploading. Less than 10kb (min+gzipped).
 
 **English | [简体中文](README_zh-CN.md)**
 
@@ -20,6 +20,8 @@ yarn add tiny-oss
 
 ## Usage
 
+### Basic
+
 ```js
 const oss = new TinyOSS({
   accessKeyId: 'your accessKeyId',
@@ -34,6 +36,19 @@ const blob = new Blob(['hello world'], { type: 'text/plain' });
 
 // Upload
 oss.put('hello-world', blob);
+```
+
+### Upload progress
+
+You can specify the third parameter to monitor the upload progress data:
+
+```js
+// Upload progress
+oss.put('hello-world', blob, {
+  onprogress (e) {
+    console.log('total: ', e.total, ', uploaded: ', e.loaded);
+  }
+});
 ```
 
 More options or methods see [API](#api).
@@ -74,7 +89,7 @@ Please check [Browser.js offical document](https://help.aliyun.com/document_deta
 * secure
 * timeout
 
-### put(objectName, blob)
+### put(objectName, blob, options)
 
 Upload the blob.
 
@@ -82,6 +97,8 @@ Upload the blob.
 
 * **objectName (String)**: The object name.
 * **blob (Blob|File)**: The object to be uploaded.
+* **[options (Object)]**
+  + **[onprogress (Function)]**: The upload progress event listener receiving an [progress event](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/progress_event) object as an parameter.
 
 #### Return
 
