@@ -1,7 +1,7 @@
 {
   "name": "tiny-oss",
-  "version": "0.2.0",
-  "description": "A tiny aliyun oss sdk for browser",
+  "version": "0.4.0",
+  "description": "A tiny aliyun oss sdk for browser which focus on uploading",
   "main": "lib/index.js",
   "engines": {
     "node": ">=6.0.0"
