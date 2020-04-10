@@ -9,7 +9,8 @@
   "files": [
     "dist",
     "lib",
-    "es"
+    "es",
+    "vendor"
   ],
   "scripts": {
     "clean": "rimraf dist lib es",
