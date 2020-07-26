@@ -3,6 +3,7 @@
   "version": "0.4.1",
   "description": "A tiny aliyun oss sdk for browser which focus on uploading",
   "main": "lib/index.js",
+  "types": "index.d.ts",
   "engines": {
     "node": ">=6.0.0"
   },
