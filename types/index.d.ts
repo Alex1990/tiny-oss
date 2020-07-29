@@ -5,7 +5,7 @@ export = TinyOSS;
 
 declare class TinyOSS {
   /**
-   * 
+   *
    * @param options see <link> https://github.com/ali-sdk/ali-oss#signatureurlname-options </link>
    */
   constructor(options?: TinyOSS.TinyOSSOptions);
@@ -31,7 +31,7 @@ declare class TinyOSS {
 
   /**
    * get signature url for an object
-   * 
+   *
    * @param objectName object name
    * @param options signature options, see <link> https://github.com/ali-sdk/ali-oss#signatureurlname-options </link>
    * @return signature url
