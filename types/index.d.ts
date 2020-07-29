@@ -15,8 +15,9 @@ declare class TinyOSS {
    *
    * @param objectName object name
    * @param blob data
+   * @param options put options
    */
-  put(objectName: string, blob: Blob): Promise<XMLHttpRequest["response"]>;
+  put(objectName: string, blob: Blob, options?: PutOptions): Promise<XMLHttpRequest["response"]>;
 
   /**
    * put symbol link
@@ -71,6 +72,10 @@ declare namespace TinyOSS {
     contentType?: string; // The Content-Type of the callback requests initiatiated, It supports application/x-www-form-urlencoded and application/json, and the former is the default value.
     customValue?: object;
     headers?: object; //  extra headers, detail see RFC 2616
+  }
+
+  export interface PutOptions {
+    onprogress?(e: Event): void;
   }
 
   export interface SignatureUrlOptions {
