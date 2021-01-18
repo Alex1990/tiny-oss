@@ -17,7 +17,7 @@ declare class TinyOSS {
    * @param blob data
    * @param options put options
    */
-  put(objectName: string, blob: Blob, options?: PutOptions): Promise<XMLHttpRequest["response"]>;
+  put(objectName: string, blob: Blob, options?: TinyOSS.PutOptions): Promise<XMLHttpRequest["response"]>;
 
   /**
    * put symbol link
