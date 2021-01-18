@@ -1,6 +1,6 @@
 {
   "name": "tiny-oss",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "A tiny aliyun oss sdk for browser which focus on uploading",
   "main": "lib/index.js",
   "types": "types/index.d.ts",
