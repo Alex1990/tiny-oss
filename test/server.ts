@@ -1,7 +1,10 @@
-require('dotenv').config();
+import 'dotenv/config';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 const Koa = require('koa');
 const serve = require('koa-static');
 const { STS } = require('ali-oss');
+import type { Context, Next } from 'koa';
 
 const autoKill = process.env.AUTO_KILL;
 const accessKeyId = process.env.OSS_ACCESS_KEY_ID;
@@ -17,9 +20,24 @@ const PORT = 8080;
 
 app.use(serve(root));
 
+// CORS middleware - allow any domain
+app.use(async (ctx: Context, next: Next) => {
+  ctx.set('Access-Control-Allow-Origin', '*');
+  ctx.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  ctx.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  ctx.set('Access-Control-Allow-Credentials', 'true');
+
+  if (ctx.method === 'OPTIONS') {
+    ctx.status = 204;
+    return;
+  }
+
+  await next();
+});
+
 let lastReqTime = Date.now();
 
-app.use(async (ctx, next) => {
+app.use(async (ctx: Context, next: Next) => {
   lastReqTime = Date.now();
   if (ctx.path === '/api/oss-config') {
     ctx.body = {

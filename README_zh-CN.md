@@ -55,20 +55,9 @@ oss.put('hello-world', blob, {
 
 ## 兼容性
 
+应该在大部分浏览器都能正常运行。
+
 这个包依赖一些现代 Web APIs，比如 [Blob](https://developer.mozilla.org/zh-CN/docs/Web/API/Blob), [Uint8Array](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array), [FileReader](https://developer.mozilla.org/zh-CN/docs/Web/API/FileReader), [Promise](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Promise).
-
-所以应该在下面浏览器当中都能正常运行。
-
-* Chrome >= 20
-* Edge >= 12
-* IE >= 10
-* Firefox >= 4
-* Safari >= 8
-* Opera >= 11
-* Android >= 4.4.4
-* iOS >= 8
-
-**对于 IE 和低版本 Firefox（<= 28），你需要引入 Promise polyfill，比如 [es6-promise](https://github.com/stefanpenner/es6-promise)**。
 
 ## 接口
 

@@ -9,3 +9,5 @@ yarn.lock
 *.log
 .env
 stats.json
+test-results
+test/__screenshots__
