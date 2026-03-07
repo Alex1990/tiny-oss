@@ -36,8 +36,7 @@
   },
   "lint-staged": {
     "*.ts": [
-      "oxlint --fix",
-      "git add"
+      "oxlint --fix"
     ]
   },
   "keywords": [
