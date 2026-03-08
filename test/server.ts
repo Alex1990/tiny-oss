@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const Koa = require('koa');
-const serve = require('koa-static');
+
 const { STS } = require('ali-oss');
 import type { Context, Next } from 'koa';
 
@@ -14,11 +14,8 @@ const region = process.env.OSS_REGION;
 const endpoint = process.env.OSS_ENDPOINT;
 const arn = process.env.OSS_ARN;
 
-const root = process.cwd();
 const app = new Koa();
 const PORT = 8080;
-
-app.use(serve(root));
 
 // CORS middleware - allow any domain
 app.use(async (ctx: Context, next: Next) => {
