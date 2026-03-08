@@ -22,6 +22,7 @@
     "lint": "oxlint src test",
     "build": "vite build && npm run build:types",
     "build:types": "dts-bundle-generator src/index.ts -o dist/index.d.ts --project tsconfig.json --sort",
+    "check:types": "tsc --noEmit --skipLibCheck test/test-types.ts",
     "dev": "vite",
     "serve": "tsx test/server.ts",
     "test": "vitest",
