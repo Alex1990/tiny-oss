@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import Koa from 'koa';
+import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
 import aliOss from 'ali-oss';
-import type { Context, Next } from 'koa';
 
 const { STS } = aliOss;
 
@@ -13,19 +13,18 @@ const region = process.env.OSS_REGION;
 const endpoint = process.env.OSS_ENDPOINT;
 const arn = process.env.OSS_ARN;
 
-const app = new Koa();
+const app = new Hono();
 const PORT = 8080;
 
 // CORS middleware - allow any domain
-app.use(async (ctx: Context, next: Next) => {
-  ctx.set('Access-Control-Allow-Origin', '*');
-  ctx.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  ctx.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  ctx.set('Access-Control-Allow-Credentials', 'true');
+app.use(async (c, next) => {
+  c.header('Access-Control-Allow-Origin', '*');
+  c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  c.header('Access-Control-Allow-Credentials', 'true');
 
-  if (ctx.method === 'OPTIONS') {
-    ctx.status = 204;
-    return;
+  if (c.req.method === 'OPTIONS') {
+    return new Response(null, { status: 204 });
   }
 
   await next();
@@ -33,37 +32,42 @@ app.use(async (ctx: Context, next: Next) => {
 
 let lastReqTime = Date.now();
 
-app.use(async (ctx: Context, next: Next) => {
+app.use(async (c, next) => {
   lastReqTime = Date.now();
-  if (ctx.path === '/api/oss-config') {
-    ctx.body = {
-      accessKeyId,
-      accessKeySecret,
-      bucket,
-      region,
-      endpoint,
-    };
-  }
-  if (ctx.path === '/api/sts') {
-    const sts = new STS({
-      accessKeyId,
-      accessKeySecret,
-    });
-    // 60 mins
-    const expires = 60 * 60;
-    const sessionName = 'foo';
-    const stsToken = await sts.assumeRole(arn, undefined, expires, sessionName);
-    ctx.body = {
-      bucket,
-      region,
-      endpoint,
-      stsToken,
-    };
-  }
-  next();
+  await next();
 });
 
-app.listen(PORT);
+app.get('/api/oss-config', (c) => {
+  return c.json({
+    accessKeyId,
+    accessKeySecret,
+    bucket,
+    region,
+    endpoint,
+  });
+});
+
+app.get('/api/sts', async (c) => {
+  const sts = new STS({
+    accessKeyId,
+    accessKeySecret,
+  });
+  // 60 mins
+  const expires = 60 * 60;
+  const sessionName = 'foo';
+  const stsToken = await sts.assumeRole(arn, undefined, expires, sessionName);
+  return c.json({
+    bucket,
+    region,
+    endpoint,
+    stsToken,
+  });
+});
+
+serve({
+  fetch: app.fetch,
+  port: PORT,
+});
 console.log('listening on port %s', PORT);
 
 if (autoKill) {
