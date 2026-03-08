@@ -1,10 +1,9 @@
 import 'dotenv/config';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const Koa = require('koa');
-
-const { STS } = require('ali-oss');
+import Koa from 'koa';
+import aliOss from 'ali-oss';
 import type { Context, Next } from 'koa';
+
+const { STS } = aliOss;
 
 const autoKill = process.env.AUTO_KILL;
 const accessKeyId = process.env.OSS_ACCESS_KEY_ID;
