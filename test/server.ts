@@ -6,12 +6,12 @@ import aliOss from 'ali-oss';
 const { STS } = aliOss;
 
 const autoKill = process.env.AUTO_KILL;
-const accessKeyId = process.env.OSS_ACCESS_KEY_ID;
-const accessKeySecret = process.env.OSS_ACCESS_KEY_SECRET;
+const accessKeyId = process.env.OSS_ACCESS_KEY_ID as string;
+const accessKeySecret = process.env.OSS_ACCESS_KEY_SECRET as string;
 const bucket = process.env.OSS_BUCKET;
 const region = process.env.OSS_REGION;
 const endpoint = process.env.OSS_ENDPOINT;
-const arn = process.env.OSS_ARN;
+const arn = process.env.OSS_ARN as string;
 
 const app = new Hono();
 const PORT = 8080;
