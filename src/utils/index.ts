@@ -7,8 +7,10 @@ function isDate(obj: any): boolean {
 }
 
 function unix(date?: string | number | Date): number {
-  const timestamp = date ? new Date(date).getTime() : Date.now();
-  return Math.floor(isNaN(timestamp) ? Date.now() : timestamp / 1000);
+  const now = Date.now();
+  const timestamp = date ? new Date(date).getTime() : now;
+  const validTimestamp = isNaN(timestamp) ? now : timestamp;
+  return Math.floor(validTimestamp / 1000);
 }
 
 function blobToBuffer(blob: Blob): Promise<Uint8Array> {
