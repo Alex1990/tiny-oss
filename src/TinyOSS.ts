@@ -729,12 +729,20 @@ export default class TinyOSS {
 
     let uploadId: string;
     let doneParts: TinyOSS.PartInfo[] = [];
-    const actualPartSize = Math.max(partSize, 100 * 1024); // minimum 100KB
+    let actualPartSize = Math.max(partSize, 100 * 1024); // minimum 100KB
+
+    const fileSize = file.size;
+    if (fileSize === 0) {
+      throw new Error('multipart upload requires a non-empty file');
+    }
 
     // Use checkpoint if available
-    if (checkpoint && checkpoint.uploadId && checkpoint.file.size === file.size) {
+    if (checkpoint && checkpoint.uploadId && checkpoint.file.size === fileSize) {
       uploadId = checkpoint.uploadId;
       doneParts = checkpoint.doneParts || [];
+      // Resume with the part size the checkpoint was created with, otherwise
+      // start/end ranges and the final part list would be computed wrong.
+      if (checkpoint.partSize) actualPartSize = checkpoint.partSize;
     } else {
       // Initialize multipart upload
       const initHeaders: Record<string, any> = { ...headers };
@@ -749,7 +757,6 @@ export default class TinyOSS {
     }
 
     // Calculate parts
-    const fileSize = file.size;
     const numParts = Math.ceil(fileSize / actualPartSize);
     const parts: TinyOSS.PartInfo[] = [];
 
@@ -776,26 +783,31 @@ export default class TinyOSS {
 
     // Upload parts with concurrency control
     const uploadPartWithRetry = async (partNo: number, start: number, end: number): Promise<TinyOSS.PartInfo> => {
-      try {
+      const uploadOnce = async (): Promise<TinyOSS.UploadPartResult> => {
         const result = await this.uploadPart(objectName, uploadId, partNo, file, start, end);
-        // Update checkpoint
-        currentCheckpoint.doneParts.push({ number: partNo, etag: result.etag });
-        // Call progress callback
-        if (progress) {
-          const percentage = currentCheckpoint.doneParts.length / numParts;
-          progress(percentage, currentCheckpoint, result);
+        // The browser can only read the ETag response header when the bucket
+        // CORS rule exposes it; otherwise completeMultipartUpload would fail
+        // with an opaque InvalidPart error.
+        if (!result.etag) {
+          throw new Error('cannot read the ETag of the uploaded part; make sure the bucket CORS rule exposes the ETag response header');
         }
-        return { number: partNo, etag: result.etag };
+        return result;
+      };
+      let result: TinyOSS.UploadPartResult;
+      try {
+        result = await uploadOnce();
       } catch (err) {
         // Retry once on error
-        const result = await this.uploadPart(objectName, uploadId, partNo, file, start, end);
-        currentCheckpoint.doneParts.push({ number: partNo, etag: result.etag });
-        if (progress) {
-          const percentage = currentCheckpoint.doneParts.length / numParts;
-          progress(percentage, currentCheckpoint, result);
-        }
-        return { number: partNo, etag: result.etag };
+        result = await uploadOnce();
       }
+      // Update checkpoint
+      currentCheckpoint.doneParts.push({ number: partNo, etag: result.etag });
+      // Call progress callback
+      if (progress) {
+        const percentage = currentCheckpoint.doneParts.length / numParts;
+        progress(percentage, currentCheckpoint, result);
+      }
+      return { number: partNo, etag: result.etag };
     };
 
     // Upload parts in parallel with concurrency limit
@@ -809,10 +821,14 @@ export default class TinyOSS {
       const task = uploadPartWithRetry(part.number, start, end);
       uploadTasks.push(task);
       executing.push(task);
+      // Remove the task from the in-flight pool once it settles, so the
+      // next Promise.race never sees an already-resolved promise.
+      task.finally(() => {
+        const index = executing.indexOf(task);
+        if (index > -1) executing.splice(index, 1);
+      });
       if (executing.length >= parallel) {
         await Promise.race(executing);
-        const index = executing.findIndex((p) => p === task);
-        if (index > -1) executing.splice(index, 1);
       }
     }
 

@@ -62,7 +62,7 @@ export default function ajax(url: string, options: AjaxOptions = {}): Promise<an
             statusText: xhr.statusText,
           });
         } else {
-          const err = new Error(`the request is error: ${xhr.status} ${xhr.statusText}`);
+          const err = new Error(`the request is error: ${xhr.status} ${xhr.statusText} ${xhr.responseText || ''}`);
           reject(err);
         }
       }

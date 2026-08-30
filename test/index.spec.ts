@@ -93,6 +93,40 @@ describe('TinyOSS', () => {
     expect(text).toBe(content);
   });
 
+  it('multipartUpload', async () => {
+    const objectName = getObjectName();
+    const res = await fetch('http://localhost:8080/api/oss-config');
+    const data = (await res.json()) as OssConfig;
+    const { accessKeyId, accessKeySecret, region, bucket } = data;
+    const tinyOss = new TinyOSS({ accessKeyId, accessKeySecret, region, bucket });
+    const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket });
+
+    // 3MB patterned data -> three 1MB parts, so a wrong part range or
+    // ordering in completeMultipartUpload shows up as a content mismatch.
+    const size = 3 * 1024 * 1024;
+    const bytes = new Uint8Array(size);
+    for (let i = 0; i < size; i++) bytes[i] = i % 251;
+    const blob = new Blob([bytes], { type: 'application/octet-stream' });
+
+    const result = await tinyOss.multipartUpload(objectName, blob, { partSize: 1024 * 1024 });
+    expect(result.name).toBe(objectName);
+    expect(result.etag).toBeTruthy();
+
+    try {
+      const url = oss.signatureUrl(objectName);
+      const getRes = await fetch(url);
+      expect(getRes.status).toBe(200);
+      const downloaded = new Uint8Array(await getRes.arrayBuffer());
+      expect(downloaded.length).toBe(size);
+      // Compare in chunks so a mismatch reports the failing block.
+      for (let i = 0; i < size; i += 64 * 1024) {
+        expect(Array.from(downloaded.subarray(i, i + 64 * 1024))).toEqual(Array.from(bytes.subarray(i, i + 64 * 1024)));
+      }
+    } finally {
+      await oss.delete(objectName);
+    }
+  });
+
   it('put stsToken', async () => {
     const content = 'put stsToken: hello 你好';
     const objectName = getObjectName();
