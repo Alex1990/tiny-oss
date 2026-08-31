@@ -93,49 +93,21 @@ put(
 
 ## 非浏览器环境
 
-网络层是可注入的。浏览器默认使用 `XMLHttpRequest`；在 Service Worker 或微信小程序中，启动时用 `setTransport` 注入自己的传输实现。输入数据支持 `Blob`、`ArrayBuffer`、`Uint8Array` 三种类型（小程序没有 Blob，请传 `ArrayBuffer`）。
-
-### Service Worker
+网络层是可注入的。浏览器默认使用 `XMLHttpRequest`；Service Worker 和微信小程序有现成的适配器：
 
 ```js
-import { setTransport } from 'tiny-oss';
+// Service Worker（或 Node.js）
+import { setTransport, fetchTransport } from 'tiny-oss';
+setTransport(fetchTransport);
 
-setTransport(async (url, { method, headers, data, timeout }) => {
-  const controller = new AbortController();
-  const timer = timeout ? setTimeout(() => controller.abort(), timeout) : null;
-  const res = await fetch(url, { method, headers, body: data, signal: controller.signal });
-  if (timer) clearTimeout(timer);
-  return {
-    data: await res.text(),
-    headers: Object.fromEntries(res.headers.entries()),
-    status: res.status,
-    statusText: res.statusText,
-  };
-});
+// 微信小程序
+import { setTransport, wxRequestTransport } from 'tiny-oss';
+setTransport(wxRequestTransport);
 ```
 
-### 微信小程序
+输入数据支持 `Blob`、`ArrayBuffer`、`Uint8Array` 三种类型（小程序没有 Blob，请传 `ArrayBuffer`）。
 
-```js
-import { setTransport } from 'tiny-oss';
-
-setTransport((url, { method, headers, data, timeout }) =>
-  new Promise((resolve, reject) => {
-    wx.request({
-      url,
-      method,
-      header: headers,
-      data: data instanceof Uint8Array ? data.buffer : data,
-      timeout,
-      success: (res) =>
-        resolve({ data: res.data, headers: res.header, status: res.statusCode, statusText: '' }),
-      fail: reject,
-    });
-  })
-);
-```
-
-然后用 `ArrayBuffer` 代替 `Blob` 上传：
+### 微信小程序上传
 
 ```js
 import { put, multipartUpload } from 'tiny-oss';
@@ -144,6 +116,16 @@ const arrayBuffer = getFileArrayBuffer(); // 例如 FileSystemManager.readFile �
 
 put(options, 'photo.jpg', arrayBuffer);
 multipartUpload(options, 'video.mp4', arrayBuffer, { partSize: 1024 * 1024 });
+```
+
+### 自定义 transport
+
+其他环境可以给 `setTransport` 传入自己的函数。它接收 `(url, { method, headers, data, timeout, onprogress, total })`，必须 resolve 为 `{ data, headers, status, statusText }`，失败时 reject：
+
+```js
+setTransport(async (url, { method, headers, data, timeout }) => {
+  // 适配你的平台的请求 API
+});
 ```
 
 ### 进度事件

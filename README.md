@@ -93,53 +93,24 @@ This package depends on some Web APIs, such as [Blob](https://developer.mozilla.
 
 ## Non-browser environments
 
-The network layer is injectable. Browsers use `XMLHttpRequest` by default; in
-Service Workers or WeChat mini programs, pass your own transport with
-`setTransport` once at startup. The input data types are environment
-agnostic: `Blob`, `ArrayBuffer` and `Uint8Array` are all accepted (mini
-programs don't have `Blob`, so pass `ArrayBuffer`).
-
-### Service Worker
+The network layer is injectable. Browsers use `XMLHttpRequest` by default;
+Service Workers and WeChat mini programs have ready-made adapters:
 
 ```js
-import { setTransport } from 'tiny-oss';
+// Service Worker (or Node.js)
+import { setTransport, fetchTransport } from 'tiny-oss';
+setTransport(fetchTransport);
 
-setTransport(async (url, { method, headers, data, timeout }) => {
-  const controller = new AbortController();
-  const timer = timeout ? setTimeout(() => controller.abort(), timeout) : null;
-  const res = await fetch(url, { method, headers, body: data, signal: controller.signal });
-  if (timer) clearTimeout(timer);
-  return {
-    data: await res.text(),
-    headers: Object.fromEntries(res.headers.entries()),
-    status: res.status,
-    statusText: res.statusText,
-  };
-});
+// WeChat mini program
+import { setTransport, wxRequestTransport } from 'tiny-oss';
+setTransport(wxRequestTransport);
 ```
 
-### WeChat mini program
+The input data types are environment agnostic: `Blob`, `ArrayBuffer` and
+`Uint8Array` are all accepted (mini programs don't have `Blob`, so pass
+`ArrayBuffer`).
 
-```js
-import { setTransport } from 'tiny-oss';
-
-setTransport((url, { method, headers, data, timeout }) =>
-  new Promise((resolve, reject) => {
-    wx.request({
-      url,
-      method,
-      header: headers,
-      data: data instanceof Uint8Array ? data.buffer : data,
-      timeout,
-      success: (res) =>
-        resolve({ data: res.data, headers: res.header, status: res.statusCode, statusText: '' }),
-      fail: reject,
-    });
-  })
-);
-```
-
-Then upload with `ArrayBuffer` instead of `Blob`:
+### WeChat mini program upload
 
 ```js
 import { put, multipartUpload } from 'tiny-oss';
@@ -148,6 +119,18 @@ const arrayBuffer = getFileArrayBuffer(); // e.g. from FileSystemManager.readFil
 
 put(options, 'photo.jpg', arrayBuffer);
 multipartUpload(options, 'video.mp4', arrayBuffer, { partSize: 1024 * 1024 });
+```
+
+### Custom transport
+
+For other environments, pass your own function to `setTransport`. It receives
+`(url, { method, headers, data, timeout, onprogress, total })` and must
+resolve with `{ data, headers, status, statusText }`, rejecting on failure:
+
+```js
+setTransport(async (url, { method, headers, data, timeout }) => {
+  // adapt to your platform's request API
+});
 ```
 
 ### Progress events

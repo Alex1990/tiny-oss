@@ -1,6 +1,8 @@
 export type { TinyOSS } from './types';
 export { setTransport, getTransport } from './transport';
 export type { Transport, TransportOptions, TransportResponse } from './transport';
+export { fetchTransport } from './transports/fetch';
+export { wxRequestTransport } from './transports/wx';
 export { bindOptions } from './ops/bindOptions';
 export { put } from './ops/put';
 export { putSymlink } from './ops/putSymlink';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { put, putSymlink, signatureUrl, multipartUpload, bindOptions } from '../src/index';
+import { put, putSymlink, signatureUrl, multipartUpload, bindOptions, setTransport, getTransport, fetchTransport } from '../src/index';
 // @ts-ignore: ali-oss only for test server
 import OSS from 'ali-oss';
 
@@ -233,6 +233,50 @@ describe('integration', () => {
       }
     } finally {
       await oss.delete(objectName);
+    }
+  });
+
+  it('fetch transport put and multipartUpload', async () => {
+    const res = await fetch('http://localhost:8080/api/oss-config');
+    const data = (await res.json()) as OssConfig;
+    const { accessKeyId, accessKeySecret, region, bucket } = data;
+    const options = { accessKeyId, accessKeySecret, region, bucket };
+    const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket });
+
+    const saved = getTransport();
+    setTransport(fetchTransport);
+    try {
+      // put through fetch
+      const putName = getObjectName();
+      await put(options, putName, 'fetch transport 你好');
+      try {
+        const url = oss.signatureUrl(putName);
+        const text = await (await fetch(url)).text();
+        expect(text).toBe('fetch transport 你好');
+      } finally {
+        await oss.delete(putName);
+      }
+
+      // multipart through fetch (needs a real file, as in Service Worker)
+      const size = 2 * 1024 * 1024;
+      const bytes = new Uint8Array(size);
+      for (let i = 0; i < size; i++) bytes[i] = i % 251;
+      const multiName = getObjectName();
+      const result = await multipartUpload(options, multiName, bytes, { partSize: 1024 * 1024 });
+      expect(result.etag).toBeTruthy();
+      try {
+        const url = oss.signatureUrl(multiName);
+        const downloaded = new Uint8Array(await (await fetch(url)).arrayBuffer());
+        expect(downloaded.length).toBe(size);
+        for (let i = 0; i < size; i += 64 * 1024) {
+          const end = Math.min(i + 64 * 1024, size);
+          expect(Array.from(downloaded.subarray(i, end))).toEqual(Array.from(bytes.subarray(i, end)));
+        }
+      } finally {
+        await oss.delete(multiName);
+      }
+    } finally {
+      setTransport(saved);
     }
   });
 
