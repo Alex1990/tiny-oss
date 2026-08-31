@@ -52,10 +52,14 @@ describe('TinyOSS', () => {
     const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket });
     const blob = new Blob([content], { type: 'text/plain' });
     await tinyOss.put(objectName, blob);
-    const url = oss.signatureUrl(objectName);
-    const getRes = await fetch(url);
-    const text = await getRes.text();
-    expect(text).toBe(content);
+    try {
+      const url = oss.signatureUrl(objectName);
+      const getRes = await fetch(url);
+      const text = await getRes.text();
+      expect(text).toBe(content);
+    } finally {
+      await oss.delete(objectName);
+    }
   });
 
   it('putSymlink', async () => {
@@ -66,15 +70,20 @@ describe('TinyOSS', () => {
     const data = (await res.json()) as OssConfig;
     const { accessKeyId, accessKeySecret, region, bucket } = data;
     const tinyOss = new TinyOSS({ accessKeyId, accessKeySecret, region, bucket });
+    const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket });
     const blob = new Blob([content], { type: 'text/plain' });
     await Promise.all([
       tinyOss.put(targetObjectName, blob),
       tinyOss.putSymlink(objectName, targetObjectName),
     ]);
-    const url = tinyOss.signatureUrl(objectName);
-    const getRes = await fetch(url);
-    const text = await getRes.text();
-    expect(text).toBe(content);
+    try {
+      const url = tinyOss.signatureUrl(objectName);
+      const getRes = await fetch(url);
+      const text = await getRes.text();
+      expect(text).toBe(content);
+    } finally {
+      await Promise.all([oss.delete(objectName), oss.delete(targetObjectName)]);
+    }
   });
 
   it('signatureUrl', async () => {
@@ -87,10 +96,14 @@ describe('TinyOSS', () => {
     const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket });
     const blob = new Blob([content], { type: 'text/plain' });
     await oss.put(objectName, blob);
-    const url = tinyOss.signatureUrl(objectName);
-    const getRes = await fetch(url);
-    const text = await getRes.text();
-    expect(text).toBe(content);
+    try {
+      const url = tinyOss.signatureUrl(objectName);
+      const getRes = await fetch(url);
+      const text = await getRes.text();
+      expect(text).toBe(content);
+    } finally {
+      await oss.delete(objectName);
+    }
   });
 
   it('multipartUpload', async () => {
@@ -149,10 +162,14 @@ describe('TinyOSS', () => {
     });
     const blob = new Blob([content], { type: 'text/plain' });
     await tinyOss.put(objectName, blob);
-    const url = oss.signatureUrl(objectName);
-    const getRes = await fetch(url);
-    const text = await getRes.text();
-    expect(text).toBe(content);
+    try {
+      const url = oss.signatureUrl(objectName);
+      const getRes = await fetch(url);
+      const text = await getRes.text();
+      expect(text).toBe(content);
+    } finally {
+      await oss.delete(objectName);
+    }
   });
 
   it('signatureUrl stsToken', async () => {
@@ -177,10 +194,14 @@ describe('TinyOSS', () => {
     });
     const blob = new Blob([content], { type: 'text/plain' });
     await oss.put(objectName, blob);
-    const url = tinyOss.signatureUrl(objectName);
-    const getRes = await fetch(url);
-    const text = await getRes.text();
-    expect(text).toBe(content);
+    try {
+      const url = tinyOss.signatureUrl(objectName);
+      const getRes = await fetch(url);
+      const text = await getRes.text();
+      expect(text).toBe(content);
+    } finally {
+      await oss.delete(objectName);
+    }
   });
 
 });
