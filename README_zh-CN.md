@@ -1,6 +1,6 @@
 # tiny-oss
 
-用于浏览器端的阿里云 OSS 极简版 SDK，专注于上传功能。小于 10kb (min+gzipped)。同时提供腾讯云 COS 入口（`tiny-oss/cos`），API 完全一致——见[腾讯云 COS](#腾讯云-cos)。
+用于浏览器端的阿里云 OSS 极简版 SDK，专注于上传功能。小于 10kb (min+gzipped)。同时提供腾讯云 COS（`tiny-oss/cos`）与华为云 OBS（`tiny-oss/obs`）入口，API 完全一致——见[腾讯云 COS](#腾讯云-cos)与[华为云 OBS](#华为云-obs)。
 
 **[English](README.md) | 简体中文**
 
@@ -85,6 +85,44 @@ COS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`�
 - 与 OSS 一样，浏览器上传 COS 需要在存储桶配置跨域规则，并推荐使用临时密钥（CAM STS）而非永久密钥。
 - 分片上传需要存储桶 CORS 规则暴露 `ETag` 响应头。
 - COS 签名对时间敏感，客户端时钟偏差会导致 403 `RequestTimeTooSkewed`。
+
+## 华为云 OBS
+
+同一套操作通过第三个独立入口支持华为云 OBS（`tiny-oss/obs`）。每个入口自包含：按需导入即可让 OSS 产物不携带 COS/OBS 签名代码（反之亦然）。
+
+```js
+import { put, multipartUpload, signatureUrl } from 'tiny-oss/obs';
+
+put(
+  {
+    accessKeyId: '你的 Access Key Id',
+    accessKeySecret: '你的 Secret Access Key',
+    // 推荐在浏览器端使用 stsToken 参数
+    stsToken: 'security token',
+    region: 'cn-north-4',
+    bucket: 'your-bucket' // OBS 的 bucket 名不带任何后缀
+  },
+  'hello-world',
+  blob
+);
+```
+
+OBS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`（OBS 无软链接接口）。options 字段对应关系：
+
+| option | OSS | OBS |
+|---|---|---|
+| `accessKeyId` | 阿里云 AccessKeyId | 华为云 Access Key Id |
+| `accessKeySecret` | 阿里云 AccessKeySecret | 华为云 Secret Access Key |
+| `region` | `oss-cn-beijing` | 如 `cn-north-4`、`cn-east-3` |
+| `bucket` | `my-bucket` | 普通 bucket 名（无 APPID 后缀） |
+| `stsToken` | OSS STS token | OBS 临时密钥 SecurityToken（`x-obs-security-token`） |
+| `endpoint` / `secure` / `timeout` | 相同 | 相同 |
+
+注意事项：
+
+- 浏览器上传 OBS 需要在存储桶配置跨域规则（允许你的站点并暴露 `ETag` 响应头以支持分片上传），推荐使用临时密钥（IAM 委托）而非永久密钥。
+- OBS 签名对时间敏感（`x-obs-date` 头），客户端时钟偏差会导致 403 `RequestTimeTooSkewed`。
+- OBS 签名器使用 OBS 的 "obs" 签名方案，与官方 `esdk-obs-browserjs` 逐字节一致。
 
 ### 绑定配置一次
 

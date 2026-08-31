@@ -17,6 +17,10 @@ const cosAccessKeySecret = process.env.COS_ACCESS_KEY_SECRET;
 const cosBucket = process.env.COS_BUCKET;
 const cosRegion = process.env.COS_REGION;
 const cosStsRoleArn = process.env.COS_STS_ROLE_ARN;
+const obsAccessKeyId = process.env.OBS_ACCESS_KEY_ID;
+const obsAccessKeySecret = process.env.OBS_ACCESS_KEY_SECRET;
+const obsBucket = process.env.OBS_BUCKET;
+const obsRegion = process.env.OBS_REGION;
 
 const app = new Hono();
 const PORT = 8080;
@@ -59,6 +63,15 @@ app.get('/api/cos-config', (c) => {
     bucket: cosBucket,
     region: cosRegion,
     stsRoleArn: cosStsRoleArn,
+  });
+});
+
+app.get('/api/obs-config', (c) => {
+  return c.json({
+    accessKeyId: obsAccessKeyId,
+    accessKeySecret: obsAccessKeySecret,
+    bucket: obsBucket,
+    region: obsRegion,
   });
 });
 

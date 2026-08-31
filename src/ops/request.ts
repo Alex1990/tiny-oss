@@ -14,13 +14,15 @@ const DEFAULT_OPTIONS = {
 /**
  * Validate and fill in defaults for client options. The result is a
  * plain object, so the functional API can be tree-shaken independently
- * of the TinyOSS class. Shared by every provider.
+ * of the TinyOSS class. Shared by every provider; providers may pass
+ * their own defaults (e.g. OBS region 'cn-north-4').
  */
 export function normalizeOptions(
-  options: TinyOSS.TinyOSSOptions = {} as TinyOSS.TinyOSSOptions
+  options: TinyOSS.TinyOSSOptions = {} as TinyOSS.TinyOSSOptions,
+  defaults: Record<string, any> = DEFAULT_OPTIONS
 ): TinyOSS.TinyOSSOptions {
   assertOptions(options);
-  return Object.assign({}, DEFAULT_OPTIONS, options);
+  return Object.assign({}, defaults, options);
 }
 
 /**

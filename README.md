@@ -1,6 +1,6 @@
 # tiny-oss
 
-A tiny aliyun oss sdk for browser which focus on uploading. Less than 10kb (min+gzipped). Also ships a Tencent Cloud COS entry point (`tiny-oss/cos`) with the same API — see [Tencent Cloud COS](#tencent-cloud-cos).
+A tiny aliyun oss sdk for browser which focus on uploading. Less than 10kb (min+gzipped). Also ships Tencent Cloud COS (`tiny-oss/cos`) and Huawei Cloud OBS (`tiny-oss/obs`) entry points with the same API — see [Tencent Cloud COS](#tencent-cloud-cos) and [Huawei Cloud OBS](#huawei-cloud-obs).
 
 **English | [简体中文](README_zh-CN.md)**
 
@@ -85,6 +85,44 @@ Notes:
 - Like OSS, browser uploads to COS require a CORS rule on the bucket, and temporary credentials (CAM STS) are recommended over permanent keys.
 - Set the bucket CORS rule to expose the `ETag` response header for multipart uploads.
 - COS signatures are time-sensitive; a skewed client clock yields 403 `RequestTimeTooSkewed`.
+
+## Huawei Cloud OBS
+
+The same operations are also available for Huawei Cloud OBS through a third entry point (`tiny-oss/obs`). Each entry is self-contained: importing only what you use keeps the OSS bundle free of COS/OBS signing code and vice versa.
+
+```js
+import { put, multipartUpload, signatureUrl } from 'tiny-oss/obs';
+
+put(
+  {
+    accessKeyId: 'your Access Key Id',
+    accessKeySecret: 'your Secret Access Key',
+    // Recommend to use the stsToken option in browser
+    stsToken: 'security token',
+    region: 'cn-north-4',
+    bucket: 'your-bucket' // OBS bucket names carry no suffix
+  },
+  'hello-world',
+  blob
+);
+```
+
+The OBS entry exports everything the OSS entry does except `putSymlink` (OBS has no symlink API). Options map as:
+
+| option | OSS | OBS |
+|---|---|---|
+| `accessKeyId` | Aliyun AccessKeyId | Huawei Cloud Access Key Id |
+| `accessKeySecret` | Aliyun AccessKeySecret | Huawei Cloud Secret Access Key |
+| `region` | `oss-cn-beijing` | e.g. `cn-north-4`, `cn-east-3` |
+| `bucket` | `my-bucket` | plain bucket name (no APPID suffix) |
+| `stsToken` | OSS STS token | OBS temporary-credential SecurityToken (`x-obs-security-token`) |
+| `endpoint` / `secure` / `timeout` | same | same |
+
+Notes:
+
+- Browser uploads to OBS require the bucket's CORS rule to allow your origin and expose the `ETag` response header for multipart uploads; temporary credentials (IAM agency) are recommended over permanent keys.
+- OBS signatures are time-sensitive (the `x-obs-date` header); a skewed client clock yields `403 RequestTimeTooSkewed`.
+- The OBS signer uses the OBS "obs" signature scheme, matching the official `esdk-obs-browserjs` byte for byte.
 
 ### Binding options once
 

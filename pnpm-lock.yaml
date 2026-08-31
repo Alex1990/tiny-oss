@@ -48,6 +48,9 @@ importers:
       dts-bundle-generator:
         specifier: ^9.5.1
         version: 9.5.1
+      esdk-obs-browserjs:
+        specifier: 3.25.51
+        version: 3.25.51
       hono:
         specifier: ^4.12.5
         version: 4.12.5
@@ -658,11 +661,17 @@ packages:
   ast-v8-to-istanbul@0.3.10:
     resolution: {integrity: sha512-p4K7vMz2ZSk3wN8l5o3y2bJAoZXT3VuJI5OLTATY/01CYWumWvwkUw0SqDBnNq6IiTO3qDa1eSQDibAV8g7XOQ==}
 
+  axios@0.26.1:
+    resolution: {integrity: sha512-fPwcX4EvnSHuInCMItEhAGnaSEXRBjtzh9fOtsE6E1G6p7vl7edEeZe11QHf18+6+9gR5PbKV/sGKNaD8YaMeA==}
+
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
 
   bidi-js@1.0.3:
     resolution: {integrity: sha512-RKshQI1R3YQ+n9YJz2QQ147P66ELpa1FQEg20Dk8oW9t2KgLbpDLLp9aGZ7y8WHSshDknG0bknqGw5/tyCs5tw==}
+
+  blueimp-md5@2.19.0:
+    resolution: {integrity: sha512-DRQrD6gJyy8FbiE4s+bDoXS9hiW3Vbx5uCdwvcCf3zLHL+Iv7LtGHLpr+GZV8rHG8tK766FGYBwRbu8pELTt+w==}
 
   bowser@1.9.4:
     resolution: {integrity: sha512-9IdMmj2KjigRq6oWhmwv1W36pDuA4STQZ8q6YO9um+x07xgYNCD3Oou+WP/3L1HNz7iqythGet3/p4wvc8AAwQ==}
@@ -730,6 +739,10 @@ packages:
 
   crypt@0.0.2:
     resolution: {integrity: sha512-mCxBlsHFYh9C+HVpiEacem8FEBnMXgU9gy4zmNC+SXAZNB/1idgp/aulFJ4FgCi7GPEVbfyng092GqL2k2rmow==}
+
+  crypto-js@4.2.0:
+    resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
 
   css-tree@3.1.0:
     resolution: {integrity: sha512-0eW44TGN5SQXU1mWSkKwFstI/22X2bG1nYzZTYMAWjylYURhse752YgbE4Cx46AC+bAvI+/dYTPRk1LqSUnu6w==}
@@ -841,6 +854,10 @@ packages:
   escape-html@1.0.3:
     resolution: {integrity: sha512-NiSupZ4OeuGwr68lGIeym/ksIZMJodUGOSCZ/FSnTxcrekbvqrgdUxlJOMpijaKZVjAJrWrGs/6Jy8OMuyj9ow==}
 
+  esdk-obs-browserjs@3.25.51:
+    resolution: {integrity: sha512-bH0esfRpOMGDrWatpi74Q5IIh9dm/40fvoocqf8XaAiPqfyi9PzUtRCxrlpzVEu6COhJyNIJUUHBrA9Yt3ZpEg==}
+    engines: {node: '>=0.12.7'}
+
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
 
@@ -871,6 +888,15 @@ packages:
   fill-range@7.1.1:
     resolution: {integrity: sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg==}
     engines: {node: '>=8'}
+
+  follow-redirects@1.16.0:
+    resolution: {integrity: sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==}
+    engines: {node: '>=4.0'}
+    peerDependencies:
+      debug: '*'
+    peerDependenciesMeta:
+      debug:
+        optional: true
 
   formstream@1.5.2:
     resolution: {integrity: sha512-NASf0lgxC1AyKNXQIrXTEYkiX99LhCEXTkiGObXAkpBui86a4u8FjH1o2bGb3PpqI3kafC+yw4zWeK6l6VHTgg==}
@@ -1013,6 +1039,9 @@ packages:
   js-base64@2.6.4:
     resolution: {integrity: sha512-pZe//GGmwJndub7ZghVHz7vjb2LgC1m8B07Au3eYqeqv9emhESByMXxaEgkUkEqJe87oBbSniGYoQNIBklc7IQ==}
 
+  js-base64@3.9.3:
+    resolution: {integrity: sha512-uwYQp+VJ38FVvtim6qNbit6e9uT6dwWQ4Y1+H9TxhW5hcHjpHwoxlR0nMpqUmIFOmu4VqMxwdJA88gIVuZJQ/g==}
+
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -1027,6 +1056,9 @@ packages:
     peerDependenciesMeta:
       canvas:
         optional: true
+
+  jssha@3.3.2:
+    resolution: {integrity: sha512-0RhFxzijV4W0qTXa97D5b6twAWXX7SEOpw8qzAZyZ+oeGOP9e84PnDSLjl7SBB1vBQ+chSUwsZR06i1AzA+nEA==}
 
   jstoxml@2.2.9:
     resolution: {integrity: sha512-OYWlK0j+roh+eyaMROlNbS5cd5R25Y+IUpdl7cNdB8HNrkgwQzIS7L9MegxOiWNBj9dQhA/yAxiMwCC5mwNoBw==}
@@ -1458,6 +1490,9 @@ packages:
   unescape@1.0.1:
     resolution: {integrity: sha512-O0+af1Gs50lyH1nUu3ZyYS1cRh01Q/kUKatTOkSs7jukXE6/NebucDVxyiDsA9AQ4JC1V1jUH9EO8JX2nMDgGQ==}
     engines: {node: '>=0.10.0'}
+
+  urijs@1.19.11:
+    resolution: {integrity: sha512-HXgFDgDommxn5/bIv0cnQZsPhHDA90NPHD6+c/v21U5+Sx5hoP8+dP9IZXBU1gIfvdRfhG8cel9QNPeionfcCQ==}
 
   urllib@2.44.0:
     resolution: {integrity: sha512-zRCJqdfYllRDA9bXUtx+vccyRqtJPKsw85f44zH7zPD28PIvjMqIgw9VwoTLV7xTBWZsbebUFVHU5ghQcWku2A==}
@@ -2102,12 +2137,20 @@ snapshots:
       estree-walker: 3.0.3
       js-tokens: 9.0.1
 
+  axios@0.26.1:
+    dependencies:
+      follow-redirects: 1.16.0
+    transitivePeerDependencies:
+      - debug
+
   base64-js@1.5.1: {}
 
   bidi-js@1.0.3:
     dependencies:
       require-from-string: 2.0.2
     optional: true
+
+  blueimp-md5@2.19.0: {}
 
   bowser@1.9.4: {}
 
@@ -2167,6 +2210,8 @@ snapshots:
       fast-xml-parser: 4.5.0
 
   crypt@0.0.2: {}
+
+  crypto-js@4.2.0: {}
 
   css-tree@3.1.0:
     dependencies:
@@ -2282,6 +2327,17 @@ snapshots:
 
   escape-html@1.0.3: {}
 
+  esdk-obs-browserjs@3.25.51:
+    dependencies:
+      axios: 0.26.1
+      blueimp-md5: 2.19.0
+      crypto-js: 4.2.0
+      js-base64: 3.9.3
+      jssha: 3.3.2
+      urijs: 1.19.11
+    transitivePeerDependencies:
+      - debug
+
   estree-walker@3.0.3:
     dependencies:
       '@types/estree': 1.0.8
@@ -2305,6 +2361,8 @@ snapshots:
   fill-range@7.1.1:
     dependencies:
       to-regex-range: 5.0.1
+
+  follow-redirects@1.16.0: {}
 
   formstream@1.5.2:
     dependencies:
@@ -2446,6 +2504,8 @@ snapshots:
 
   js-base64@2.6.4: {}
 
+  js-base64@3.9.3: {}
+
   js-tokens@4.0.0: {}
 
   js-tokens@9.0.1: {}
@@ -2478,6 +2538,8 @@ snapshots:
       - supports-color
       - utf-8-validate
     optional: true
+
+  jssha@3.3.2: {}
 
   jstoxml@2.2.9: {}
 
@@ -2923,6 +2985,8 @@ snapshots:
   unescape@1.0.1:
     dependencies:
       extend-shallow: 2.0.1
+
+  urijs@1.19.11: {}
 
   urllib@2.44.0:
     dependencies:

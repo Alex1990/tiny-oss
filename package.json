@@ -13,6 +13,10 @@
     "./cos": {
       "types": "./dist/cos.d.ts",
       "import": "./dist/tiny-oss.cos.es.js"
+    },
+    "./obs": {
+      "types": "./dist/obs.d.ts",
+      "import": "./dist/tiny-oss.obs.es.js"
     }
   },
   "engines": {
@@ -24,10 +28,11 @@
   "scripts": {
     "clean": "rimraf dist",
     "lint": "oxlint src test",
-    "build": "vite build && vite build -c vite.cos.config.ts && npm run build:types && npm run build:types:cos",
+    "build": "vite build && vite build -c vite.cos.config.ts && vite build -c vite.obs.config.ts && npm run build:types && npm run build:types:cos && npm run build:types:obs",
     "build:types": "dts-bundle-generator src/index.ts -o dist/index.d.ts --project tsconfig.json --sort",
     "build:types:cos": "dts-bundle-generator src/cos/index.ts -o dist/cos.d.ts --project tsconfig.json --sort",
-    "check:types": "tsc --noEmit --skipLibCheck test/test-types.ts && tsc --noEmit --skipLibCheck test/test-types-cos.ts",
+    "build:types:obs": "dts-bundle-generator src/obs/index.ts -o dist/obs.d.ts --project tsconfig.json --sort",
+    "check:types": "tsc --noEmit --skipLibCheck test/test-types.ts && tsc --noEmit --skipLibCheck test/test-types-cos.ts && tsc --noEmit --skipLibCheck test/test-types-obs.ts",
     "dev": "vite",
     "serve": "tsx test/server.ts",
     "test": "vitest",
@@ -68,6 +73,7 @@
     "cos-js-sdk-v5": "^1.10.1",
     "dotenv": "^17.2.3",
     "dts-bundle-generator": "^9.5.1",
+    "esdk-obs-browserjs": "3.25.51",
     "hono": "^4.12.5",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
