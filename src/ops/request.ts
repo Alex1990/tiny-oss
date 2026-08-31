@@ -62,7 +62,8 @@ export interface RequestParams {
  * built from the host plus the sub-resource query parameters.
  */
 export function request(options: TinyOSS.TinyOSSOptions, params: RequestParams): Promise<any> {
-  const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = options;
+  const opts = normalizeOptions(options);
+  const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = opts;
   const headers: Record<string, any> = {
     'x-oss-date': new Date().toUTCString(),
     ...params.headers,
@@ -79,7 +80,7 @@ export function request(options: TinyOSS.TinyOSSOptions, params: RequestParams):
   });
   headers.Authorization = `OSS ${accessKeyId}:${signature}`;
   const protocol = secure ? 'https' : 'http';
-  let url = `${protocol}://${resolveHost(options)}/${params.objectName}`;
+  let url = `${protocol}://${resolveHost(opts)}/${params.objectName}`;
   if (params.subResource) {
     const qs = Object.keys(params.subResource)
       .map((key) => {

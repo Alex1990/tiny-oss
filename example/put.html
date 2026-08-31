@@ -24,7 +24,7 @@
   <p><button id="auto">自动生成文件验证</button></p>
   <pre id="status">待开始</pre>
   <script type="module">
-    import TinyOSS from '/dist/tiny-oss.es.js';
+    import { put, signatureUrl, bindOptions } from '/dist/tiny-oss.es.js';
     (function () {
       var statusEl = document.getElementById('status')
       function log (msg) {
@@ -47,16 +47,19 @@
         return hex
       }
 
-      var oss = null
+      var upload = null
+      var sign = null
       fetch('http://localhost:8080/api/oss-config')
         .then(function (res) { return res.json() })
         .then(function (cfg) {
-          oss = new TinyOSS({
+          var options = {
             accessKeyId: cfg.accessKeyId,
             accessKeySecret: cfg.accessKeySecret,
             region: cfg.region,
             bucket: cfg.bucket
-          })
+          }
+          upload = bindOptions(put, options)
+          sign = bindOptions(signatureUrl, options)
           document.getElementById('cfg').textContent = 'bucket=' + cfg.bucket + ' region=' + cfg.region
           log('config ready')
         })
@@ -66,7 +69,7 @@
         })
 
       function verify (objectName, expectedBytes) {
-        var url = oss.signatureUrl(objectName)
+        var url = sign(objectName)
         return fetch(url).then(function (res) { return res.arrayBuffer() }).then(function (buf) {
           var downloaded = new Uint8Array(buf)
           if (downloaded.length !== expectedBytes.length) {
@@ -80,7 +83,7 @@
       }
 
       function doUpload (objectName, blob, onprogress) {
-        return oss.put(objectName, blob, { onprogress: onprogress })
+        return upload(objectName, blob, { onprogress: onprogress })
       }
 
       document.getElementById('manual').addEventListener('click', function () {

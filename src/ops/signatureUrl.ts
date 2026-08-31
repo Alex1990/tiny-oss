@@ -1,5 +1,5 @@
 import { getSignature, unix } from '../utils';
-import { resolveHost } from './request';
+import { normalizeOptions, resolveHost } from './request';
 import type { TinyOSS } from '../types';
 
 /**
@@ -16,7 +16,8 @@ export function signatureUrl(
   urlOptions: TinyOSS.SignatureUrlOptions = {}
 ): string {
   const { expires = 1800, method, process, response } = urlOptions;
-  const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = options;
+  const opts = normalizeOptions(options);
+  const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = opts;
   const headers: Record<string, any> = {};
   const subResource: Record<string, any> = {};
   if (process) subResource['x-oss-process'] = process;
@@ -53,7 +54,7 @@ export function signatureUrl(
     expires: expireUnix,
   });
   const protocol = secure ? 'https' : 'http';
-  let url = `${protocol}://${resolveHost(options)}/${objectName}`;
+  let url = `${protocol}://${resolveHost(opts)}/${objectName}`;
   url += `?OSSAccessKeyId=${accessKeyId}`;
   url += `&Expires=${expireUnix}`;
   url += `&Signature=${encodeURIComponent(signature)}`;

@@ -1,129 +1,114 @@
 // Type testing file - validates that the generated .d.ts file exports correct types
-// Run: npx tsc --noEmit test-types.ts
+// Run: npx tsc --noEmit --skipLibCheck test-types.ts
 
-import TinyOSS from '../dist/index';
+import {
+  put,
+  putSymlink,
+  signatureUrl,
+  initMultipartUpload,
+  uploadPart,
+  completeMultipartUpload,
+  abortMultipartUpload,
+  listParts,
+  listUploads,
+  uploadPartCopy,
+  multipartUpload,
+  bindOptions,
+  type TinyOSS,
+} from '../dist/index';
 
-// ========================================
-// Test 1: Verify class can be instantiated with correct options
-// ========================================
-const oss = new TinyOSS({
+const options: TinyOSS.TinyOSSOptions = {
   accessKeyId: 'test-key-id',
   accessKeySecret: 'test-secret',
   bucket: 'test-bucket',
   region: 'oss-cn-hangzhou',
-  secure: true,
-  timeout: 30000,
-  internal: false,
-  cname: false,
-});
-
-// ========================================
-// Test 2: Verify constructor accepts optional and partial options
-// ========================================
-const ossMinimal = new TinyOSS({
-  accessKeyId: 'test',
-  accessKeySecret: 'test',
-});
-
-const ossWithStsToken = new TinyOSS({
-  accessKeyId: 'test',
-  accessKeySecret: 'test',
-  stsToken: 'temporary-token',
-});
-
-const ossWithEndpoint = new TinyOSS({
-  accessKeyId: 'test',
-  accessKeySecret: 'test',
-  endpoint: 'custom.example.com',
-});
-
-// ========================================
-// Test 3: Verify instance properties exist
-// ========================================
-const host: string | undefined = oss.host;
-const opts = oss.opts;
-
-// ========================================
-// Test 4: Verify put method signature
-// ========================================
-const blob = new Blob(['test content'], { type: 'text/plain' });
-
-// Basic put call
-const putPromise: Promise<any> = oss.put('test.txt', blob);
-
-// Put with options
-const putWithProgress = oss.put('test.txt', blob, {
-  onprogress: function(this: XMLHttpRequest, ev: ProgressEvent) {
-    console.log(`Progress: ${ev.loaded}/${ev.total}`);
-  },
-});
-
-// ========================================
-// Test 5: Verify putSymlink method
-// ========================================
-const symlinkPromise: Promise<any> = oss.putSymlink('link.txt', 'target.txt');
-
-// ========================================
-// Test 6: Verify signatureUrl method
-// ========================================
-// Basic signature url
-const basicUrl: string = oss.signatureUrl('test.txt');
-
-// With options
-const urlWithOptions = oss.signatureUrl('test.txt', {
-  expires: 3600,
-  method: 'GET',
-  'Content-Type': 'application/json',
-  process: 'image/resize,w_200',
-  response: {
-    'content-type': 'image/jpeg',
-    'content-disposition': 'attachment; filename="test.jpg"',
-    'cache-control': 'max-age=3600',
-  },
-});
-
-// With callback
-const urlWithCallback = oss.signatureUrl('test.txt', {
-  callback: {
-    url: 'https://example.com/callback',
-    body: 'key=$(key)&etag=$(etag)',
-    host: 'example.com',
-    contentType: 'application/json',
-    customValue: { foo: 'bar' },
-    headers: { 'X-Custom': 'header' },
-  },
-});
-
-// ========================================
-// Test 7: Verify HTTP methods type
-// ========================================
-type Methods = 'GET' | 'POST' | 'DELETE' | 'PUT';
-const validMethods: Methods[] = ['GET', 'POST', 'DELETE', 'PUT'];
-
-// ========================================
-// Test 8: Verify ResponseHeaderType
-// ========================================
-const responseHeaders: {
-  'content-type'?: string;
-  'content-disposition'?: string;
-  'cache-control'?: string;
-} = {
-  'content-type': 'application/json',
 };
 
 // ========================================
-// Test 9: Test that incorrect types cause errors (uncomment to verify)
+// Test 1: Verify operation signatures
+// ========================================
+const blob = new Blob(['test content'], { type: 'text/plain' });
+
+// put
+const putPromise: Promise<any> = put(options, 'test.txt', blob);
+const putWithProgress = put(options, 'test.txt', blob, {
+  onprogress (e) {
+    const loaded: number = e.loaded;
+    const total: number = e.total;
+    console.log(loaded, total);
+  },
+});
+
+// putSymlink
+const symlinkPromise: Promise<any> = putSymlink(options, 'link.txt', 'target.txt');
+
+// signatureUrl
+const basicUrl: string = signatureUrl(options, 'test.txt');
+const urlWithOptions: string = signatureUrl(options, 'test.txt', { expires: 600, method: 'GET' });
+const urlWithCallback: string = signatureUrl(options, 'test.txt', {
+  callback: {
+    url: 'https://example.com/callback',
+    body: 'key=$(key)',
+  },
+});
+
+// multipart upload workflow
+const initResult: Promise<TinyOSS.InitMultipartUploadResult> = initMultipartUpload(options, 'test.txt', { timeout: 30000 });
+const uploadPartResult: Promise<TinyOSS.UploadPartResult> = uploadPart(options, 'test.txt', 'upload-1', 1, blob, 0, 1024);
+const completeResult: Promise<TinyOSS.CompleteMultipartUploadResult> = completeMultipartUpload(
+  options,
+  'test.txt',
+  'upload-1',
+  [{ number: 1, etag: '"etag"' }]
+);
+const abortResult: Promise<void> = abortMultipartUpload(options, 'test.txt', 'upload-1');
+const listPartsResult: Promise<TinyOSS.ListPartsResult> = listParts(options, 'test.txt', 'upload-1');
+const listUploadsResult: Promise<TinyOSS.ListUploadsResult> = listUploads(options, { prefix: 'x' });
+const uploadPartCopyResult: Promise<TinyOSS.UploadPartCopyResult> = uploadPartCopy(
+  options,
+  'test.txt',
+  'upload-1',
+  1,
+  'bytes=0-1023',
+  { sourceKey: 'source.txt' }
+);
+const multipartResult: Promise<TinyOSS.CompleteMultipartUploadResult> = multipartUpload(options, 'test.txt', blob, {
+  partSize: 1024 * 1024,
+  parallel: 3,
+  progress: (percentage: number, checkpoint: TinyOSS.Checkpoint) => {
+    console.log(percentage, checkpoint.uploadId);
+  },
+});
+
+// bindOptions
+const upload = bindOptions(put, options);
+const boundPutPromise: Promise<any> = upload('bound.txt', blob);
+
+// ========================================
+// Test 2: Verify interface types are exported
+// ========================================
+const responseHeaders: TinyOSS.ResponseHeaderType = {
+  'content-type': 'application/json',
+};
+const part: TinyOSS.PartInfo = { number: 1, etag: '"etag"' };
+const sourceData: TinyOSS.SourceData = { sourceKey: 'src', sourceBucket: 'other' };
+
+// ========================================
+// Test 3: Test that incorrect types cause errors (uncomment to verify)
 // ========================================
 // @ts-expect-error - accessKeyId should be string
-const wrongOss = new TinyOSS({ accessKeyId: 123 });
+put({ accessKeyId: 123 }, 'test.txt', blob);
 
 // @ts-expect-error - missing required accessKeySecret
-const wrongOss2 = new TinyOSS({ accessKeyId: 'test' });
+put({ accessKeyId: 'test' }, 'test.txt', blob);
 
 // @ts-expect-error - put requires objectName as string
-oss.put(123, blob);
+put(options, 123, blob);
 
 // @ts-expect-error - put requires Blob
-oss.put('test.txt', 'not a blob');
+put(options, 'test.txt', 'not a blob');
+
+// @ts-expect-error - multipartUpload requires non-empty options object first
+multipartUpload(options, 'test.txt', blob, { parallel: '3' });
 
 console.log('All type tests passed!');

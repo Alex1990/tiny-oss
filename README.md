@@ -20,44 +20,16 @@ yarn add tiny-oss
 
 ## Usage
 
+Every operation is a standalone function taking the client options as the first argument. Import only what you use and bundlers tree-shake the rest, so a bundle that only calls `put` does not carry the multipart code.
+
 ### Basic
-
-```js
-const oss = new TinyOSS({
-  accessKeyId: 'your accessKeyId',
-  accessKeySecret: 'your accessKeySecret',
-  // Recommend to use the stsToken option in browser
-  stsToken: 'security token',
-  region: 'oss-cn-beijing',
-  bucket: 'your bucket'
-});
-
-const blob = new Blob(['hello world'], { type: 'text/plain' });
-
-// Upload
-oss.put('hello-world', blob);
-```
-
-### Upload progress
-
-You can specify the third parameter to monitor the upload progress data:
-
-```js
-// Upload progress
-oss.put('hello-world', blob, {
-  onprogress (e) {
-    console.log('total: ', e.total, ', uploaded: ', e.loaded);
-  }
-});
-```
-
-### Functional API (tree-shakable)
-
-Every operation is also exported as a standalone function that takes the client options as the first argument. Import only what you use and bundlers tree-shake the rest, so a bundle that only calls `put` does not carry the multipart code:
 
 ```js
 import { put } from 'tiny-oss';
 
+const blob = new Blob(['hello world'], { type: 'text/plain' });
+
+// Upload
 put(
   {
     accessKeyId: 'your accessKeyId',
@@ -68,11 +40,11 @@ put(
     bucket: 'your bucket'
   },
   'hello-world',
-  new Blob(['hello world'], { type: 'text/plain' })
+  blob
 );
 ```
 
-Available functions: `put`, `putSymlink`, `signatureUrl`, `initMultipartUpload`, `uploadPart`, `completeMultipartUpload`, `abortMultipartUpload`, `listParts`, `listUploads`, `uploadPartCopy`, `multipartUpload`. Each mirrors the same-named class method with the client options as the first argument.
+Available functions: `put`, `putSymlink`, `signatureUrl`, `initMultipartUpload`, `uploadPart`, `completeMultipartUpload`, `abortMultipartUpload`, `listParts`, `listUploads`, `uploadPartCopy`, `multipartUpload`, `bindOptions`.
 
 Types are available via named imports: `import { put, type TinyOSS } from 'tiny-oss'`.
 
@@ -94,6 +66,23 @@ const upload = bindOptions(put, {
 upload('hello-world', new Blob(['hello world'], { type: 'text/plain' }));
 ```
 
+### Upload progress
+
+You can specify the last parameter to monitor the upload progress data:
+
+```js
+put(
+  options,
+  'hello-world',
+  blob,
+  {
+    onprogress (e) {
+      console.log('total: ', e.total, ', uploaded: ', e.loaded);
+    }
+  }
+);
+```
+
 More options or methods see [API](#api).
 
 ## Compatibility
@@ -104,13 +93,9 @@ This package depends on some Web APIs, such as [Blob](https://developer.mozilla.
 
 ## API
 
-```js
-new TinyOSS(options)
-```
-
 ### options
 
-Please check [Browser.js offical document](https://help.aliyun.com/document_detail/64095.html?spm=a2c4g.11186623.6.1122.27976928XhTpTr).
+The first argument of every operation. Please check [Browser.js offical document](https://help.aliyun.com/document_detail/64095.html?spm=a2c4g.11186623.6.1122.27976928XhTpTr).
 
 * accessKeyId
 * accessKeySecret
@@ -121,27 +106,29 @@ Please check [Browser.js offical document](https://help.aliyun.com/document_deta
 * secure
 * timeout
 
-### put(objectName, blob, options)
+### put(options, objectName, blob, putOptions)
 
 Upload the blob.
 
 #### Arguments
 
+* **options (Object)**: The client options, see above.
 * **objectName (String)**: The object name.
 * **blob (Blob|File)**: The object to be uploaded.
-* **[options (Object)]**
+* **[putOptions (Object)]**
   + **[onprogress (Function)]**: The upload progress event listener receiving an [progress event](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/progress_event) object as an parameter.
 
 #### Return
 
 * **(Promise)**
 
-### putSymlink(objectName, targetObjectName)
+### putSymlink(options, objectName, targetObjectName)
 
 Create a symlink.
 
 #### Arguments
 
+* **options (Object)**: The client options, see above.
 * **objectName (String)**: The symlink object name.
 * **targetObjectName (String)**: The target object name.
 
@@ -149,15 +136,16 @@ Create a symlink.
 
 * **(Promise)**
 
-### signatureUrl(objectName, options)
+### signatureUrl(options, objectName, urlOptions)
 
 Get a signature url to download the file.
 
 #### Arguments
 
+* **options (Object)**: The client options, see above.
 * **objectName (String)**: The object name.
-* **[options (Object)]**:
-  + **[options.expires (Number)]**: The url expires (unit: seconds).
+* **[urlOptions (Object)]**:
+  + **[expires (Number)]**: The url expires (unit: seconds).
 
 #### Return
 

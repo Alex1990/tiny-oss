@@ -1,4 +1,3 @@
-import TinyOSS from './TinyOSS';
 export type { TinyOSS } from './types';
 export { bindOptions } from './ops/bindOptions';
 export { put } from './ops/put';
@@ -12,4 +11,3 @@ export { listParts } from './ops/listParts';
 export { listUploads } from './ops/listUploads';
 export { uploadPartCopy } from './ops/uploadPartCopy';
 export { multipartUpload } from './ops/multipartUpload';
-export default TinyOSS;
