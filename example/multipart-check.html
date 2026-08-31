@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>multipartUpload check</title>
+  <style>
+    body { font: 14px/1.6 system-ui, sans-serif; margin: 2rem; max-width: 720px; }
+    pre { background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+    .pass { color: #1a7f37; font-weight: bold; }
+    .fail { color: #cf222e; font-weight: bold; }
+    button { padding: .5rem 1.5rem; font-size: 1rem; cursor: pointer; }
+    #status { margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h2>multipartUpload 真实网页验证</h2>
+  <p>流程: fetch <code>/api/oss-config</code> → 生成 3MB 模式化数据(3 个 1MB 分片, parallel=2) → <code>multipartUpload</code> → 签名 URL 下载 → 逐字节比对。</p>
+  <button id="run">开始验证</button>
+  <pre id="status">待开始</pre>
+  <script type="module">
+    import TinyOSS from '/dist/tiny-oss.es.js';
+    (function () {
+      var statusEl = document.getElementById('status')
+      function log (msg) {
+        var text = statusEl.textContent
+        statusEl.textContent = text === '待开始' ? msg : text + '\n' + msg
+      }
+
+      function makeData (size) {
+        var bytes = new Uint8Array(size)
+        for (var i = 0; i < size; i++) bytes[i] = i % 251
+        return bytes
+      }
+
+      function toHex (u8) {
+        var hex = ''
+        for (var i = 0; i < u8.length; i += 65536) {
+          var chunk = Array.prototype.slice.call(u8.subarray(i, i + 65536))
+          hex += chunk.map(function (b) { return b.toString(16).padStart(2, '0') }).join('')
+        }
+        return hex
+      }
+
+      document.getElementById('run').addEventListener('click', function () {
+        statusEl.className = ''
+        statusEl.textContent = '待开始'
+        fetch('http://localhost:8080/api/oss-config')
+          .then(function (res) { return res.json() })
+          .then(function (cfg) {
+            log('config: bucket=' + cfg.bucket + ' region=' + cfg.region)
+            var oss = new TinyOSS({
+              accessKeyId: cfg.accessKeyId,
+              accessKeySecret: cfg.accessKeySecret,
+              region: cfg.region,
+              bucket: cfg.bucket
+            })
+            var size = 3 * 1024 * 1024
+            var bytes = makeData(size)
+            var objectName = 'multipart-check-' + Date.now()
+            var blob = new Blob([bytes], { type: 'application/octet-stream' })
+            log('start upload: ' + objectName + ' (' + size + ' bytes)')
+
+            return oss.multipartUpload(objectName, blob, {
+              partSize: 1024 * 1024,
+              parallel: 2,
+              progress: function (pct) {
+                log('progress: ' + Math.round(pct * 100) + '%')
+              }
+            }).then(function (result) {
+              log('upload done, etag: ' + result.etag)
+              var url = oss.signatureUrl(objectName)
+              return fetch(url).then(function (res) { return res.arrayBuffer() }).then(function (buf) {
+                  var downloaded = new Uint8Array(buf)
+                  if (downloaded.length !== size) {
+                    throw new Error('size mismatch: ' + downloaded.length + ' != ' + size)
+                  }
+                  if (toHex(downloaded) !== toHex(bytes)) {
+                    throw new Error('content mismatch!')
+                  }
+                  log('download verified: ' + downloaded.length + ' bytes, content identical')
+                  statusEl.className = 'pass'
+                  statusEl.textContent += '\n✅ PASS: 3MB 分片上传内容逐字节一致'
+              })
+            })
+          })
+          .catch(function (err) {
+            statusEl.className = 'fail'
+            statusEl.textContent += '\n❌ FAIL: ' + (err && err.message ? err.message : err)
+          })
+      })
+    })()
+  </script>
+</body>
+</html>
