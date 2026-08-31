@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { setTransport, getTransport } from '../src/transport';
 import type { Transport, TransportOptions } from '../src/transport';
 import { request } from '../src/ops/request';
-import { put } from '../src/ops/put';
+import { put } from '../src/index';
 
 const options = {
   accessKeyId: 'ak',

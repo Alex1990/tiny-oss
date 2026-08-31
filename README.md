@@ -1,6 +1,6 @@
 # tiny-oss
 
-A tiny aliyun oss sdk for browser which focus on uploading. Less than 10kb (min+gzipped).
+A tiny aliyun oss sdk for browser which focus on uploading. Less than 10kb (min+gzipped). Also ships a Tencent Cloud COS entry point (`tiny-oss/cos`) with the same API — see [Tencent Cloud COS](#tencent-cloud-cos).
 
 **English | [简体中文](README_zh-CN.md)**
 
@@ -47,6 +47,44 @@ put(
 Available functions: `put`, `putSymlink`, `signatureUrl`, `initMultipartUpload`, `uploadPart`, `completeMultipartUpload`, `abortMultipartUpload`, `listParts`, `listUploads`, `uploadPartCopy`, `multipartUpload`, `bindOptions`.
 
 Types are available via named imports: `import { put, type TinyOSS } from 'tiny-oss'`.
+
+## Tencent Cloud COS
+
+The same operations are available for Tencent Cloud COS through a separate entry point. The OSS entry never references COS code and vice versa, so importing only what you use keeps the OSS bundle free of COS signing code (and the other way around).
+
+```js
+import { put, multipartUpload, signatureUrl } from 'tiny-oss/cos';
+
+put(
+  {
+    accessKeyId: 'your SecretId',
+    accessKeySecret: 'your SecretKey',
+    // Recommend to use the stsToken option in browser
+    stsToken: 'security token',
+    region: 'ap-guangzhou',
+    bucket: 'your-bucket-1250000000' // COS bucket names include the APPID suffix
+  },
+  'hello-world',
+  blob
+);
+```
+
+The COS entry exports everything the OSS entry does except `putSymlink` (COS has no symlink API). Options map as:
+
+| option | OSS | COS |
+|---|---|---|
+| `accessKeyId` | Aliyun AccessKeyId | Tencent SecretId |
+| `accessKeySecret` | Aliyun AccessKeySecret | Tencent SecretKey |
+| `region` | `oss-cn-beijing` | e.g. `ap-guangzhou` |
+| `bucket` | `my-bucket` | must include the APPID suffix, e.g. `examplebucket-1250000000` |
+| `stsToken` | OSS STS token | COS temporary-credential SecurityToken (`x-cos-security-token`) |
+| `endpoint` / `secure` / `timeout` | same | same |
+
+Notes:
+
+- Like OSS, browser uploads to COS require a CORS rule on the bucket, and temporary credentials (CAM STS) are recommended over permanent keys.
+- Set the bucket CORS rule to expose the `ETag` response header for multipart uploads.
+- COS signatures are time-sensitive; a skewed client clock yields 403 `RequestTimeTooSkewed`.
 
 ### Binding options once
 

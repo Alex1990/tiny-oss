@@ -3,14 +3,14 @@ import { normalizeOptions, resolveHost } from './request';
 import type { TinyOSS } from '../types';
 
 /**
- * Get a signed url for an object.
+ * Get a signed url for an OSS object.
  *
  * @param options client options
  * @param objectName object name
  * @param urlOptions signature options, see https://github.com/ali-sdk/ali-oss#signatureurlname-options
  * @return signature url
  */
-export function signatureUrl(
+export function ossSignUrl(
   options: TinyOSS.TinyOSSOptions,
   objectName: string,
   urlOptions: TinyOSS.SignatureUrlOptions = {}

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { bindOptions } from '../src/ops/bindOptions';
-import { put } from '../src/ops/put';
+import { put } from '../src/index';
 
 describe('bindOptions', () => {
   it('should forward the remaining arguments to the operation', async () => {

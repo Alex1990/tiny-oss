@@ -1,12 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { multipartUpload } from '../src/ops/multipartUpload';
-import { initMultipartUpload } from '../src/ops/initMultipartUpload';
-import { uploadPart } from '../src/ops/uploadPart';
-import { completeMultipartUpload } from '../src/ops/completeMultipartUpload';
+import { createMultipartUpload, type MultipartUploadDeps } from '../src/ops/multipartUpload';
+import type { Protocol } from '../src/protocol';
+import type { TinyOSS } from '../src/types';
 
-vi.mock('../src/ops/initMultipartUpload', () => ({ initMultipartUpload: vi.fn() }));
-vi.mock('../src/ops/uploadPart', () => ({ uploadPart: vi.fn() }));
-vi.mock('../src/ops/completeMultipartUpload', () => ({ completeMultipartUpload: vi.fn() }));
+// The multipart workflow is provider-agnostic; a minimal protocol is enough.
+const protocol = { metaPrefix: 'x-oss-meta-' } as Protocol;
 
 const options = {
   accessKeyId: 'test-ak',
@@ -15,14 +13,27 @@ const options = {
   region: 'oss-cn-hangzhou',
 };
 
-const mockedInit = vi.mocked(initMultipartUpload);
-const mockedUploadPart = vi.mocked(uploadPart);
-const mockedComplete = vi.mocked(completeMultipartUpload);
+let mockedInit: ReturnType<typeof vi.fn>;
+let mockedUploadPart: ReturnType<typeof vi.fn>;
+let mockedComplete: ReturnType<typeof vi.fn>;
+let multipartUpload: ReturnType<typeof createMultipartUpload>;
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  mockedInit.mockResolvedValue({ name: 'obj', uploadId: 'upload-1' });
-  mockedComplete.mockResolvedValue({ name: 'obj', etag: 'final-etag' });
+  mockedInit = vi.fn(async (o: unknown, name: string) => ({ name, uploadId: 'upload-1' }));
+  mockedUploadPart = vi.fn(async (_o: unknown, name: string, _u: string, partNo: number) => ({
+    name,
+    etag: `etag-${partNo}`,
+  }));
+  mockedComplete = vi.fn(async (_o: unknown, name: string, _u: string) => ({
+    name,
+    etag: 'final-etag',
+  }));
+  const deps: MultipartUploadDeps = {
+    initMultipartUpload: mockedInit,
+    uploadPart: mockedUploadPart,
+    completeMultipartUpload: mockedComplete,
+  };
+  multipartUpload = createMultipartUpload(protocol, deps);
 });
 
 describe('multipartUpload', () => {
@@ -69,11 +80,6 @@ describe('multipartUpload', () => {
       ],
     };
 
-    mockedUploadPart.mockImplementation(async (_o, _n, _u, partNo) => ({
-      name: 'obj',
-      etag: `etag-${partNo}`,
-    }));
-
     // Pass a different partSize on resume; the checkpoint partSize must win.
     await multipartUpload(options, 'obj', file, { checkpoint, partSize: 1024 * 1024 });
 
@@ -114,8 +120,6 @@ describe('multipartUpload', () => {
   });
 
   it('should report progress per completed part', async () => {
-    mockedUploadPart.mockResolvedValue({ name: 'obj', etag: 'etag' });
-
     const percentages: number[] = [];
     const file = new Blob([new Uint8Array(1024 * 1024 * 2)]);
     await multipartUpload(options, 'obj', file, {

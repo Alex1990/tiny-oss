@@ -1,6 +1,6 @@
 # tiny-oss
 
-用于浏览器端的阿里云 OSS 极简版 SDK，专注于上传功能。小于 10kb (min+gzipped)。
+用于浏览器端的阿里云 OSS 极简版 SDK，专注于上传功能。小于 10kb (min+gzipped)。同时提供腾讯云 COS 入口（`tiny-oss/cos`），API 完全一致——见[腾讯云 COS](#腾讯云-cos)。
 
 **[English](README.md) | 简体中文**
 
@@ -47,6 +47,44 @@ put(
 可用函数：`put`、`putSymlink`、`signatureUrl`、`initMultipartUpload`、`uploadPart`、`completeMultipartUpload`、`abortMultipartUpload`、`listParts`、`listUploads`、`uploadPartCopy`、`multipartUpload`、`bindOptions`。
 
 类型通过具名导入使用：`import { put, type TinyOSS } from 'tiny-oss'`。
+
+## 腾讯云 COS
+
+同一套操作通过独立入口支持腾讯云 COS。OSS 入口完全不引用 COS 代码，反之亦然——按需导入即可让 OSS 产物不携带 COS 签名代码（反之亦然）。
+
+```js
+import { put, multipartUpload, signatureUrl } from 'tiny-oss/cos';
+
+put(
+  {
+    accessKeyId: '你的 SecretId',
+    accessKeySecret: '你的 SecretKey',
+    // 推荐在浏览器端使用 stsToken 参数
+    stsToken: 'security token',
+    region: 'ap-guangzhou',
+    bucket: 'your-bucket-1250000000' // COS 的 bucket 名必须带 APPID 后缀
+  },
+  'hello-world',
+  blob
+);
+```
+
+COS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`（COS 无软链接接口）。options 字段对应关系：
+
+| option | OSS | COS |
+|---|---|---|
+| `accessKeyId` | 阿里云 AccessKeyId | 腾讯云 SecretId |
+| `accessKeySecret` | 阿里云 AccessKeySecret | 腾讯云 SecretKey |
+| `region` | `oss-cn-beijing` | 如 `ap-guangzhou` |
+| `bucket` | `my-bucket` | 必须带 APPID 后缀，如 `examplebucket-1250000000` |
+| `stsToken` | OSS STS token | COS 临时密钥 SecurityToken（`x-cos-security-token`） |
+| `endpoint` / `secure` / `timeout` | 相同 | 相同 |
+
+注意事项：
+
+- 与 OSS 一样，浏览器上传 COS 需要在存储桶配置跨域规则，并推荐使用临时密钥（CAM STS）而非永久密钥。
+- 分片上传需要存储桶 CORS 规则暴露 `ETag` 响应头。
+- COS 签名对时间敏感，客户端时钟偏差会导致 403 `RequestTimeTooSkewed`。
 
 ### 绑定配置一次
 

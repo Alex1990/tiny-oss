@@ -12,6 +12,11 @@ const bucket = process.env.OSS_BUCKET;
 const region = process.env.OSS_REGION;
 const endpoint = process.env.OSS_ENDPOINT;
 const arn = process.env.OSS_ARN as string;
+const cosAccessKeyId = process.env.COS_ACCESS_KEY_ID;
+const cosAccessKeySecret = process.env.COS_ACCESS_KEY_SECRET;
+const cosBucket = process.env.COS_BUCKET;
+const cosRegion = process.env.COS_REGION;
+const cosStsRoleArn = process.env.COS_STS_ROLE_ARN;
 
 const app = new Hono();
 const PORT = 8080;
@@ -44,6 +49,16 @@ app.get('/api/oss-config', (c) => {
     bucket,
     region,
     endpoint,
+  });
+});
+
+app.get('/api/cos-config', (c) => {
+  return c.json({
+    accessKeyId: cosAccessKeyId,
+    accessKeySecret: cosAccessKeySecret,
+    bucket: cosBucket,
+    region: cosRegion,
+    stsRoleArn: cosStsRoleArn,
   });
 });
 

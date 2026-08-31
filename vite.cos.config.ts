@@ -1,16 +1,17 @@
 import { defineConfig } from 'vite';
 
-// Aliyun OSS entry — keeps the original bundle name `tiny-oss.es.js`.
-// Self-contained: no COS signing code inside.
+// Tencent COS entry — `tiny-oss.cos.es.js`. Self-contained: no OSS
+// signing code inside.
 export default defineConfig({
   build: {
     target: 'es2015',
     lib: {
-      entry: 'src/index.ts',
-      fileName: () => 'tiny-oss.es.js',
+      entry: 'src/cos/index.ts',
+      fileName: () => 'tiny-oss.cos.es.js',
       formats: ['es'],
     },
     outDir: 'dist',
+    emptyOutDir: false,
     sourcemap: true,
     minify: 'esbuild',
   },

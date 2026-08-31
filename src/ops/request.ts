@@ -1,6 +1,7 @@
 import { getTransport } from '../transport';
 import { assertOptions, getSignature, encodeUtf8 } from '../utils';
 import type { TinyOSS } from '../types';
+import type { RequestParams } from '../protocol';
 
 const DEFAULT_OPTIONS = {
   region: 'oss-cn-hangzhou',
@@ -13,7 +14,7 @@ const DEFAULT_OPTIONS = {
 /**
  * Validate and fill in defaults for client options. The result is a
  * plain object, so the functional API can be tree-shaken independently
- * of the TinyOSS class.
+ * of the TinyOSS class. Shared by every provider.
  */
 export function normalizeOptions(
   options: TinyOSS.TinyOSSOptions = {} as TinyOSS.TinyOSSOptions
@@ -23,8 +24,8 @@ export function normalizeOptions(
 }
 
 /**
- * Resolve the host the requests are sent to. An explicit endpoint wins
- * over the bucket/region combination.
+ * Resolve the OSS host the requests are sent to. An explicit endpoint
+ * wins over the bucket/region combination.
  */
 export function resolveHost(options: TinyOSS.TinyOSSOptions): string {
   const { bucket, region, endpoint, internal } = options;
@@ -38,14 +39,14 @@ export function resolveHost(options: TinyOSS.TinyOSSOptions): string {
 
 /**
  * Resolve the per-request timeout, honoring a per-request override and
- * tolerating string timeouts.
+ * tolerating string timeouts. Shared by every provider.
  */
 export function resolveTimeout(options: TinyOSS.TinyOSSOptions, fallback?: number): number | undefined {
   const value = fallback || options.timeout;
   return typeof value === 'string' ? parseInt(value, 10) : value;
 }
 
-/** Total payload size in bytes, for transports that need it. */
+/** Total payload size in bytes, for transports that need it. Shared by every provider. */
 export function dataSize(data: any): number | undefined {
   if (data == null) return undefined;
   if (typeof data === 'string') return encodeUtf8(data).length;
@@ -53,17 +54,6 @@ export function dataSize(data: any): number | undefined {
   if (data instanceof ArrayBuffer) return data.byteLength;
   if (ArrayBuffer.isView(data)) return data.byteLength;
   return undefined;
-}
-
-export interface RequestParams {
-  verb: string;
-  objectName: string;
-  contentMd5?: string;
-  headers?: Record<string, any>;
-  subResource?: Record<string, any>;
-  data?: any;
-  timeout?: number;
-  onprogress?: (e: TinyOSS.Progress) => any;
 }
 
 /**
