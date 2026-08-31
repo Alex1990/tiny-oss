@@ -76,6 +76,24 @@ put(
 
 类型通过具名导入使用：`import { put, type TinyOSS } from 'tiny-oss'`。
 
+### 绑定配置一次
+
+如果不想每次调用都传认证等配置，可以用 `bindOptions` 绑定一次。它只引用你传入的操作函数，不会影响 tree shaking：
+
+```js
+import { put, bindOptions } from 'tiny-oss';
+
+const upload = bindOptions(put, {
+  accessKeyId: 'your accessKeyId',
+  accessKeySecret: 'your accessKeySecret',
+  stsToken: 'security token',
+  region: 'oss-cn-beijing',
+  bucket: 'your bucket'
+});
+
+upload('hello-world', new Blob(['hello world'], { type: 'text/plain' }));
+```
+
 更多配置参数或方法参考 [API](#api)。
 
 ## 兼容性

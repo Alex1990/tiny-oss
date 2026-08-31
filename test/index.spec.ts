@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import TinyOSS from '../src/TinyOSS';
-import { put, signatureUrl, multipartUpload } from '../src/index';
+import { put, signatureUrl, multipartUpload, bindOptions } from '../src/index';
 // @ts-ignore: ali-oss only for test server
 import OSS from 'ali-oss';
 
@@ -266,5 +266,25 @@ describe('functional API', () => {
     const options = { accessKeyId, accessKeySecret, region, bucket };
     const oss = new TinyOSS(options);
     expect(signatureUrl(options, objectName)).toBe(oss.signatureUrl(objectName));
+  });
+
+  it('bindOptions put', async () => {
+    const content = 'bindOptions put: hello 你好';
+    const objectName = getObjectName();
+    const res = await fetch('http://localhost:8080/api/oss-config');
+    const data = (await res.json()) as OssConfig;
+    const { accessKeyId, accessKeySecret, region, bucket } = data;
+    const upload = bindOptions(put, { accessKeyId, accessKeySecret, region, bucket });
+    const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket });
+    const blob = new Blob([content], { type: 'text/plain' });
+    await upload(objectName, blob);
+    try {
+      const url = oss.signatureUrl(objectName);
+      const getRes = await fetch(url);
+      const text = await getRes.text();
+      expect(text).toBe(content);
+    } finally {
+      await oss.delete(objectName);
+    }
   });
 });

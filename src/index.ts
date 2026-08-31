@@ -1,5 +1,6 @@
 import TinyOSS from './TinyOSS';
 export type { TinyOSS } from './types';
+export { bindOptions } from './ops/bindOptions';
 export { put } from './ops/put';
 export { putSymlink } from './ops/putSymlink';
 export { signatureUrl } from './ops/signatureUrl';

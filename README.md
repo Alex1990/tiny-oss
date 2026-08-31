@@ -76,6 +76,24 @@ Available functions: `put`, `putSymlink`, `signatureUrl`, `initMultipartUpload`,
 
 Types are available via named imports: `import { put, type TinyOSS } from 'tiny-oss'`.
 
+### Binding options once
+
+To avoid passing the credentials on every call, bind them once with `bindOptions`. It only references the operation you give it, so tree shaking is unaffected:
+
+```js
+import { put, bindOptions } from 'tiny-oss';
+
+const upload = bindOptions(put, {
+  accessKeyId: 'your accessKeyId',
+  accessKeySecret: 'your accessKeySecret',
+  stsToken: 'security token',
+  region: 'oss-cn-beijing',
+  bucket: 'your bucket'
+});
+
+upload('hello-world', new Blob(['hello world'], { type: 'text/plain' }));
+```
+
 More options or methods see [API](#api).
 
 ## Compatibility
