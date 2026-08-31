@@ -1,4 +1,5 @@
 import { request } from './request';
+import { getXmlTag } from '../utils/xml';
 import type { TinyOSS } from '../types';
 
 /**
@@ -37,10 +38,8 @@ export function uploadPartCopy(
     subResource: { uploadId, partNumber: partNo.toString() },
     timeout: copyOptions.timeout,
   }).then((res: any) => {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(res.data, 'text/xml');
-    const etag = xmlDoc.getElementsByTagName('ETag')[0]?.textContent || '';
-    const lastModified = xmlDoc.getElementsByTagName('LastModified')[0]?.textContent || '';
+    const etag = getXmlTag(res.data, 'ETag');
+    const lastModified = getXmlTag(res.data, 'LastModified');
     return {
       etag,
       lastModified,

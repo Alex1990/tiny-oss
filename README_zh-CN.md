@@ -89,7 +89,66 @@ put(
 
 应该在大部分浏览器都能正常运行。
 
-这个包依赖一些现代 Web APIs，比如 [Blob](https://developer.mozilla.org/zh-CN/docs/Web/API/Blob), [Uint8Array](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array), [FileReader](https://developer.mozilla.org/zh-CN/docs/Web/API/FileReader), [Promise](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Promise).
+这个包依赖一些现代 Web APIs，比如 [Blob](https://developer.mozilla.org/zh-CN/docs/Web/API/Blob), [Uint8Array](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array), [Promise](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Promise). 浏览器端默认使用 `XMLHttpRequest` 发起请求；其他环境可注入自己的传输层（见下）。
+
+## 非浏览器环境
+
+网络层是可注入的。浏览器默认使用 `XMLHttpRequest`；在 Service Worker 或微信小程序中，启动时用 `setTransport` 注入自己的传输实现。输入数据支持 `Blob`、`ArrayBuffer`、`Uint8Array` 三种类型（小程序没有 Blob，请传 `ArrayBuffer`）。
+
+### Service Worker
+
+```js
+import { setTransport } from 'tiny-oss';
+
+setTransport(async (url, { method, headers, data, timeout }) => {
+  const controller = new AbortController();
+  const timer = timeout ? setTimeout(() => controller.abort(), timeout) : null;
+  const res = await fetch(url, { method, headers, body: data, signal: controller.signal });
+  if (timer) clearTimeout(timer);
+  return {
+    data: await res.text(),
+    headers: Object.fromEntries(res.headers.entries()),
+    status: res.status,
+    statusText: res.statusText,
+  };
+});
+```
+
+### 微信小程序
+
+```js
+import { setTransport } from 'tiny-oss';
+
+setTransport((url, { method, headers, data, timeout }) =>
+  new Promise((resolve, reject) => {
+    wx.request({
+      url,
+      method,
+      header: headers,
+      data: data instanceof Uint8Array ? data.buffer : data,
+      timeout,
+      success: (res) =>
+        resolve({ data: res.data, headers: res.header, status: res.statusCode, statusText: '' }),
+      fail: reject,
+    });
+  })
+);
+```
+
+然后用 `ArrayBuffer` 代替 `Blob` 上传：
+
+```js
+import { put, multipartUpload } from 'tiny-oss';
+
+const arrayBuffer = getFileArrayBuffer(); // 例如 FileSystemManager.readFile 的结果
+
+put(options, 'photo.jpg', arrayBuffer);
+multipartUpload(options, 'video.mp4', arrayBuffer, { partSize: 1024 * 1024 });
+```
+
+### 进度事件
+
+`onprogress` 回调收到 `{ loaded, total, lengthComputable }`。浏览器上报真实的上传进度（`lengthComputable: true`）。`fetch` 和 `wx.request` 无法上报中间进度，这类适配器会在发送前触发一次 `0%`、完成后触发一次 `100%` 事件，`lengthComputable: false`——可用于切换"上传中"状态，不要用来渲染百分比。
 
 ## 接口
 

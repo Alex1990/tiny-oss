@@ -1,21 +1,30 @@
 import { initMultipartUpload } from './initMultipartUpload';
 import { uploadPart } from './uploadPart';
 import { completeMultipartUpload } from './completeMultipartUpload';
+import { encodeUtf8 } from '../utils';
 import type { TinyOSS } from '../types';
+
+function getFileSize(data: TinyOSS.BlobLike | string): number {
+  if (typeof data === 'string') return encodeUtf8(data).length;
+  if (data instanceof Blob) return data.size;
+  return data.byteLength;
+}
 
 /**
  * Multipart upload with full workflow support.
  *
  * @param options client options
  * @param objectName object name
- * @param file file blob to upload
+ * @param file file blob to upload; Blob in browsers, ArrayBuffer/
+ *        Uint8Array in environments without Blob (WeChat mini programs),
+ *        or a string
  * @param multipartOptions multipart upload options
  * @return complete upload result
  */
 export async function multipartUpload(
   options: TinyOSS.TinyOSSOptions,
   objectName: string,
-  file: Blob,
+  file: TinyOSS.BlobLike | string,
   multipartOptions: TinyOSS.MultipartUploadOptions = {}
 ): Promise<TinyOSS.CompleteMultipartUploadResult> {
   const {
@@ -32,13 +41,13 @@ export async function multipartUpload(
   let doneParts: TinyOSS.PartInfo[] = [];
   let actualPartSize = Math.max(partSize, 100 * 1024); // minimum 100KB
 
-  const fileSize = file.size;
+  const fileSize = getFileSize(file);
   if (fileSize === 0) {
     throw new Error('multipart upload requires a non-empty file');
   }
 
   // Use checkpoint if available
-  if (checkpoint && checkpoint.uploadId && checkpoint.file.size === fileSize) {
+  if (checkpoint && checkpoint.uploadId && getFileSize(checkpoint.file) === fileSize) {
     uploadId = checkpoint.uploadId;
     doneParts = checkpoint.doneParts || [];
     // Resume with the part size the checkpoint was created with, otherwise

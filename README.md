@@ -89,7 +89,74 @@ More options or methods see [API](#api).
 
 It should work in most browsers.
 
-This package depends on some Web APIs, such as [Blob](https://developer.mozilla.org/en-US/docs/Web/API/Blob), [Uint8Array](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array), [FileReader](https://developer.mozilla.org/en-US/docs/Web/API/FileReader), [Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise).
+This package depends on some Web APIs, such as [Blob](https://developer.mozilla.org/en-US/docs/Web/API/Blob), [Uint8Array](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array), [Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise). In browsers it uses `XMLHttpRequest` for network requests; other environments inject their own transport (see below).
+
+## Non-browser environments
+
+The network layer is injectable. Browsers use `XMLHttpRequest` by default; in
+Service Workers or WeChat mini programs, pass your own transport with
+`setTransport` once at startup. The input data types are environment
+agnostic: `Blob`, `ArrayBuffer` and `Uint8Array` are all accepted (mini
+programs don't have `Blob`, so pass `ArrayBuffer`).
+
+### Service Worker
+
+```js
+import { setTransport } from 'tiny-oss';
+
+setTransport(async (url, { method, headers, data, timeout }) => {
+  const controller = new AbortController();
+  const timer = timeout ? setTimeout(() => controller.abort(), timeout) : null;
+  const res = await fetch(url, { method, headers, body: data, signal: controller.signal });
+  if (timer) clearTimeout(timer);
+  return {
+    data: await res.text(),
+    headers: Object.fromEntries(res.headers.entries()),
+    status: res.status,
+    statusText: res.statusText,
+  };
+});
+```
+
+### WeChat mini program
+
+```js
+import { setTransport } from 'tiny-oss';
+
+setTransport((url, { method, headers, data, timeout }) =>
+  new Promise((resolve, reject) => {
+    wx.request({
+      url,
+      method,
+      header: headers,
+      data: data instanceof Uint8Array ? data.buffer : data,
+      timeout,
+      success: (res) =>
+        resolve({ data: res.data, headers: res.header, status: res.statusCode, statusText: '' }),
+      fail: reject,
+    });
+  })
+);
+```
+
+Then upload with `ArrayBuffer` instead of `Blob`:
+
+```js
+import { put, multipartUpload } from 'tiny-oss';
+
+const arrayBuffer = getFileArrayBuffer(); // e.g. from FileSystemManager.readFile
+
+put(options, 'photo.jpg', arrayBuffer);
+multipartUpload(options, 'video.mp4', arrayBuffer, { partSize: 1024 * 1024 });
+```
+
+### Progress events
+
+`onprogress` receives `{ loaded, total, lengthComputable }`. Browsers report
+real upload progress (`lengthComputable: true`). `fetch` and `wx.request`
+cannot report intermediate progress, so those adapters fire a `0%` event
+before sending and a `100%` event after, with `lengthComputable: false` — use
+them to toggle a loading state, not to render a percentage.
 
 ## API
 

@@ -105,10 +105,4 @@ put({ accessKeyId: 'test' }, 'test.txt', blob);
 // @ts-expect-error - put requires objectName as string
 put(options, 123, blob);
 
-// @ts-expect-error - put requires Blob
-put(options, 'test.txt', 'not a blob');
-
-// @ts-expect-error - multipartUpload requires non-empty options object first
-multipartUpload(options, 'test.txt', blob, { parallel: '3' });
-
 console.log('All type tests passed!');

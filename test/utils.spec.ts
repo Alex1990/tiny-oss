@@ -2,12 +2,14 @@ import { describe, it, expect } from 'vitest';
 import {
   unix,
   blobToBuffer,
+  encodeUtf8,
   assertOptions,
   getContentMd5,
   getCanonicalizedOSSHeaders,
   getCanonicalizedResource,
   getSignature,
 } from '../src/utils';
+import { getXmlTag, getXmlTags } from '../src/utils/xml';
 
 describe('utils', () => {
   describe('unix', () => {
@@ -74,6 +76,69 @@ describe('utils', () => {
       expect(result).toBeInstanceOf(Uint8Array);
       expect(result.length).toBe(bytes.length);
       expect(Array.from(result)).toEqual(Array.from(bytes));
+    });
+
+    it('should accept ArrayBuffer', async () => {
+      const bytes = new Uint8Array([1, 2, 3, 4]);
+      const result = await blobToBuffer(bytes.buffer);
+      expect(Array.from(result)).toEqual([1, 2, 3, 4]);
+    });
+
+    it('should accept Uint8Array without copying', async () => {
+      const bytes = new Uint8Array([9, 8, 7]);
+      const result = await blobToBuffer(bytes);
+      // Zero-copy: the result is a view over the same underlying buffer.
+      expect(result.buffer).toBe(bytes.buffer);
+    });
+
+    it('should accept a string via UTF-8 encoding', async () => {
+      const result = await blobToBuffer('你好abc');
+      expect(new TextDecoder().decode(result)).toBe('你好abc');
+    });
+  });
+
+  describe('encodeUtf8', () => {
+    it('should match TextEncoder output', () => {
+      const cases = ['', 'hello', '你好', 'emoji 😀', 'a𠜎b', 'ñ€é'];
+      cases.forEach((str) => {
+        expect(Array.from(encodeUtf8(str))).toEqual(Array.from(new TextEncoder().encode(str)));
+      });
+    });
+
+    it('should encode multi-byte sequences correctly', () => {
+      // 你 = U+4F60 -> E4 BD A0
+      expect(Array.from(encodeUtf8('你'))).toEqual([0xe4, 0xbd, 0xa0]);
+      // 😀 = U+1F600 (surrogate pair) -> F0 9F 98 80
+      expect(Array.from(encodeUtf8('😀'))).toEqual([0xf0, 0x9f, 0x98, 0x80]);
+    });
+  });
+
+  describe('xml', () => {
+    it('should extract the first tag text', () => {
+      const xml = '<Result><UploadId>abc-123</UploadId><ETag>"xyz"</ETag></Result>';
+      expect(getXmlTag(xml, 'UploadId')).toBe('abc-123');
+      expect(getXmlTag(xml, 'ETag')).toBe('"xyz"');
+      expect(getXmlTag(xml, 'Missing')).toBe('');
+    });
+
+    it('should extract repeated tags in order', () => {
+      const xml = [
+        '<ListPartsResult>',
+        '<Part><PartNumber>1</PartNumber><Size>10</Size></Part>',
+        '<Part><PartNumber>2</PartNumber><Size>20</Size></Part>',
+        '</ListPartsResult>',
+      ].join('');
+      const parts = getXmlTags(xml, 'Part');
+      expect(parts).toHaveLength(2);
+      expect(getXmlTag(parts[0], 'PartNumber')).toBe('1');
+      expect(getXmlTag(parts[1], 'PartNumber')).toBe('2');
+    });
+
+    it('should handle repeated upload tags', () => {
+      const xml = '<ListUploadsResult><Upload><Key>a.txt</Key><UploadId>u1</UploadId></Upload></ListUploadsResult>';
+      const uploads = getXmlTags(xml, 'Upload');
+      expect(uploads).toHaveLength(1);
+      expect(getXmlTag(uploads[0], 'Key')).toBe('a.txt');
     });
   });
 

@@ -1,26 +1,38 @@
-export interface AjaxOptions {
-  async?: boolean;
+import type { TinyOSS } from './types';
+
+export interface TransportOptions {
+  method: string;
+  headers: Record<string, string>;
   data?: any;
-  headers?: Record<string, any>;
-  method?: string;
   timeout?: number;
-  onprogress?: (this: XMLHttpRequest, ev: ProgressEvent) => any;
+  /**
+   * Total payload size in bytes; transports without native progress
+   * events use it to fire 0%/100% synthetic events.
+   */
+  total?: number;
+  /**
+   * Upload progress. lengthComputable is false when the environment
+   * cannot report intermediate progress (fetch, wx.request); such
+   * adapters fire a 0% event before sending and a 100% event after.
+   */
+  onprogress?: (e: TinyOSS.Progress) => void;
 }
 
-export interface AjaxResponse {
-  data: any;
+export interface TransportResponse {
+  data: string;
   headers: Record<string, string>;
   status: number;
   statusText: string;
 }
 
-export default function ajax(url: string, options: AjaxOptions = {}): Promise<any> {
+export type Transport = (url: string, options: TransportOptions) => Promise<TransportResponse>;
+
+function xhrTransport(url: string, options: TransportOptions): Promise<TransportResponse> {
   return new Promise((resolve, reject) => {
     const {
-      async = true,
+      method = 'get',
       data = null,
       headers = {},
-      method = 'get',
       timeout = 0,
       onprogress,
     } = options;
@@ -34,8 +46,10 @@ export default function ajax(url: string, options: AjaxOptions = {}): Promise<an
     xhr.onerror = () => {
       reject(new Error('unknown error'));
     };
-    if (xhr.upload) {
-      xhr.upload.onprogress = onprogress!;
+    if (xhr.upload && onprogress) {
+      xhr.upload.onprogress = (ev) => {
+        onprogress({ loaded: ev.loaded, total: ev.total, lengthComputable: ev.lengthComputable });
+      };
     }
     xhr.onreadystatechange = () => {
       if (xhr.readyState === 4) {
@@ -56,7 +70,7 @@ export default function ajax(url: string, options: AjaxOptions = {}): Promise<an
             });
           }
           resolve({
-            data: xhr.response,
+            data: xhr.responseText,
             headers: responseHeaders,
             status: xhr.status,
             statusText: xhr.statusText,
@@ -67,7 +81,7 @@ export default function ajax(url: string, options: AjaxOptions = {}): Promise<an
         }
       }
     };
-    xhr.open(method, url, async);
+    xhr.open(method, url, true);
     Object.keys(headers).forEach((key) => {
       xhr.setRequestHeader(key, headers[key]);
     });
@@ -77,4 +91,19 @@ export default function ajax(url: string, options: AjaxOptions = {}): Promise<an
       reject(err);
     }
   });
+}
+
+let current: Transport = xhrTransport;
+
+/**
+ * Replace the network layer. Defaults to XMLHttpRequest; pass a
+ * fetch-based adapter in Service Workers or a wx.request-based adapter
+ * in WeChat mini programs.
+ */
+export function setTransport(transport: Transport): void {
+  current = transport;
+}
+
+export function getTransport(): Transport {
+  return current;
 }

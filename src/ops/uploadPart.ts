@@ -20,17 +20,22 @@ export async function uploadPart(
   objectName: string,
   uploadId: string,
   partNo: number,
-  data: Blob,
+  data: TinyOSS.BlobLike | string,
   start: number,
   end: number,
   multipartOptions: TinyOSS.MultipartOptions = {}
 ): Promise<TinyOSS.UploadPartResult> {
-  const partData = data.slice(start, end);
+  // Uint8Array slicing is zero-copy (subarray); other inputs slice natively.
+  const partData = ArrayBuffer.isView(data) && !(data instanceof DataView)
+    ? data.subarray(start, end)
+    : data.slice(start, end);
   const buf = await blobToBuffer(partData);
   const contentMd5 = getContentMd5(buf);
+  // Only Blob carries a type; byte inputs default to octet-stream.
+  const contentType = partData instanceof Blob ? partData.type || 'application/octet-stream' : 'application/octet-stream';
   const headers: Record<string, any> = {
     'Content-Md5': contentMd5,
-    'Content-Type': partData.type || 'application/octet-stream',
+    'Content-Type': contentType,
     ...multipartOptions.headers,
   };
   return request(options, {

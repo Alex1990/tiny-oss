@@ -1,5 +1,6 @@
-import { blobToBuffer, getContentMd5 } from '../utils';
+import { getContentMd5, encodeUtf8 } from '../utils';
 import { request } from './request';
+import { getXmlTag } from '../utils/xml';
 import type { TinyOSS } from '../types';
 
 /**
@@ -25,8 +26,7 @@ export async function completeMultipartUpload(
     .map((part) => `  <Part><PartNumber>${part.number}</PartNumber><ETag>${part.etag}</ETag></Part>`)
     .join('\n');
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<CompleteMultipartUpload>\n${xmlParts}\n</CompleteMultipartUpload>`;
-  const blob = new Blob([xml], { type: 'application/xml' });
-  const buf = await blobToBuffer(blob);
+  const buf = encodeUtf8(xml);
   const contentMd5 = getContentMd5(buf);
   const headers: Record<string, any> = {
     'Content-Md5': contentMd5,
@@ -39,12 +39,10 @@ export async function completeMultipartUpload(
     contentMd5,
     headers,
     subResource: { uploadId },
-    data: blob,
+    data: buf,
     timeout: multipartOptions.timeout,
   }).then((res: any) => {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(res.data, 'text/xml');
-    const etag = xmlDoc.getElementsByTagName('ETag')[0]?.textContent || '';
+    const etag = getXmlTag(res.data, 'ETag');
     return {
       name: objectName,
       etag,

@@ -1,4 +1,5 @@
 import { request } from './request';
+import { getXmlTag, getXmlTags } from '../utils/xml';
 import type { TinyOSS } from '../types';
 
 /**
@@ -26,21 +27,15 @@ export function listUploads(
     subResource,
     timeout: multipartOptions.timeout,
   }).then((res: any) => {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(res.data, 'text/xml');
-    const isTruncated = xmlDoc.getElementsByTagName('IsTruncated')[0]?.textContent === 'true';
-    const nextKeyMarker = xmlDoc.getElementsByTagName('NextKeyMarker')[0]?.textContent || undefined;
-    const nextUploadIdMarker = xmlDoc.getElementsByTagName('NextUploadIdMarker')[0]?.textContent || undefined;
-    const uploadElements = xmlDoc.getElementsByTagName('Upload');
-    const uploads: TinyOSS.UploadInfo[] = [];
-    for (let i = 0; i < uploadElements.length; i++) {
-      const upload = uploadElements[i];
-      uploads.push({
-        uploadId: upload.getElementsByTagName('UploadId')[0]?.textContent || '',
-        name: upload.getElementsByTagName('Key')[0]?.textContent || '',
-        initiated: upload.getElementsByTagName('Initiated')[0]?.textContent || '',
-      });
-    }
+    const xml = res.data;
+    const isTruncated = getXmlTag(xml, 'IsTruncated') === 'true';
+    const nextKeyMarker = getXmlTag(xml, 'NextKeyMarker') || undefined;
+    const nextUploadIdMarker = getXmlTag(xml, 'NextUploadIdMarker') || undefined;
+    const uploads: TinyOSS.UploadInfo[] = getXmlTags(xml, 'Upload').map((uploadXml) => ({
+      uploadId: getXmlTag(uploadXml, 'UploadId'),
+      name: getXmlTag(uploadXml, 'Key'),
+      initiated: getXmlTag(uploadXml, 'Initiated'),
+    }));
     return {
       uploads,
       isTruncated,

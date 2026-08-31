@@ -184,6 +184,58 @@ describe('integration', () => {
     }
   });
 
+  it('put ArrayBuffer input', async () => {
+    const size = 2 * 1024 * 1024;
+    const bytes = new Uint8Array(size);
+    for (let i = 0; i < size; i++) bytes[i] = i % 251;
+    const objectName = getObjectName();
+    const res = await fetch('http://localhost:8080/api/oss-config');
+    const data = (await res.json()) as OssConfig;
+    const { accessKeyId, accessKeySecret, region, bucket } = data;
+    const options = { accessKeyId, accessKeySecret, region, bucket };
+    const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket });
+    // Mini-program style input: ArrayBuffer instead of Blob.
+    await put(options, objectName, bytes.buffer as ArrayBuffer);
+    try {
+      const url = oss.signatureUrl(objectName);
+      const getRes = await fetch(url);
+      const downloaded = new Uint8Array(await getRes.arrayBuffer());
+      expect(downloaded.length).toBe(size);
+      for (let i = 0; i < size; i += 64 * 1024) {
+        const end = Math.min(i + 64 * 1024, size);
+        expect(Array.from(downloaded.subarray(i, end))).toEqual(Array.from(bytes.subarray(i, end)));
+      }
+    } finally {
+      await oss.delete(objectName);
+    }
+  });
+
+  it('multipartUpload ArrayBuffer input', async () => {
+    const size = 3 * 1024 * 1024;
+    const bytes = new Uint8Array(size);
+    for (let i = 0; i < size; i++) bytes[i] = i % 251;
+    const objectName = getObjectName();
+    const res = await fetch('http://localhost:8080/api/oss-config');
+    const data = (await res.json()) as OssConfig;
+    const { accessKeyId, accessKeySecret, region, bucket } = data;
+    const options = { accessKeyId, accessKeySecret, region, bucket };
+    const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket });
+    const result = await multipartUpload(options, objectName, bytes.buffer as ArrayBuffer, { partSize: 1024 * 1024 });
+    expect(result.etag).toBeTruthy();
+    try {
+      const url = oss.signatureUrl(objectName);
+      const getRes = await fetch(url);
+      const downloaded = new Uint8Array(await getRes.arrayBuffer());
+      expect(downloaded.length).toBe(size);
+      for (let i = 0; i < size; i += 64 * 1024) {
+        const end = Math.min(i + 64 * 1024, size);
+        expect(Array.from(downloaded.subarray(i, end))).toEqual(Array.from(bytes.subarray(i, end)));
+      }
+    } finally {
+      await oss.delete(objectName);
+    }
+  });
+
   it('bindOptions put', async () => {
     const content = 'bindOptions put: hello 你好';
     const objectName = getObjectName();

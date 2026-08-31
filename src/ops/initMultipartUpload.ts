@@ -1,4 +1,5 @@
 import { request } from './request';
+import { getXmlTag } from '../utils/xml';
 import type { TinyOSS } from '../types';
 
 /**
@@ -22,9 +23,7 @@ export function initMultipartUpload(
     subResource: { uploads: '' },
     timeout: multipartOptions.timeout,
   }).then((res: any) => {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(res.data, 'text/xml');
-    const uploadId = xmlDoc.getElementsByTagName('UploadId')[0]?.textContent || '';
+    const uploadId = getXmlTag(res.data, 'UploadId');
     return {
       name: objectName,
       uploadId,

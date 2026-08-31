@@ -1,6 +1,7 @@
 import md5 from 'md5';
 import base64js from 'base64-js';
 import { Digest } from '../digest';
+import { encodeUtf8 } from './utf8';
 
 function isDate(obj: any): boolean {
   return obj instanceof Date && !isNaN(obj.getTime());
@@ -13,18 +14,18 @@ function unix(date?: string | number | Date): number {
   return Math.floor(validTimestamp / 1000);
 }
 
-function blobToBuffer(blob: Blob): Promise<Uint8Array> {
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => {
-      const result = new Uint8Array(fr.result as ArrayBuffer);
-      resolve(result);
-    };
-    fr.onerror = () => {
-      reject(fr.error);
-    };
-    fr.readAsArrayBuffer(blob);
-  });
+function blobToBuffer(blob: Blob | ArrayBuffer | Uint8Array | string): Promise<Uint8Array> {
+  if (typeof blob === 'string') {
+    return Promise.resolve(encodeUtf8(blob));
+  }
+  if (blob instanceof ArrayBuffer) {
+    return Promise.resolve(new Uint8Array(blob));
+  }
+  if (ArrayBuffer.isView(blob)) {
+    return Promise.resolve(new Uint8Array(blob.buffer, blob.byteOffset, blob.byteLength));
+  }
+  // Blob: modern browsers and Service Workers provide blob.arrayBuffer().
+  return blob.arrayBuffer().then((buf) => new Uint8Array(buf));
 }
 
 interface Options {
@@ -135,6 +136,7 @@ function getSignature(options: SignatureOptions): string {
 
 export {
   unix,
+  encodeUtf8,
   blobToBuffer,
   assertOptions,
   getContentMd5,

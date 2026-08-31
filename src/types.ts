@@ -12,8 +12,16 @@ export namespace TinyOSS {
     cname?: boolean; // use custom domain name
   }
 
+  export interface Progress {
+    loaded: number;
+    total: number;
+    lengthComputable: boolean;
+  }
+
+  export type BlobLike = Blob | ArrayBuffer | Uint8Array;
+
   export interface PutOptions {
-    onprogress?: (this: XMLHttpRequest, ev: ProgressEvent) => any;
+    onprogress?: (e: Progress) => any;
   }
 
   export type HTTPMethods = "GET" | "POST" | "DELETE" | "PUT";
@@ -55,7 +63,7 @@ export namespace TinyOSS {
   }
 
   export interface Checkpoint {
-    file: Blob;
+    file: BlobLike | string;
     name: string;
     uploadId: string;
     partSize: number;

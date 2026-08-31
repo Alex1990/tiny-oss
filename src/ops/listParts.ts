@@ -1,4 +1,5 @@
 import { request } from './request';
+import { getXmlTag, getXmlTags } from '../utils/xml';
 import type { TinyOSS } from '../types';
 
 /**
@@ -28,21 +29,15 @@ export function listParts(
     subResource,
     timeout: multipartOptions.timeout,
   }).then((res: any) => {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(res.data, 'text/xml');
-    const isTruncated = xmlDoc.getElementsByTagName('IsTruncated')[0]?.textContent === 'true';
-    const nextPartNumberMarker = parseInt(xmlDoc.getElementsByTagName('NextPartNumberMarker')[0]?.textContent || '0', 10);
-    const partElements = xmlDoc.getElementsByTagName('Part');
-    const parts: TinyOSS.Part[] = [];
-    for (let i = 0; i < partElements.length; i++) {
-      const part = partElements[i];
-      parts.push({
-        PartNumber: parseInt(part.getElementsByTagName('PartNumber')[0]?.textContent || '0', 10),
-        LastModified: part.getElementsByTagName('LastModified')[0]?.textContent || '',
-        ETag: part.getElementsByTagName('ETag')[0]?.textContent || '',
-        Size: parseInt(part.getElementsByTagName('Size')[0]?.textContent || '0', 10),
-      });
-    }
+    const xml = res.data;
+    const isTruncated = getXmlTag(xml, 'IsTruncated') === 'true';
+    const nextPartNumberMarker = parseInt(getXmlTag(xml, 'NextPartNumberMarker') || '0', 10);
+    const parts: TinyOSS.Part[] = getXmlTags(xml, 'Part').map((partXml) => ({
+      PartNumber: parseInt(getXmlTag(partXml, 'PartNumber') || '0', 10),
+      LastModified: getXmlTag(partXml, 'LastModified'),
+      ETag: getXmlTag(partXml, 'ETag'),
+      Size: parseInt(getXmlTag(partXml, 'Size') || '0', 10),
+    }));
     return {
       isTruncated,
       nextPartNumberMarker,

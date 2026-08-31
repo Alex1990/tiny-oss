@@ -1,5 +1,5 @@
-import ajax from '../utils/ajax';
-import { assertOptions, getSignature } from '../utils';
+import { getTransport } from '../transport';
+import { assertOptions, getSignature, encodeUtf8 } from '../utils';
 import type { TinyOSS } from '../types';
 
 const DEFAULT_OPTIONS = {
@@ -45,6 +45,16 @@ export function resolveTimeout(options: TinyOSS.TinyOSSOptions, fallback?: numbe
   return typeof value === 'string' ? parseInt(value, 10) : value;
 }
 
+/** Total payload size in bytes, for transports that need it. */
+export function dataSize(data: any): number | undefined {
+  if (data == null) return undefined;
+  if (typeof data === 'string') return encodeUtf8(data).length;
+  if (data instanceof Blob) return data.size;
+  if (data instanceof ArrayBuffer) return data.byteLength;
+  if (ArrayBuffer.isView(data)) return data.byteLength;
+  return undefined;
+}
+
 export interface RequestParams {
   verb: string;
   objectName: string;
@@ -53,13 +63,14 @@ export interface RequestParams {
   subResource?: Record<string, any>;
   data?: any;
   timeout?: number;
-  onprogress?: (this: XMLHttpRequest, ev: ProgressEvent) => any;
+  onprogress?: (e: TinyOSS.Progress) => any;
 }
 
 /**
- * Sign and send a single OSS request. Headers are completed with the
- * date, the STS token and the Authorization signature, and the URL is
- * built from the host plus the sub-resource query parameters.
+ * Sign and send a single OSS request through the configured transport.
+ * Headers are completed with the date, the STS token and the
+ * Authorization signature, and the URL is built from the host plus the
+ * sub-resource query parameters.
  */
 export function request(options: TinyOSS.TinyOSSOptions, params: RequestParams): Promise<any> {
   const opts = normalizeOptions(options);
@@ -90,11 +101,12 @@ export function request(options: TinyOSS.TinyOSSOptions, params: RequestParams):
       .join('&');
     if (qs) url += `?${qs}`;
   }
-  return ajax(url, {
+  return getTransport()(url, {
     method: params.verb,
     headers,
     data: params.data,
-    timeout: params.timeout == null ? resolveTimeout(options) : params.timeout,
+    timeout: params.timeout == null ? resolveTimeout(opts) : params.timeout,
     onprogress: params.onprogress,
+    total: dataSize(params.data),
   });
 }
