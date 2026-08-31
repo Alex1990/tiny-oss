@@ -51,6 +51,31 @@ oss.put('hello-world', blob, {
 });
 ```
 
+### 函数式 API（支持 tree shaking）
+
+每个操作也都以独立函数形式导出，客户端配置作为第一个参数。只导入你需要的函数，打包器会摇树剔除其余代码——例如只调用 `put` 的打包产物不会包含分片上传相关代码：
+
+```js
+import { put } from 'tiny-oss';
+
+put(
+  {
+    accessKeyId: 'your accessKeyId',
+    accessKeySecret: 'your accessKeySecret',
+    // 建议在浏览器中使用 stsToken
+    stsToken: 'security token',
+    region: 'oss-cn-beijing',
+    bucket: 'your bucket'
+  },
+  'hello-world',
+  new Blob(['hello world'], { type: 'text/plain' })
+);
+```
+
+可用函数：`put`、`putSymlink`、`signatureUrl`、`initMultipartUpload`、`uploadPart`、`completeMultipartUpload`、`abortMultipartUpload`、`listParts`、`listUploads`、`uploadPartCopy`、`multipartUpload`。每个函数与同名类方法行为一致，仅多了一个置于首位的客户端配置参数。
+
+类型通过具名导入使用：`import { put, type TinyOSS } from 'tiny-oss'`。
+
 更多配置参数或方法参考 [API](#api)。
 
 ## 兼容性

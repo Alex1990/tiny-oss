@@ -1,2 +1,14 @@
 import TinyOSS from './TinyOSS';
+export type { TinyOSS } from './types';
+export { put } from './ops/put';
+export { putSymlink } from './ops/putSymlink';
+export { signatureUrl } from './ops/signatureUrl';
+export { initMultipartUpload } from './ops/initMultipartUpload';
+export { uploadPart } from './ops/uploadPart';
+export { completeMultipartUpload } from './ops/completeMultipartUpload';
+export { abortMultipartUpload } from './ops/abortMultipartUpload';
+export { listParts } from './ops/listParts';
+export { listUploads } from './ops/listUploads';
+export { uploadPartCopy } from './ops/uploadPartCopy';
+export { multipartUpload } from './ops/multipartUpload';
 export default TinyOSS;

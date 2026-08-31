@@ -51,6 +51,31 @@ oss.put('hello-world', blob, {
 });
 ```
 
+### Functional API (tree-shakable)
+
+Every operation is also exported as a standalone function that takes the client options as the first argument. Import only what you use and bundlers tree-shake the rest, so a bundle that only calls `put` does not carry the multipart code:
+
+```js
+import { put } from 'tiny-oss';
+
+put(
+  {
+    accessKeyId: 'your accessKeyId',
+    accessKeySecret: 'your accessKeySecret',
+    // Recommend to use the stsToken option in browser
+    stsToken: 'security token',
+    region: 'oss-cn-beijing',
+    bucket: 'your bucket'
+  },
+  'hello-world',
+  new Blob(['hello world'], { type: 'text/plain' })
+);
+```
+
+Available functions: `put`, `putSymlink`, `signatureUrl`, `initMultipartUpload`, `uploadPart`, `completeMultipartUpload`, `abortMultipartUpload`, `listParts`, `listUploads`, `uploadPartCopy`, `multipartUpload`. Each mirrors the same-named class method with the client options as the first argument.
+
+Types are available via named imports: `import { put, type TinyOSS } from 'tiny-oss'`.
+
 More options or methods see [API](#api).
 
 ## Compatibility

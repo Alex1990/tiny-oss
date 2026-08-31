@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import TinyOSS from '../src/TinyOSS';
+import { put, signatureUrl, multipartUpload } from '../src/index';
 // @ts-ignore: ali-oss only for test server
 import OSS from 'ali-oss';
 
@@ -204,4 +205,66 @@ describe('TinyOSS', () => {
     }
   });
 
+});
+
+describe('functional API', () => {
+  it('put', async () => {
+    const content = 'functional put: hello 你好';
+    const objectName = getObjectName();
+    const res = await fetch('http://localhost:8080/api/oss-config');
+    const data = (await res.json()) as OssConfig;
+    const { accessKeyId, accessKeySecret, region, bucket } = data;
+    const options = { accessKeyId, accessKeySecret, region, bucket };
+    const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket });
+    const blob = new Blob([content], { type: 'text/plain' });
+    await put(options, objectName, blob);
+    try {
+      const url = oss.signatureUrl(objectName);
+      const getRes = await fetch(url);
+      const text = await getRes.text();
+      expect(text).toBe(content);
+    } finally {
+      await oss.delete(objectName);
+    }
+  });
+
+  it('multipartUpload', async () => {
+    const size = 3 * 1024 * 1024;
+    const bytes = new Uint8Array(size);
+    for (let i = 0; i < size; i++) bytes[i] = i % 251;
+    const objectName = getObjectName();
+    const res = await fetch('http://localhost:8080/api/oss-config');
+    const data = (await res.json()) as OssConfig;
+    const { accessKeyId, accessKeySecret, region, bucket } = data;
+    const options = { accessKeyId, accessKeySecret, region, bucket };
+    const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket });
+    const blob = new Blob([bytes], { type: 'application/octet-stream' });
+    const result = await multipartUpload(options, objectName, blob, { partSize: 1024 * 1024, parallel: 2 });
+    expect(result.etag).toBeTruthy();
+    try {
+      const url = oss.signatureUrl(objectName);
+      const getRes = await fetch(url);
+      const downloaded = new Uint8Array(await getRes.arrayBuffer());
+      expect(downloaded.length).toBe(size);
+      const chunkSize = 64 * 1024;
+      for (let offset = 0; offset < size; offset += chunkSize) {
+        const end = Math.min(offset + chunkSize, size);
+        for (let i = offset; i < end; i++) {
+          if (downloaded[i] !== bytes[i]) throw new Error(`byte mismatch at ${i}`);
+        }
+      }
+    } finally {
+      await oss.delete(objectName);
+    }
+  });
+
+  it('signatureUrl matches the class result', async () => {
+    const objectName = getObjectName();
+    const res = await fetch('http://localhost:8080/api/oss-config');
+    const data = (await res.json()) as OssConfig;
+    const { accessKeyId, accessKeySecret, region, bucket } = data;
+    const options = { accessKeyId, accessKeySecret, region, bucket };
+    const oss = new TinyOSS(options);
+    expect(signatureUrl(options, objectName)).toBe(oss.signatureUrl(objectName));
+  });
 });
