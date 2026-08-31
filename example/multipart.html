@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>put method</title>
+  <title>multipartUpload check</title>
   <style>
     body { font: 14px/1.6 system-ui, sans-serif; margin: 2rem; max-width: 720px; }
     pre { background: #f5f5f5; padding: 1rem; border-radius: 6px; overflow-x: auto; }
@@ -14,8 +14,8 @@
   </style>
 </head>
 <body>
-  <h2>put 上传验证</h2>
-  <p>流程: fetch <code>/api/oss-config</code> → 上传(手动选文件 / 自动生成 2MB)→ 签名 URL 下载 → 逐字节比对。</p>
+  <h2>multipartUpload 分片上传验证</h2>
+  <p>流程: fetch <code>/api/oss-config</code> → 分片上传(1MB 分片, parallel=2)→ 签名 URL 下载 → 逐字节比对。</p>
   <p>配置: <span id="cfg">加载中…</span></p>
   <p>
     <input type="file" id="file" />
@@ -79,8 +79,14 @@
         })
       }
 
-      function doUpload (objectName, blob, onprogress) {
-        return oss.put(objectName, blob, { onprogress: onprogress })
+      function doMultipartUpload (objectName, blob) {
+        return oss.multipartUpload(objectName, blob, {
+          partSize: 1024 * 1024,
+          parallel: 2,
+          progress: function (pct) {
+            log('progress: ' + Math.round(pct * 100) + '%')
+          }
+        })
       }
 
       document.getElementById('manual').addEventListener('click', function () {
@@ -90,21 +96,23 @@
           log('请先选择文件')
           return
         }
+        if (file.size === 0) {
+          log('空文件无法分片上传')
+          return
+        }
         statusEl.className = ''
         statusEl.textContent = '待开始'
         var objectName = file.name
-        log('upload: ' + objectName + ' (' + file.size + ' bytes)')
+        log('start upload: ' + objectName + ' (' + file.size + ' bytes)')
         file.arrayBuffer().then(function (buf) {
           var expected = new Uint8Array(buf)
-          return doUpload(objectName, file, function (e) {
-            log('progress: ' + Math.round(e.loaded / e.total * 100) + '%')
-          }).then(function () {
-            log('upload done')
+          return doMultipartUpload(objectName, file).then(function (result) {
+            log('upload done, etag: ' + result.etag)
             return verify(objectName, expected)
           }).then(function (len) {
             log('download verified: ' + len + ' bytes, content identical')
             statusEl.className = 'pass'
-            statusEl.textContent += '\n✅ PASS: ' + objectName + ' 上传内容逐字节一致'
+            statusEl.textContent += '\n✅ PASS: ' + objectName + ' 分片上传内容逐字节一致'
           })
         })
         .catch(function (err) {
@@ -116,22 +124,20 @@
       document.getElementById('auto').addEventListener('click', function () {
         statusEl.className = ''
         statusEl.textContent = '待开始'
-        var size = 2 * 1024 * 1024
+        var size = 3 * 1024 * 1024
         var bytes = makeData(size)
-        var objectName = 'put-auto-' + Date.now()
+        var objectName = 'multipart-auto-' + Date.now()
         var blob = new Blob([bytes], { type: 'application/octet-stream' })
         log('start upload: ' + objectName + ' (' + size + ' bytes)')
-        doUpload(objectName, blob, function (e) {
-          log('progress: ' + Math.round(e.loaded / e.total * 100) + '%')
-        })
-          .then(function () {
-            log('upload done')
+        doMultipartUpload(objectName, blob)
+          .then(function (result) {
+            log('upload done, etag: ' + result.etag)
             return verify(objectName, bytes)
           })
           .then(function (len) {
             log('download verified: ' + len + ' bytes, content identical')
             statusEl.className = 'pass'
-            statusEl.textContent += '\n✅ PASS: 2MB put 上传内容逐字节一致'
+            statusEl.textContent += '\n✅ PASS: 3MB 分片上传内容逐字节一致'
           })
           .catch(function (err) {
             statusEl.className = 'fail'
