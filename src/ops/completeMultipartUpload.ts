@@ -1,6 +1,6 @@
 import { getContentMd5, encodeUtf8 } from '../utils';
 import { getXmlTag } from '../utils/xml';
-import type { TinyOSS } from '../types';
+import type { CompleteMultipartUploadResult, MultipartOptions, Options, PartInfo } from '../types';
 import type { Protocol } from '../protocol';
 
 /**
@@ -10,12 +10,12 @@ import type { Protocol } from '../protocol';
  */
 export function createCompleteMultipartUpload(protocol: Protocol) {
   return async function completeMultipartUpload(
-    options: TinyOSS.TinyOSSOptions,
+    options: Options,
     objectName: string,
     uploadId: string,
-    parts: TinyOSS.PartInfo[],
-    multipartOptions: TinyOSS.MultipartOptions = {}
-  ): Promise<TinyOSS.CompleteMultipartUploadResult> {
+    parts: PartInfo[],
+    multipartOptions: MultipartOptions = {}
+  ): Promise<CompleteMultipartUploadResult> {
     // Build complete multipart upload XML
     const xmlParts = parts
       .sort((a, b) => a.number - b.number)

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createMultipartUpload, type MultipartUploadDeps } from '../src/ops/multipartUpload';
 import type { Protocol } from '../src/protocol';
-import type { TinyOSS } from '../src/types';
 
 // The multipart workflow is provider-agnostic; a minimal protocol is enough.
 const protocol = { metaPrefix: 'x-oss-meta-' } as Protocol;

@@ -60,7 +60,7 @@ put(
 
 可用函数：`put`、`putSymlink`、`signatureUrl`、`initMultipartUpload`、`uploadPart`、`completeMultipartUpload`、`abortMultipartUpload`、`listParts`、`listUploads`、`uploadPartCopy`、`multipartUpload`、`bindOptions`。
 
-类型通过具名导入使用：`import { put, type TinyOSS } from 'tiny-oss'`。
+类型通过具名导入使用：`import { put, type Options, type BlobLike, type PutOptions, type Progress, type SignatureUrlOptions } from 'tiny-oss'`。
 
 ### 绑定选项参数
 
@@ -186,16 +186,18 @@ put(
 );
 ```
 
-AWS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`（S3 无软链接接口）。options 字段对应关系：
+AWS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`（S3 无软链接接口）。options：
 
-| option | OSS | AWS S3 |
+| option | 类型 | 说明 |
 |---|---|---|
-| `accessKeyId` | 阿里云 AccessKeyId | AWS Access Key ID |
-| `accessKeySecret` | 阿里云 AccessKeySecret | AWS Secret Access Key |
-| `region` | `oss-cn-beijing` | 如 `us-east-1`、`ap-southeast-1` |
-| `bucket` | `my-bucket` | 普通 bucket 名 |
-| `stsToken` | OSS STS token | AWS 临时密钥 SessionToken（`x-amz-security-token`） |
-| `endpoint` / `secure` / `timeout` | 相同 | 相同 |
+| `accessKeyId` | `string` | AWS Access Key ID |
+| `accessKeySecret` | `string` | AWS Secret Access Key |
+| `stsToken` | `string` | 临时密钥 SessionToken（`x-amz-security-token`） |
+| `region` | `string` | 如 `us-east-1`、`ap-southeast-1` |
+| `bucket` | `string` | 普通 bucket 名 |
+| `endpoint` | `string` | 自定义端点，不带协议前缀（由 `secure` 决定） |
+| `secure` | `boolean` | 使用 HTTPS（`true`）还是 HTTP（`false`），默认 `false` |
+| `timeout` | `string \| number` | 所有操作的实例级超时，默认 60s |
 
 注意事项：
 
@@ -279,16 +281,18 @@ put(
 );
 ```
 
-COS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`（COS 无软链接接口）。options 字段对应关系：
+COS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`（COS 无软链接接口）。options：
 
-| option | OSS | COS |
+| option | 类型 | 说明 |
 |---|---|---|
-| `accessKeyId` | 阿里云 AccessKeyId | 腾讯云 SecretId |
-| `accessKeySecret` | 阿里云 AccessKeySecret | 腾讯云 SecretKey |
-| `region` | `oss-cn-beijing` | 如 `ap-guangzhou` |
-| `bucket` | `my-bucket` | 必须带 APPID 后缀，如 `examplebucket-1250000000` |
-| `stsToken` | OSS STS token | COS 临时密钥 SecurityToken（`x-cos-security-token`） |
-| `endpoint` / `secure` / `timeout` | 相同 | 相同 |
+| `accessKeyId` | `string` | 腾讯云 SecretId |
+| `accessKeySecret` | `string` | 腾讯云 SecretKey |
+| `stsToken` | `string` | 临时密钥 SecurityToken（`x-cos-security-token`） |
+| `region` | `string` | 如 `ap-guangzhou` |
+| `bucket` | `string` | 必须带 APPID 后缀，如 `examplebucket-1250000000` |
+| `endpoint` | `string` | 自定义端点，不带协议前缀（由 `secure` 决定） |
+| `secure` | `boolean` | 使用 HTTPS（`true`）还是 HTTP（`false`），默认 `false` |
+| `timeout` | `string \| number` | 所有操作的实例级超时，默认 60s |
 
 注意事项：
 
@@ -317,16 +321,18 @@ put(
 );
 ```
 
-OBS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`（OBS 无软链接接口）。options 字段对应关系：
+OBS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`（OBS 无软链接接口）。options：
 
-| option | OSS | OBS |
+| option | 类型 | 说明 |
 |---|---|---|
-| `accessKeyId` | 阿里云 AccessKeyId | 华为云 Access Key Id |
-| `accessKeySecret` | 阿里云 AccessKeySecret | 华为云 Secret Access Key |
-| `region` | `oss-cn-beijing` | 如 `cn-north-4`、`cn-east-3` |
-| `bucket` | `my-bucket` | 普通 bucket 名（无 APPID 后缀） |
-| `stsToken` | OSS STS token | OBS 临时密钥 SecurityToken（`x-obs-security-token`） |
-| `endpoint` / `secure` / `timeout` | 相同 | 相同 |
+| `accessKeyId` | `string` | 华为云 Access Key Id |
+| `accessKeySecret` | `string` | 华为云 Secret Access Key |
+| `stsToken` | `string` | 临时密钥 SecurityToken（`x-obs-security-token`） |
+| `region` | `string` | 如 `cn-north-4`、`cn-east-3` |
+| `bucket` | `string` | 普通 bucket 名（无 APPID 后缀） |
+| `endpoint` | `string` | 自定义端点，不带协议前缀（由 `secure` 决定） |
+| `secure` | `boolean` | 使用 HTTPS（`true`）还是 HTTP（`false`），默认 `false` |
+| `timeout` | `string \| number` | 所有操作的实例级超时，默认 60s |
 
 注意事项：
 
@@ -352,16 +358,18 @@ put(
 );
 ```
 
-Azure 入口导出 `put`、`signatureUrl`、`initMultipartUpload`、`uploadPart`、`completeMultipartUpload`、`multipartUpload` 与 `bindOptions`。选项映射：
+Azure 入口导出 `put`、`signatureUrl`、`initMultipartUpload`、`uploadPart`、`completeMultipartUpload`、`multipartUpload` 与 `bindOptions`。options：
 
-| option | OSS | Azure Blob |
+| option | 类型 | 说明 |
 |---|---|---|
-| `accessKeyId` | 阿里云 AccessKeyId | 存储账号名 |
-| `accessKeySecret` | 阿里云 AccessKeySecret | **base64 编码**的账号密钥（SharedKey 要求先 base64 解码再签名） |
-| `bucket` | `my-bucket` | 容器名 |
-| `region` | `oss-cn-beijing` | 不使用（Blob 服务无 region 概念） |
-| `stsToken` | OSS STS token | 不使用（改用 SAS 或存储访问策略） |
-| `endpoint` / `secure` / `timeout` | 相同 | 相同（`secure` 默认为 `true`） |
+| `accessKeyId` | `string` | 存储账号名 |
+| `accessKeySecret` | `string` | **base64 编码**的账号密钥（SharedKey 要求先 base64 解码再签名） |
+| `bucket` | `string` | 容器名 |
+| `region` | `string` | 不使用（Blob 服务无 region 概念） |
+| `stsToken` | `string` | 不使用（改用 SAS 或存储访问策略） |
+| `endpoint` | `string` | 自定义端点，不带协议前缀 |
+| `secure` | `boolean` | 使用 HTTPS（`true`）还是 HTTP（`false`），默认 `true` |
+| `timeout` | `string \| number` | 所有操作的实例级超时，默认 60s |
 
 说明：
 
@@ -430,7 +438,7 @@ export { put, multipartUpload, signatureUrl: myProtocol.signUrl };
 每个操作的第一个参数。只有 `accessKeyId` 与 `accessKeySecret` 必填，其余均可选：
 
 ```ts
-interface TinyOSSOptions {
+interface Options {
   accessKeyId: string;        // 你的阿里云 AccessKeyId
   accessKeySecret: string;    // 你的阿里云 AccessKeySecret
   stsToken?: string;          // 临时凭证（浏览器端推荐使用）
@@ -451,24 +459,24 @@ interface TinyOSSOptions {
 
 ```ts
 put(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
-  blob: TinyOSS.BlobLike | string, // BlobLike = Blob | ArrayBuffer | Uint8Array
-  putOptions?: TinyOSS.PutOptions  // { onprogress?: (e: TinyOSS.Progress) => any }
+  blob: BlobLike | string, // BlobLike = Blob | ArrayBuffer | Uint8Array
+  putOptions?: PutOptions  // { onprogress?: (e: Progress) => any }
 ): Promise<any>
 ```
 
 #### 参数
 
-* **options** (Object)：客户端配置，见上。
-* **objectName** (String)：对象名称。
-* **blob** (Blob|File|ArrayBuffer|Uint8Array|String)：被上传的对象。
-* **putOptions?** (Object)：可选的上传选项。
-  + **onprogress?** (Function)：上传进度事件监听器，接受一个 [progress event](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/progress_event) 对象作为参数。
+* **options**: `Options` — 客户端配置，见上。
+* **objectName**: `string` — 对象名称。
+* **blob**: `BlobLike | string` — 被上传的对象（`BlobLike = Blob | ArrayBuffer | Uint8Array`）。
+* **putOptions?**: `PutOptions` — 可选的上传选项。
+  + **onprogress?**: `(e: Progress) => any` — 上传进度事件监听器，接受一个 [progress event](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/progress_event) 对象作为参数。
 
 #### 返回值
 
-* **(Promise)**
+* `Promise<any>`
 
 ### putSymlink(options, objectName, targetObjectName)
 
@@ -476,7 +484,7 @@ put(
 
 ```ts
 putSymlink(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
   targetObjectName: string
 ): Promise<any>
@@ -484,13 +492,13 @@ putSymlink(
 
 #### 参数
 
-* **options** (Object)：客户端配置，见上。
-* **objectName** (String)：软链接对象名称。
-* **targetObjectName** (String)：软链接目标对象名称。
+* **options**: `Options` — 客户端配置，见上。
+* **objectName**: `string` — 软链接对象名称。
+* **targetObjectName**: `string` — 软链接目标对象名称。
 
 #### 返回值
 
-* **(Promise)**
+* `Promise<any>`
 
 ### signatureUrl(options, objectName, urlOptions)
 
@@ -498,22 +506,24 @@ putSymlink(
 
 ```ts
 signatureUrl(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
-  urlOptions?: TinyOSS.SignatureUrlOptions // { expires?: number; method?: HTTPMethods; response?: ResponseHeaderType }
+  urlOptions?: SignatureUrlOptions // { expires?: number; method?: HTTPMethods; response?: ResponseHeaderType }
 ): string
 ```
 
 #### 参数
 
-* **options** (Object)：客户端配置，见上。
-* **objectName** (String)：对象名称。
-* **urlOptions?** (Object)：可选的签名选项。
-  + **expires?** (Number)：URL 过期时间（单位：秒），默认为 1800。
+* **options**: `Options` — 客户端配置，见上。
+* **objectName**: `string` — 对象名称。
+* **urlOptions?**: `SignatureUrlOptions` — 可选的签名选项。
+  + **expires?**: `number` — URL 过期时间（单位：秒），默认 1800。
+  + **method?**: `HTTPMethods` — HTTP 方法，默认 `'GET'`。
+  + **response?**: `ResponseHeaderType` — 下载时设置的响应头。
 
 #### 返回值
 
-* **(String)**
+* `string`
 
 ## 许可证协议
 

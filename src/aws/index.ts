@@ -41,7 +41,32 @@ const listUploads = createListUploads(AWS_PROTOCOL);
 const uploadPartCopy = createUploadPartCopy(AWS_PROTOCOL);
 const signatureUrl = AWS_PROTOCOL.signUrl;
 
-export type { TinyOSS } from '../types';
+export type {
+  BlobLike,
+  Checkpoint,
+  CompleteMultipartUploadResult,
+  HTTPMethods,
+  InitMultipartUploadResult,
+  ListPartsResult,
+  ListQuery,
+  ListUploadsQuery,
+  ListUploadsResult,
+  MultipartOptions,
+  MultipartUploadOptions,
+  ObjectCallback,
+  Options,
+  Part,
+  PartInfo,
+  Progress,
+  PutOptions,
+  ResponseHeaderType,
+  SignatureUrlOptions,
+  SourceData,
+  UploadInfo,
+  UploadPartCopyOptions,
+  UploadPartCopyResult,
+  UploadPartResult,
+} from '../types';
 export { setTransport, getTransport } from '../transport';
 export type { Transport, TransportOptions, TransportResponse } from '../transport';
 export { fetchTransport } from '../transports/fetch';

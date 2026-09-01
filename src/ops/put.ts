@@ -1,5 +1,5 @@
 import { blobToBuffer, getContentMd5 } from '../utils';
-import type { TinyOSS } from '../types';
+import type { BlobLike, Options, PutOptions } from '../types';
 import type { Protocol } from '../protocol';
 
 /**
@@ -9,10 +9,10 @@ import type { Protocol } from '../protocol';
  */
 export function createPut(protocol: Protocol) {
   return function put(
-    options: TinyOSS.TinyOSSOptions,
+    options: Options,
     objectName: string,
-    data: TinyOSS.BlobLike | string,
-    putOptions: TinyOSS.PutOptions = {}
+    data: BlobLike | string,
+    putOptions: PutOptions = {}
   ): Promise<any> {
     return blobToBuffer(data)
       .then((buf) => {

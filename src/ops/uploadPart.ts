@@ -1,5 +1,5 @@
 import { blobToBuffer, getContentMd5 } from '../utils';
-import type { TinyOSS } from '../types';
+import type { BlobLike, MultipartOptions, Options, UploadPartResult } from '../types';
 import type { Protocol } from '../protocol';
 
 /**
@@ -9,15 +9,15 @@ import type { Protocol } from '../protocol';
  */
 export function createUploadPart(protocol: Protocol) {
   return async function uploadPart(
-    options: TinyOSS.TinyOSSOptions,
+    options: Options,
     objectName: string,
     uploadId: string,
     partNo: number,
-    data: TinyOSS.BlobLike | string,
+    data: BlobLike | string,
     start: number,
     end: number,
-    multipartOptions: TinyOSS.MultipartOptions = {}
-  ): Promise<TinyOSS.UploadPartResult> {
+    multipartOptions: MultipartOptions = {}
+  ): Promise<UploadPartResult> {
     // Uint8Array slicing is zero-copy (subarray); other inputs slice natively.
     const partData = ArrayBuffer.isView(data) && !(data instanceof DataView)
       ? data.subarray(start, end)

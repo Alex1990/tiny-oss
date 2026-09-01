@@ -1,4 +1,4 @@
-import type { TinyOSS } from './types';
+import type { Progress } from './types';
 
 export interface TransportOptions {
   method: string;
@@ -15,7 +15,7 @@ export interface TransportOptions {
    * cannot report intermediate progress (fetch, wx.request); such
    * adapters fire a 0% event before sending and a 100% event after.
    */
-  onprogress?: (e: TinyOSS.Progress) => void;
+  onprogress?: (e: Progress) => void;
 }
 
 export interface TransportResponse {

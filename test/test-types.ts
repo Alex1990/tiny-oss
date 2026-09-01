@@ -14,10 +14,20 @@ import {
   uploadPartCopy,
   multipartUpload,
   bindOptions,
-  type TinyOSS,
+  type Checkpoint,
+  type CompleteMultipartUploadResult,
+  type InitMultipartUploadResult,
+  type ListPartsResult,
+  type ListUploadsResult,
+  type Options,
+  type PartInfo,
+  type ResponseHeaderType,
+  type SourceData,
+  type UploadPartCopyResult,
+  type UploadPartResult,
 } from '../dist/index';
 
-const options: TinyOSS.TinyOSSOptions = {
+const options: Options = {
   accessKeyId: 'test-key-id',
   accessKeySecret: 'test-secret',
   bucket: 'test-bucket',
@@ -53,18 +63,18 @@ const urlWithCallback: string = signatureUrl(options, 'test.txt', {
 });
 
 // multipart upload workflow
-const initResult: Promise<TinyOSS.InitMultipartUploadResult> = initMultipartUpload(options, 'test.txt', { timeout: 30000 });
-const uploadPartResult: Promise<TinyOSS.UploadPartResult> = uploadPart(options, 'test.txt', 'upload-1', 1, blob, 0, 1024);
-const completeResult: Promise<TinyOSS.CompleteMultipartUploadResult> = completeMultipartUpload(
+const initResult: Promise<InitMultipartUploadResult> = initMultipartUpload(options, 'test.txt', { timeout: 30000 });
+const uploadPartResult: Promise<UploadPartResult> = uploadPart(options, 'test.txt', 'upload-1', 1, blob, 0, 1024);
+const completeResult: Promise<CompleteMultipartUploadResult> = completeMultipartUpload(
   options,
   'test.txt',
   'upload-1',
   [{ number: 1, etag: '"etag"' }]
 );
 const abortResult: Promise<void> = abortMultipartUpload(options, 'test.txt', 'upload-1');
-const listPartsResult: Promise<TinyOSS.ListPartsResult> = listParts(options, 'test.txt', 'upload-1');
-const listUploadsResult: Promise<TinyOSS.ListUploadsResult> = listUploads(options, { prefix: 'x' });
-const uploadPartCopyResult: Promise<TinyOSS.UploadPartCopyResult> = uploadPartCopy(
+const listPartsResult: Promise<ListPartsResult> = listParts(options, 'test.txt', 'upload-1');
+const listUploadsResult: Promise<ListUploadsResult> = listUploads(options, { prefix: 'x' });
+const uploadPartCopyResult: Promise<UploadPartCopyResult> = uploadPartCopy(
   options,
   'test.txt',
   'upload-1',
@@ -72,10 +82,10 @@ const uploadPartCopyResult: Promise<TinyOSS.UploadPartCopyResult> = uploadPartCo
   'bytes=0-1023',
   { sourceKey: 'source.txt' }
 );
-const multipartResult: Promise<TinyOSS.CompleteMultipartUploadResult> = multipartUpload(options, 'test.txt', blob, {
+const multipartResult: Promise<CompleteMultipartUploadResult> = multipartUpload(options, 'test.txt', blob, {
   partSize: 1024 * 1024,
   parallel: 3,
-  progress: (percentage: number, checkpoint: TinyOSS.Checkpoint) => {
+  progress: (percentage: number, checkpoint: Checkpoint) => {
     console.log(percentage, checkpoint.uploadId);
   },
 });
@@ -87,11 +97,11 @@ const boundPutPromise: Promise<any> = upload('bound.txt', blob);
 // ========================================
 // Test 2: Verify interface types are exported
 // ========================================
-const responseHeaders: TinyOSS.ResponseHeaderType = {
+const responseHeaders: ResponseHeaderType = {
   'content-type': 'application/json',
 };
-const part: TinyOSS.PartInfo = { number: 1, etag: '"etag"' };
-const sourceData: TinyOSS.SourceData = { sourceKey: 'src', sourceBucket: 'other' };
+const part: PartInfo = { number: 1, etag: '"etag"' };
+const sourceData: SourceData = { sourceKey: 'src', sourceBucket: 'other' };
 
 // ========================================
 // Test 3: Test that incorrect types cause errors (uncomment to verify)

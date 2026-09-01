@@ -2,7 +2,7 @@ import { unix } from '../utils';
 import { normalizeOptions } from '../ops/request';
 import { getObsSignature, encodeObsUrl } from './signature';
 import { resolveObsHost } from './host';
-import type { TinyOSS } from '../types';
+import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types';
 
 /** OBS defaults: Huawei Cloud China North 4 region, http, 60s timeout. */
 const OBS_DEFAULTS = {
@@ -29,9 +29,9 @@ const OBS_DEFAULTS = {
  * @return signed URL
  */
 export function obsSignUrl(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
-  urlOptions: TinyOSS.SignatureUrlOptions = {}
+  urlOptions: SignatureUrlOptions = {}
 ): string {
   const { expires = 1800, method, process, response } = urlOptions;
   const opts = normalizeOptions(options, OBS_DEFAULTS);
@@ -41,7 +41,7 @@ export function obsSignUrl(
   if (response) {
     Object.keys(response).forEach((k) => {
       const key = `response-${k.toLowerCase()}`;
-      subResource[key] = response[k as keyof TinyOSS.ResponseHeaderType];
+      subResource[key] = response[k as keyof ResponseHeaderType];
     });
   }
   const headers: Record<string, any> = {};

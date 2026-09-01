@@ -1,5 +1,5 @@
 import { getXmlTag } from '../utils/xml';
-import type { TinyOSS } from '../types';
+import type { Options, SourceData, UploadPartCopyOptions, UploadPartCopyResult } from '../types';
 import type { Protocol } from '../protocol';
 
 /**
@@ -9,14 +9,14 @@ import type { Protocol } from '../protocol';
  */
 export function createUploadPartCopy(protocol: Protocol) {
   return function uploadPartCopy(
-    options: TinyOSS.TinyOSSOptions,
+    options: Options,
     objectName: string,
     uploadId: string,
     partNo: number,
     range: string,
-    sourceData: TinyOSS.SourceData,
-    copyOptions: TinyOSS.UploadPartCopyOptions = {}
-  ): Promise<TinyOSS.UploadPartCopyResult> {
+    sourceData: SourceData,
+    copyOptions: UploadPartCopyOptions = {}
+  ): Promise<UploadPartCopyResult> {
     const bucket = options.bucket;
     const sourceBucket = sourceData.sourceBucket || bucket;
     const copySource = `/${sourceBucket}/${encodeURIComponent(sourceData.sourceKey)}`;

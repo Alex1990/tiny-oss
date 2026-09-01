@@ -18,14 +18,16 @@ import {
   dataSize,
   type Protocol,
   type RequestParams,
+  type CompleteMultipartUploadResult,
   type MultipartUploadDeps,
-  type TinyOSS,
+  type Options,
+  type SignatureUrlOptions,
 } from '../dist/protocol';
 
 // A Protocol can be implemented outside the library: request signs and
 // sends, signUrl builds a signed URL.
 const myProtocol: Protocol = {
-  request: (options: TinyOSS.TinyOSSOptions, params: RequestParams): Promise<any> => {
+  request: (options: Options, params: RequestParams): Promise<any> => {
     return Promise.resolve({ data: '', headers: {}, status: 200, statusText: 'OK' });
   },
   metaPrefix: 'x-my-meta-',
@@ -33,12 +35,12 @@ const myProtocol: Protocol = {
   copySourceRangeHeader: 'x-my-copy-source-range',
   listUploadsMarkerKey: 'marker',
   supportsSymlink: true,
-  signUrl: (options: TinyOSS.TinyOSSOptions, objectName: string, urlOptions?: TinyOSS.SignatureUrlOptions): string => {
+  signUrl: (options: Options, objectName: string, urlOptions?: SignatureUrlOptions): string => {
     return `https://example.com/${objectName}`;
   },
 };
 
-const options: TinyOSS.TinyOSSOptions = {
+const options: Options = {
   accessKeyId: 'id',
   accessKeySecret: 'secret',
   bucket: 'b',
@@ -63,10 +65,10 @@ const uploadPartCopy = createUploadPartCopy(myProtocol);
 
 const p: Promise<any> = put(options, 'a.txt', new Blob(['x']));
 const sp: Promise<any> = putSymlink(options, 'l', 't');
-const mp: Promise<TinyOSS.CompleteMultipartUploadResult> = multipartUpload(options, 'big.bin', new Uint8Array(10));
+const mp: Promise<CompleteMultipartUploadResult> = multipartUpload(options, 'big.bin', new Uint8Array(10));
 const upload = bindOptions(put, options);
 const bp: Promise<any> = upload('b.txt', new Blob(['y']));
-const opts: TinyOSS.TinyOSSOptions = normalizeOptions(options);
+const opts: Options = normalizeOptions(options);
 const t: number | undefined = resolveTimeout(opts);
 const s: number | undefined = dataSize('hello');
 

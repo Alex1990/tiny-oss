@@ -1,6 +1,6 @@
 import { getSignature, unix } from '../utils';
 import { normalizeOptions, resolveHost } from './request';
-import type { TinyOSS } from '../types';
+import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types';
 
 /**
  * Get a signed url for an OSS object.
@@ -11,9 +11,9 @@ import type { TinyOSS } from '../types';
  * @return signature url
  */
 export function ossSignUrl(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
-  urlOptions: TinyOSS.SignatureUrlOptions = {}
+  urlOptions: SignatureUrlOptions = {}
 ): string {
   const { expires = 1800, method, process, response } = urlOptions;
   const opts = normalizeOptions(options);
@@ -24,7 +24,7 @@ export function ossSignUrl(
   if (response) {
     Object.keys(response).forEach((k) => {
       const key = `response-${k.toLowerCase()}`;
-      subResource[key] = response[k as keyof TinyOSS.ResponseHeaderType];
+      subResource[key] = response[k as keyof ResponseHeaderType];
     });
   }
   Object.keys(urlOptions).forEach((key) => {

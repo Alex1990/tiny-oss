@@ -4,7 +4,7 @@ import { encodeUtf8 } from '../utils';
 import { normalizeOptions } from '../ops/request';
 import { resolveAzureHost, azureEscapePath } from './host';
 import { AZURE_API_VERSION } from './request';
-import type { TinyOSS } from '../types';
+import type { Options, SignatureUrlOptions } from '../types';
 
 /** Azure defaults: https, 60s timeout. */
 const AZURE_DEFAULTS = {
@@ -38,9 +38,9 @@ function truncatedIso(date: Date): string {
  * @return SAS URL
  */
 export function azureSignUrl(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
-  urlOptions: TinyOSS.SignatureUrlOptions = {}
+  urlOptions: SignatureUrlOptions = {}
 ): string {
   const { expires = 1800, method, response } = urlOptions;
   const opts = normalizeOptions(options, AZURE_DEFAULTS);

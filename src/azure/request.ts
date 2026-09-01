@@ -2,7 +2,7 @@ import { getTransport } from '../transport';
 import { normalizeOptions, resolveTimeout, dataSize } from '../ops/request';
 import { getSharedKeyAuthorization } from './signature';
 import { resolveAzureHost, azureEscapePath } from './host';
-import type { TinyOSS } from '../types';
+import type { Options } from '../types';
 import type { RequestParams } from '../protocol';
 
 /**
@@ -29,7 +29,7 @@ export const AZURE_API_VERSION = '2020-12-06';
  * Content-Type / Content-Length fields. PUT requests that are not
  * block operations create a block blob, so x-ms-blob-type is added.
  */
-export function request(options: TinyOSS.TinyOSSOptions, params: RequestParams): Promise<any> {
+export function request(options: Options, params: RequestParams): Promise<any> {
   const opts = normalizeOptions(options, AZURE_DEFAULTS);
   const { accessKeyId, accessKeySecret, bucket, secure } = opts;
   const headers: Record<string, any> = {
