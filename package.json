@@ -17,6 +17,10 @@
     "./obs": {
       "types": "./dist/obs.d.ts",
       "import": "./dist/tiny-oss.obs.es.js"
+    },
+    "./aws": {
+      "types": "./dist/aws.d.ts",
+      "import": "./dist/tiny-oss.aws.es.js"
     }
   },
   "engines": {
@@ -28,11 +32,12 @@
   "scripts": {
     "clean": "rimraf dist",
     "lint": "oxlint src test",
-    "build": "vite build && vite build -c vite.cos.config.ts && vite build -c vite.obs.config.ts && npm run build:types && npm run build:types:cos && npm run build:types:obs",
+    "build": "vite build && vite build -c vite.cos.config.ts && vite build -c vite.obs.config.ts && vite build -c vite.aws.config.ts && npm run build:types && npm run build:types:cos && npm run build:types:obs && npm run build:types:aws",
     "build:types": "dts-bundle-generator src/index.ts -o dist/index.d.ts --project tsconfig.json --sort",
     "build:types:cos": "dts-bundle-generator src/cos/index.ts -o dist/cos.d.ts --project tsconfig.json --sort",
     "build:types:obs": "dts-bundle-generator src/obs/index.ts -o dist/obs.d.ts --project tsconfig.json --sort",
-    "check:types": "tsc --noEmit --skipLibCheck test/test-types.ts && tsc --noEmit --skipLibCheck test/test-types-cos.ts && tsc --noEmit --skipLibCheck test/test-types-obs.ts",
+    "build:types:aws": "dts-bundle-generator src/aws/index.ts -o dist/aws.d.ts --project tsconfig.json --sort",
+    "check:types": "tsc --noEmit --skipLibCheck test/test-types.ts && tsc --noEmit --skipLibCheck test/test-types-cos.ts && tsc --noEmit --skipLibCheck test/test-types-obs.ts && tsc --noEmit --skipLibCheck test/test-types-aws.ts",
     "dev": "vite",
     "serve": "tsx test/server.ts",
     "test": "vitest",
@@ -70,6 +75,7 @@
     "@vitest/browser-playwright": "^4.0.17",
     "@vitest/coverage-v8": "4.0.17",
     "ali-oss": "^6.23.0",
+    "aws-sdk": "2.1693.0",
     "cos-js-sdk-v5": "^1.10.1",
     "dotenv": "^17.2.3",
     "dts-bundle-generator": "^9.5.1",

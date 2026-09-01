@@ -1,6 +1,6 @@
 # tiny-oss
 
-A tiny aliyun oss sdk for browser which focus on uploading. Less than 10kb (min+gzipped). Also ships Tencent Cloud COS (`tiny-oss/cos`) and Huawei Cloud OBS (`tiny-oss/obs`) entry points with the same API — see [Tencent Cloud COS](#tencent-cloud-cos) and [Huawei Cloud OBS](#huawei-cloud-obs).
+A tiny aliyun oss sdk for browser which focus on uploading. Less than 10kb (min+gzipped). Also ships Tencent Cloud COS (`tiny-oss/cos`), Huawei Cloud OBS (`tiny-oss/obs`) and AWS S3 (`tiny-oss/aws`) entry points with the same API — see [Tencent Cloud COS](#tencent-cloud-cos), [Huawei Cloud OBS](#huawei-cloud-obs) and [AWS S3](#aws-s3).
 
 **English | [简体中文](README_zh-CN.md)**
 
@@ -123,6 +123,44 @@ Notes:
 - Browser uploads to OBS require the bucket's CORS rule to allow your origin and expose the `ETag` response header for multipart uploads; temporary credentials (IAM agency) are recommended over permanent keys.
 - OBS signatures are time-sensitive (the `x-obs-date` header); a skewed client clock yields `403 RequestTimeTooSkewed`.
 - The OBS signer uses the OBS "obs" signature scheme, matching the official `esdk-obs-browserjs` byte for byte.
+
+## AWS S3
+
+The same operations are available for AWS S3 through a fourth entry point (`tiny-oss/aws`). Each entry is self-contained: importing only what you use keeps the OSS bundle free of COS/OBS/S3 signing code and vice versa.
+
+```js
+import { put, multipartUpload, signatureUrl } from 'tiny-oss/aws';
+
+put(
+  {
+    accessKeyId: 'your Access Key ID',
+    accessKeySecret: 'your Secret Access Key',
+    // Recommend to use the stsToken option in browser
+    stsToken: 'security token',
+    region: 'us-west-2',
+    bucket: 'your-bucket'
+  },
+  'hello-world',
+  blob
+);
+```
+
+The AWS entry exports everything the OSS entry does except `putSymlink` (S3 has no symlink API). Options map as:
+
+| option | OSS | AWS S3 |
+|---|---|---|
+| `accessKeyId` | Aliyun AccessKeyId | AWS Access Key ID |
+| `accessKeySecret` | Aliyun AccessKeySecret | AWS Secret Access Key |
+| `region` | `oss-cn-beijing` | e.g. `us-east-1`, `ap-southeast-1` |
+| `bucket` | `my-bucket` | plain bucket name |
+| `stsToken` | OSS STS token | AWS temporary-credential SessionToken (`x-amz-security-token`) |
+| `endpoint` / `secure` / `timeout` | same | same |
+
+Notes:
+
+- Browser uploads to S3 require the bucket's CORS rule to allow your origin and expose the `ETag` response header for multipart uploads; temporary credentials (STS) are recommended over permanent keys.
+- The signer implements SigV4 with `UNSIGNED-PAYLOAD` (the official SDK disables body signing for S3), so it is byte-identical to `aws-sdk` v2.
+- Signatures are time-sensitive; a skewed client clock yields `403 RequestTimeTooSkewed`.
 
 ### Binding options once
 

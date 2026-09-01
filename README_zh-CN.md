@@ -1,6 +1,6 @@
 # tiny-oss
 
-用于浏览器端的阿里云 OSS 极简版 SDK，专注于上传功能。小于 10kb (min+gzipped)。同时提供腾讯云 COS（`tiny-oss/cos`）与华为云 OBS（`tiny-oss/obs`）入口，API 完全一致——见[腾讯云 COS](#腾讯云-cos)与[华为云 OBS](#华为云-obs)。
+用于浏览器端的阿里云 OSS 极简版 SDK，专注于上传功能。小于 10kb (min+gzipped)。同时提供腾讯云 COS（`tiny-oss/cos`）、华为云 OBS（`tiny-oss/obs`）与 AWS S3（`tiny-oss/aws`）入口，API 完全一致——见[腾讯云 COS](#腾讯云-cos)、[华为云 OBS](#华为云-obs)与[AWS S3](#aws-s3)。
 
 **[English](README.md) | 简体中文**
 
@@ -123,6 +123,44 @@ OBS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`�
 - 浏览器上传 OBS 需要在存储桶配置跨域规则（允许你的站点并暴露 `ETag` 响应头以支持分片上传），推荐使用临时密钥（IAM 委托）而非永久密钥。
 - OBS 签名对时间敏感（`x-obs-date` 头），客户端时钟偏差会导致 403 `RequestTimeTooSkewed`。
 - OBS 签名器使用 OBS 的 "obs" 签名方案，与官方 `esdk-obs-browserjs` 逐字节一致。
+
+## AWS S3
+
+同一套操作通过第四个独立入口支持 AWS S3（`tiny-oss/aws`）。每个入口自包含：按需导入即可让 OSS 产物不携带 COS/OBS/S3 签名代码（反之亦然）。
+
+```js
+import { put, multipartUpload, signatureUrl } from 'tiny-oss/aws';
+
+put(
+  {
+    accessKeyId: '你的 Access Key ID',
+    accessKeySecret: '你的 Secret Access Key',
+    // 推荐在浏览器端使用 stsToken 参数
+    stsToken: 'security token',
+    region: 'us-west-2',
+    bucket: 'your-bucket'
+  },
+  'hello-world',
+  blob
+);
+```
+
+AWS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`（S3 无软链接接口）。options 字段对应关系：
+
+| option | OSS | AWS S3 |
+|---|---|---|
+| `accessKeyId` | 阿里云 AccessKeyId | AWS Access Key ID |
+| `accessKeySecret` | 阿里云 AccessKeySecret | AWS Secret Access Key |
+| `region` | `oss-cn-beijing` | 如 `us-east-1`、`ap-southeast-1` |
+| `bucket` | `my-bucket` | 普通 bucket 名 |
+| `stsToken` | OSS STS token | AWS 临时密钥 SessionToken（`x-amz-security-token`） |
+| `endpoint` / `secure` / `timeout` | 相同 | 相同 |
+
+注意事项：
+
+- 浏览器上传 S3 需要在存储桶配置跨域规则（允许你的站点并暴露 `ETag` 响应头以支持分片上传），推荐使用临时密钥（STS）而非永久密钥。
+- 签名器实现 SigV4 并使用 `UNSIGNED-PAYLOAD`（官方 SDK 对 S3 默认不签名 body），与 `aws-sdk` v2 逐字节一致。
+- 签名对时间敏感，客户端时钟偏差会导致 403 `RequestTimeTooSkewed`。
 
 ### 绑定配置一次
 

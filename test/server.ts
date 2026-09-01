@@ -21,6 +21,10 @@ const obsAccessKeyId = process.env.OBS_ACCESS_KEY_ID;
 const obsAccessKeySecret = process.env.OBS_ACCESS_KEY_SECRET;
 const obsBucket = process.env.OBS_BUCKET;
 const obsRegion = process.env.OBS_REGION;
+const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
+const awsAccessKeySecret = process.env.AWS_ACCESS_KEY_SECRET;
+const awsBucket = process.env.AWS_BUCKET;
+const awsRegion = process.env.AWS_REGION;
 
 const app = new Hono();
 const PORT = 8080;
@@ -72,6 +76,15 @@ app.get('/api/obs-config', (c) => {
     accessKeySecret: obsAccessKeySecret,
     bucket: obsBucket,
     region: obsRegion,
+  });
+});
+
+app.get('/api/aws-config', (c) => {
+  return c.json({
+    accessKeyId: awsAccessKeyId,
+    accessKeySecret: awsAccessKeySecret,
+    bucket: awsBucket,
+    region: awsRegion,
   });
 });
 

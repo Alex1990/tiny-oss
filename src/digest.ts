@@ -164,6 +164,7 @@ class SHA1Engine {
   }
 }
 
+
 /* Input utility functions */
 
 function fromASCII(s: string): Uint8Array {
@@ -212,6 +213,8 @@ function convertToUInt32(i: number): Uint8Array {
 
 /* Digest implementation */
 
+export { createDigest, createHMAC };
+
 interface DigestEngine {
   reset(): void;
   blockLen: number;
@@ -224,7 +227,7 @@ interface DigestEngine {
   getDigest(): ArrayBuffer;
 }
 
-interface DigestInterface {
+export interface DigestInterface {
   update(input: string | Uint8Array | ArrayBuffer | number): void;
   finalize(): ArrayBuffer;
   digest(input: string | Uint8Array | ArrayBuffer | number): ArrayBuffer;
@@ -232,7 +235,7 @@ interface DigestInterface {
   digestLength(): number;
 }
 
-interface HMACInterface {
+export interface HMACInterface {
   setKey(key: string | Uint8Array | ArrayBuffer | number): void;
   update(input: string | Uint8Array | ArrayBuffer | number): void;
   finalize(): ArrayBuffer;
