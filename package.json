@@ -1,7 +1,7 @@
 {
   "name": "tiny-oss",
   "version": "0.5.1",
-  "description": "A tiny aliyun oss sdk for browser which focus on uploading",
+  "description": "A tiny object storage sdk for browsers, Node.js and mini programs, focused on uploading",
   "type": "module",
   "main": "dist/tiny-oss.es.js",
   "types": "dist/index.d.ts",
