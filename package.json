@@ -92,7 +92,7 @@
     "dotenv": "^17.2.3",
     "dts-bundle-generator": "^9.5.1",
     "esdk-obs-browserjs": "3.25.51",
-    "hono": "^4.12.5",
+    "hono": "^4.12.34",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "oxlint": "^1.41.0",
