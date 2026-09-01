@@ -6,11 +6,11 @@
 
 ## 支持的存储服务
 
-- [AWS S3（`tiny-oss/aws`）](#aws-s3) — SigV4 签名；同样适用于 S3 兼容存储，如 [MinIO、Cloudflare R2、Google Cloud Storage](#s3-compatible-stores-minio-cloudflare-r2-google-cloud-storage-)
 - [阿里云 OSS（`tiny-oss`）](#使用) — 默认入口
-- [腾讯云 COS（`tiny-oss/cos`）](#腾讯云-cos)
-- [华为云 OBS（`tiny-oss/obs`）](#华为云-obs)
+- [AWS S3（`tiny-oss/aws`）](#aws-s3) — SigV4 签名；同样适用于 S3 兼容存储，如 [MinIO、Cloudflare R2、Google Cloud Storage](#s3-compatible-stores-minio-cloudflare-r2-google-cloud-storage-)
 - [Azure Blob Storage（`tiny-oss/azure`）](#azure-blob-storage)
+- [华为云 OBS（`tiny-oss/obs`）](#华为云-obs)
+- [腾讯云 COS（`tiny-oss/cos`）](#腾讯云-cos)
 
 ## 安装
 

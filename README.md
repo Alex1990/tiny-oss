@@ -6,11 +6,11 @@ A tiny object storage SDK focused on uploading: Aliyun OSS, Tencent Cloud COS, H
 
 ## Supported providers
 
-- [AWS S3 (`tiny-oss/aws`)](#aws-s3) — SigV4 signing; also drives S3-compatible stores such as [MinIO, Cloudflare R2 and Google Cloud Storage](#s3-compatible-stores-minio-cloudflare-r2-google-cloud-storage-)
 - [Aliyun OSS (`tiny-oss`)](#usage) — the default entry
-- [Tencent Cloud COS (`tiny-oss/cos`)](#tencent-cloud-cos)
-- [Huawei Cloud OBS (`tiny-oss/obs`)](#huawei-cloud-obs)
+- [AWS S3 (`tiny-oss/aws`)](#aws-s3) — SigV4 signing; also drives S3-compatible stores such as [MinIO, Cloudflare R2 and Google Cloud Storage](#s3-compatible-stores-minio-cloudflare-r2-google-cloud-storage-)
 - [Azure Blob Storage (`tiny-oss/azure`)](#azure-blob-storage)
+- [Huawei Cloud OBS (`tiny-oss/obs`)](#huawei-cloud-obs)
+- [Tencent Cloud COS (`tiny-oss/cos`)](#tencent-cloud-cos)
 
 ## Installation
 
