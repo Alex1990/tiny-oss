@@ -162,6 +162,70 @@ Notes:
 - The signer implements SigV4 with `UNSIGNED-PAYLOAD` (the official SDK disables body signing for S3), so it is byte-identical to `aws-sdk` v2.
 - Signatures are time-sensitive; a skewed client clock yields `403 RequestTimeTooSkewed`.
 
+## Adding another object storage
+
+Every operation is a factory over a `Protocol` — the extension point. A provider only has to implement two functions (`request`, `signUrl`) and fill in five constants; all operations (`put`, multipart, list, copy, …) then work unchanged. The built-in providers are the reference recipes: `src/cos/`, `src/obs/`, `src/aws/`.
+
+The `Protocol` interface (`tiny-oss/protocol`):
+
+| field | meaning |
+|---|---|
+| `request(options, params)` | Sign and send one request through the configured transport; resolve `{ data, headers, status, statusText }` |
+| `signUrl(options, objectName, urlOptions)` | Build a signed download URL |
+| `metaPrefix` | Object metadata header prefix, e.g. `'x-my-meta-'` |
+| `copySourceHeader` / `copySourceRangeHeader` | Header names for `uploadPartCopy` |
+| `listUploadsMarkerKey` | Query key for the list-uploads marker (`'marker'` OSS-style, `'key-marker'` S3-style) |
+| `supportsSymlink` | Whether `putSymlink` is exported (`false` when the provider has no symlink API) |
+
+`request` receives `{ verb, objectName, contentMd5, headers, subResource, data, timeout, onprogress }`; `subResource` is the query-parameter map the operations build (`{ uploads: '' }`, `{ partNumber, uploadId }`, …) — the request implementation decides which of them participate in the signature.
+
+### Composing a custom provider
+
+```js
+import {
+  createPut,
+  createInitMultipartUpload,
+  createUploadPart,
+  createCompleteMultipartUpload,
+  createMultipartUpload,
+  createListUploads,
+  type Protocol,
+} from 'tiny-oss/protocol';
+
+const myProtocol = {
+  request(options, params) {
+    // 1. build the URL: host + '/' + objectName + sub-resource query
+    // 2. sign: compute your Authorization header from verb/date/headers/query
+    // 3. return getTransport()(url, { method, headers, data, timeout });
+    //    (import { getTransport } from 'tiny-oss')
+  },
+  signUrl(options, objectName, urlOptions) { /* signed URL string */ },
+  metaPrefix: 'x-my-meta-',
+  copySourceHeader: 'x-my-copy-source',
+  copySourceRangeHeader: 'x-my-copy-source-range',
+  listUploadsMarkerKey: 'marker',
+  supportsSymlink: false,
+};
+
+const put = createPut(myProtocol);
+const initMultipartUpload = createInitMultipartUpload(myProtocol);
+const uploadPart = createUploadPart(myProtocol);
+const completeMultipartUpload = createCompleteMultipartUpload(myProtocol);
+const multipartUpload = createMultipartUpload(myProtocol, {
+  initMultipartUpload,
+  uploadPart,
+  completeMultipartUpload,
+});
+
+export { put, multipartUpload, signatureUrl: myProtocol.signUrl };
+```
+
+The shared helpers `normalizeOptions`, `resolveTimeout` and `dataSize` (also exported from `tiny-oss/protocol`) cover option defaults, timeout and payload sizing for the `request` implementation. Because each entry is a separate build, a custom provider never inflates the OSS bundle — import it from its own file.
+
+### Contributing a provider to the repo
+
+Follow the `src/aws/` layout: `src/<provider>/{signature,host,request,signatureUrl,index}.ts`, then add the Vite build (`vite.<provider>.config.ts`), the `package.json` `exports` entry and `build:types:<provider>`. Signing must match the official SDK — the tests in `test/cos-signature.spec.ts`, `test/obs-signature.spec.ts` and `test/aws-signature.spec.ts` pin each signer against its official SDK as an oracle.
+
 ### Binding options once
 
 To avoid passing the credentials on every call, bind them once with `bindOptions`. It only references the operation you give it, so tree shaking is unaffected:

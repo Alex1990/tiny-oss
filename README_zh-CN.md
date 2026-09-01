@@ -162,6 +162,70 @@ AWS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`�
 - 签名器实现 SigV4 并使用 `UNSIGNED-PAYLOAD`（官方 SDK 对 S3 默认不签名 body），与 `aws-sdk` v2 逐字节一致。
 - 签名对时间敏感，客户端时钟偏差会导致 403 `RequestTimeTooSkewed`。
 
+## 扩展其他对象存储
+
+每个操作都是基于 `Protocol` 的工厂——这就是扩展点。接入一个新存储只需要实现两个函数（`request`、`signUrl`）并填写五个常量，所有操作（上传、分片、列举、拷贝……）即全部可用。内置实现是最佳参考配方：`src/cos/`、`src/obs/`、`src/aws/`。
+
+`Protocol` 接口（`tiny-oss/protocol`）：
+
+| 字段 | 含义 |
+|---|---|
+| `request(options, params)` | 签名并发送单个请求（走已配置的 transport），resolve `{ data, headers, status, statusText }` |
+| `signUrl(options, objectName, urlOptions)` | 生成签名下载 URL |
+| `metaPrefix` | 对象元数据头前缀，如 `'x-my-meta-'` |
+| `copySourceHeader` / `copySourceRangeHeader` | `uploadPartCopy` 用的拷贝源头名 |
+| `listUploadsMarkerKey` | 分页 marker 的 query 键（OSS 风格 `'marker'`、S3 风格 `'key-marker'`） |
+| `supportsSymlink` | 是否导出 `putSymlink`（无软链接接口时置 `false`） |
+
+`request` 收到 `{ verb, objectName, contentMd5, headers, subResource, data, timeout, onprogress }`；`subResource` 是操作拼好的 query 参数表（如 `{ uploads: '' }`、`{ partNumber, uploadId }`）——哪些参数参与签名由 request 实现决定。
+
+### 组装自定义 provider
+
+```js
+import {
+  createPut,
+  createInitMultipartUpload,
+  createUploadPart,
+  createCompleteMultipartUpload,
+  createMultipartUpload,
+  createListUploads,
+  type Protocol,
+} from 'tiny-oss/protocol';
+
+const myProtocol = {
+  request(options, params) {
+    // 1. 拼 URL：host + '/' + objectName + 子资源 query
+    // 2. 签名：由 verb/日期/头/query 计算你的 Authorization 头
+    // 3. return getTransport()(url, { method, headers, data, timeout });
+    //    （import { getTransport } from 'tiny-oss'）
+  },
+  signUrl(options, objectName, urlOptions) { /* 签名 URL 字符串 */ },
+  metaPrefix: 'x-my-meta-',
+  copySourceHeader: 'x-my-copy-source',
+  copySourceRangeHeader: 'x-my-copy-source-range',
+  listUploadsMarkerKey: 'marker',
+  supportsSymlink: false,
+};
+
+const put = createPut(myProtocol);
+const initMultipartUpload = createInitMultipartUpload(myProtocol);
+const uploadPart = createUploadPart(myProtocol);
+const completeMultipartUpload = createCompleteMultipartUpload(myProtocol);
+const multipartUpload = createMultipartUpload(myProtocol, {
+  initMultipartUpload,
+  uploadPart,
+  completeMultipartUpload,
+});
+
+export { put, multipartUpload, signatureUrl: myProtocol.signUrl };
+```
+
+共享辅助 `normalizeOptions`、`resolveTimeout`、`dataSize`（同样从 `tiny-oss/protocol` 导出）为 request 实现提供选项默认值、超时与载荷大小计算。由于每个入口独立构建，自定义 provider 不会撑大 OSS 产物——从自己的文件 import 即可。
+
+### 向仓库贡献 provider
+
+参照 `src/aws/` 布局：`src/<provider>/{signature,host,request,signatureUrl,index}.ts`，然后加 Vite 构建（`vite.<provider>.config.ts`）、`package.json` 的 `exports` 条目与 `build:types:<provider>`。签名必须与官方 SDK 对齐——`test/cos-signature.spec.ts`、`test/obs-signature.spec.ts`、`test/aws-signature.spec.ts` 用各自官方 SDK 作 oracle 钉死签名器。
+
 ### 绑定配置一次
 
 如果不想每次调用都传认证等配置，可以用 `bindOptions` 绑定一次。它只引用你传入的操作函数，不会影响 tree shaking：
