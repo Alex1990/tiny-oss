@@ -162,7 +162,7 @@ AWS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`�
 - 签名器实现 SigV4 并使用 `UNSIGNED-PAYLOAD`（官方 SDK 对 S3 默认不签名 body），与 `aws-sdk` v2 逐字节一致。
 - 签名对时间敏感，客户端时钟偏差会导致 403 `RequestTimeTooSkewed`。
 
-### S3 兼容存储（MinIO、Cloudflare R2 等）
+### S3 兼容存储（MinIO、Cloudflare R2、Google Cloud Storage 等）
 
 S3 兼容存储使用 SigV4，`tiny-oss/aws` 入口**零额外代码**即可接入——只需把 `endpoint` 指向存储并开启 `pathStyle`（这类存储把 bucket 放在 URL 路径中，对应官方 SDK 的 `forcePathStyle`）：
 
@@ -196,9 +196,26 @@ await put(
   'hello-world',
   blob
 );
+
+// Google Cloud Storage —— XML API 的 AWS SigV4 兼容模式。
+// 先在控制台创建 HMAC key；region 固定为 'auto'。
+await put(
+  {
+    accessKeyId: '你的 GCS HMAC Access ID',
+    accessKeySecret: '你的 GCS HMAC Secret',
+    region: 'auto',
+    bucket: 'my-bucket',
+    endpoint: 'storage.googleapis.com',
+    pathStyle: true,
+  },
+  'hello-world',
+  blob
+);
 ```
 
 `endpoint` 不能带协议前缀（`http://`/`https://`）——由 `secure` 选项决定。所有操作（上传、分片、列举、拷贝、签名 URL）在这些存储上原样可用。
+
+并非所有存储都讲 S3 方言：Azure Blob Storage 使用自成一派的 SharedKey 签名与不同的分片模型（Block Blob），不在 AWS 入口覆盖范围内。
 
 ## 扩展其他对象存储
 
