@@ -3,7 +3,7 @@ import { encodeUtf8 } from '../utils';
 import { normalizeOptions, resolveTimeout, dataSize } from '../ops/request';
 import { getCosAuth } from './signature';
 import { resolveCosHost } from './host';
-import type { TinyOSS } from '../types';
+import type { Options } from '../types';
 import type { RequestParams } from '../protocol';
 
 /**
@@ -15,7 +15,7 @@ import type { RequestParams } from '../protocol';
  * Unlike OSS, the COS signature covers the host header and the query
  * parameters, so both are fixed before the signature is computed.
  */
-export function request(options: TinyOSS.TinyOSSOptions, params: RequestParams): Promise<any> {
+export function request(options: Options, params: RequestParams): Promise<any> {
   const opts = normalizeOptions(options);
   const { accessKeyId, accessKeySecret, stsToken, secure } = opts;
   const host = resolveCosHost(opts);

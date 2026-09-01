@@ -1,4 +1,4 @@
-import type { TinyOSS } from '../types';
+import type { Options } from '../types';
 import type { Protocol } from '../protocol';
 
 /**
@@ -10,7 +10,7 @@ import type { Protocol } from '../protocol';
  */
 export function createPutSymlink(protocol: Protocol) {
   return function putSymlink(
-    options: TinyOSS.TinyOSSOptions,
+    options: Options,
     objectName: string,
     targetObjectName: string
   ): Promise<any> {

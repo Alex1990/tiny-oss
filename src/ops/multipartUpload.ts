@@ -1,34 +1,34 @@
 import { encodeUtf8 } from '../utils';
-import type { TinyOSS } from '../types';
+import type { BlobLike, Checkpoint, CompleteMultipartUploadResult, InitMultipartUploadResult, MultipartOptions, MultipartUploadOptions, Options, PartInfo, UploadPartResult } from '../types';
 import type { Protocol } from '../protocol';
 
 /** The multipart primitives multipartUpload drives, injected by the entry point. */
 export interface MultipartUploadDeps {
   initMultipartUpload: (
-    options: TinyOSS.TinyOSSOptions,
+    options: Options,
     objectName: string,
-    multipartOptions?: TinyOSS.MultipartOptions
-  ) => Promise<TinyOSS.InitMultipartUploadResult>;
+    multipartOptions?: MultipartOptions
+  ) => Promise<InitMultipartUploadResult>;
   uploadPart: (
-    options: TinyOSS.TinyOSSOptions,
+    options: Options,
     objectName: string,
     uploadId: string,
     partNo: number,
-    data: TinyOSS.BlobLike | string,
+    data: BlobLike | string,
     start: number,
     end: number,
-    multipartOptions?: TinyOSS.MultipartOptions
-  ) => Promise<TinyOSS.UploadPartResult>;
+    multipartOptions?: MultipartOptions
+  ) => Promise<UploadPartResult>;
   completeMultipartUpload: (
-    options: TinyOSS.TinyOSSOptions,
+    options: Options,
     objectName: string,
     uploadId: string,
-    parts: TinyOSS.PartInfo[],
-    multipartOptions?: TinyOSS.MultipartOptions
-  ) => Promise<TinyOSS.CompleteMultipartUploadResult>;
+    parts: PartInfo[],
+    multipartOptions?: MultipartOptions
+  ) => Promise<CompleteMultipartUploadResult>;
 }
 
-function getFileSize(data: TinyOSS.BlobLike | string): number {
+function getFileSize(data: BlobLike | string): number {
   if (typeof data === 'string') return encodeUtf8(data).length;
   if (data instanceof Blob) return data.size;
   return data.byteLength;
@@ -42,11 +42,11 @@ function getFileSize(data: TinyOSS.BlobLike | string): number {
  */
 export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadDeps) {
   return async function multipartUpload(
-    options: TinyOSS.TinyOSSOptions,
+    options: Options,
     objectName: string,
-    file: TinyOSS.BlobLike | string,
-    multipartOptions: TinyOSS.MultipartUploadOptions = {}
-  ): Promise<TinyOSS.CompleteMultipartUploadResult> {
+    file: BlobLike | string,
+    multipartOptions: MultipartUploadOptions = {}
+  ): Promise<CompleteMultipartUploadResult> {
     const {
       parallel = 5,
       partSize = 1024 * 1024, // default 1MB
@@ -58,7 +58,7 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
     } = multipartOptions;
 
     let uploadId: string;
-    let doneParts: TinyOSS.PartInfo[] = [];
+    let doneParts: PartInfo[] = [];
     let actualPartSize = Math.max(partSize, 100 * 1024); // minimum 100KB
 
     const fileSize = getFileSize(file);
@@ -88,10 +88,10 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
 
     // Calculate parts
     const numParts = Math.ceil(fileSize / actualPartSize);
-    const parts: TinyOSS.PartInfo[] = [];
+    const parts: PartInfo[] = [];
 
     // Build checkpoint object
-    const currentCheckpoint: TinyOSS.Checkpoint = {
+    const currentCheckpoint: Checkpoint = {
       file,
       name: objectName,
       uploadId,
@@ -112,8 +112,8 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
     }
 
     // Upload parts with concurrency control
-    const uploadPartWithRetry = async (partNo: number, start: number, end: number): Promise<TinyOSS.PartInfo> => {
-      const uploadOnce = async (): Promise<TinyOSS.UploadPartResult> => {
+    const uploadPartWithRetry = async (partNo: number, start: number, end: number): Promise<PartInfo> => {
+      const uploadOnce = async (): Promise<UploadPartResult> => {
         const result = await deps.uploadPart(options, objectName, uploadId, partNo, file, start, end);
         // The browser can only read the ETag response header when the bucket
         // CORS rule exposes it; otherwise completeMultipartUpload would fail
@@ -123,7 +123,7 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
         }
         return result;
       };
-      let result: TinyOSS.UploadPartResult;
+      let result: UploadPartResult;
       try {
         result = await uploadOnce();
       } catch (err) {
@@ -142,8 +142,8 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
 
     // Upload parts in parallel with concurrency limit
     const pendingParts = currentCheckpoint.parts.filter((p) => !doneParts.some((dp) => dp.number === p.number));
-    const uploadTasks: Promise<TinyOSS.PartInfo>[] = [];
-    const executing: Promise<TinyOSS.PartInfo>[] = [];
+    const uploadTasks: Promise<PartInfo>[] = [];
+    const executing: Promise<PartInfo>[] = [];
 
     for (const part of pendingParts) {
       const start = (part.number - 1) * actualPartSize;

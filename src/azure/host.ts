@@ -1,4 +1,4 @@
-import type { TinyOSS } from '../types';
+import type { Options } from '../types';
 
 /**
  * Resolve the Azure Blob Storage host. An explicit endpoint wins (for
@@ -6,7 +6,7 @@ import type { TinyOSS } from '../types';
  * `<account>.blob.core.windows.net` host. The account name doubles as
  * the access key ID.
  */
-export function resolveAzureHost(options: TinyOSS.TinyOSSOptions): string {
+export function resolveAzureHost(options: Options): string {
   const { accessKeyId, endpoint } = options;
   if (endpoint) return endpoint;
   return `${accessKeyId}.blob.core.windows.net`;

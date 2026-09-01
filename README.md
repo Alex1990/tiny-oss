@@ -6,11 +6,11 @@ A tiny object storage SDK focused on uploading: Aliyun OSS, Tencent Cloud COS, H
 
 ## Supported providers
 
-- [AWS S3 (`tiny-oss/aws`)](#aws-s3) — SigV4 signing; also drives S3-compatible stores such as [MinIO, Cloudflare R2 and Google Cloud Storage](#s3-compatible-stores-minio-cloudflare-r2-google-cloud-storage-)
 - [Aliyun OSS (`tiny-oss`)](#usage) — the default entry
-- [Tencent Cloud COS (`tiny-oss/cos`)](#tencent-cloud-cos)
-- [Huawei Cloud OBS (`tiny-oss/obs`)](#huawei-cloud-obs)
+- [AWS S3 (`tiny-oss/aws`)](#aws-s3) — SigV4 signing; also drives S3-compatible stores such as [MinIO, Cloudflare R2 and Google Cloud Storage](#s3-compatible-stores-minio-cloudflare-r2-google-cloud-storage-)
 - [Azure Blob Storage (`tiny-oss/azure`)](#azure-blob-storage)
+- [Huawei Cloud OBS (`tiny-oss/obs`)](#huawei-cloud-obs)
+- [Tencent Cloud COS (`tiny-oss/cos`)](#tencent-cloud-cos)
 
 ## Installation
 
@@ -60,7 +60,7 @@ put(
 
 Available functions: `put`, `putSymlink`, `signatureUrl`, `initMultipartUpload`, `uploadPart`, `completeMultipartUpload`, `abortMultipartUpload`, `listParts`, `listUploads`, `uploadPartCopy`, `multipartUpload`, `bindOptions`.
 
-Types are available via named imports: `import { put, type TinyOSS } from 'tiny-oss'`.
+Types are available via named imports: `import { put, type Options, type BlobLike, type PutOptions, type Progress, type SignatureUrlOptions } from 'tiny-oss'`.
 
 ### Binding options once
 
@@ -195,16 +195,18 @@ put(
 );
 ```
 
-The AWS entry exports everything the OSS entry does except `putSymlink` (S3 has no symlink API). Options map as:
+The AWS entry exports everything the OSS entry does except `putSymlink` (S3 has no symlink API). Options:
 
-| option | OSS | AWS S3 |
+| option | type | description |
 |---|---|---|
-| `accessKeyId` | Aliyun AccessKeyId | AWS Access Key ID |
-| `accessKeySecret` | Aliyun AccessKeySecret | AWS Secret Access Key |
-| `region` | `oss-cn-beijing` | e.g. `us-east-1`, `ap-southeast-1` |
-| `bucket` | `my-bucket` | plain bucket name |
-| `stsToken` | OSS STS token | AWS temporary-credential SessionToken (`x-amz-security-token`) |
-| `endpoint` / `secure` / `timeout` | same | same |
+| `accessKeyId` | `string` | AWS Access Key ID |
+| `accessKeySecret` | `string` | AWS Secret Access Key |
+| `stsToken` | `string` | temporary-credential SessionToken (`x-amz-security-token`) |
+| `region` | `string` | e.g. `us-east-1`, `ap-southeast-1` |
+| `bucket` | `string` | plain bucket name |
+| `endpoint` | `string` | custom endpoint, no protocol prefix (the `secure` option selects it) |
+| `secure` | `boolean` | use HTTPS (`true`) or HTTP (`false`), default `false` |
+| `timeout` | `string \| number` | instance-level timeout for all operations, default 60s |
 
 Notes:
 
@@ -288,16 +290,18 @@ put(
 );
 ```
 
-The COS entry exports everything the OSS entry does except `putSymlink` (COS has no symlink API). Options map as:
+The COS entry exports everything the OSS entry does except `putSymlink` (COS has no symlink API). Options:
 
-| option | OSS | COS |
+| option | type | description |
 |---|---|---|
-| `accessKeyId` | Aliyun AccessKeyId | Tencent SecretId |
-| `accessKeySecret` | Aliyun AccessKeySecret | Tencent SecretKey |
-| `region` | `oss-cn-beijing` | e.g. `ap-guangzhou` |
-| `bucket` | `my-bucket` | must include the APPID suffix, e.g. `examplebucket-1250000000` |
-| `stsToken` | OSS STS token | COS temporary-credential SecurityToken (`x-cos-security-token`) |
-| `endpoint` / `secure` / `timeout` | same | same |
+| `accessKeyId` | `string` | Tencent SecretId |
+| `accessKeySecret` | `string` | Tencent SecretKey |
+| `stsToken` | `string` | temporary-credential SecurityToken (`x-cos-security-token`) |
+| `region` | `string` | e.g. `ap-guangzhou` |
+| `bucket` | `string` | must include the APPID suffix, e.g. `examplebucket-1250000000` |
+| `endpoint` | `string` | custom endpoint, no protocol prefix (the `secure` option selects it) |
+| `secure` | `boolean` | use HTTPS (`true`) or HTTP (`false`), default `false` |
+| `timeout` | `string \| number` | instance-level timeout for all operations, default 60s |
 
 Notes:
 
@@ -326,16 +330,18 @@ put(
 );
 ```
 
-The OBS entry exports everything the OSS entry does except `putSymlink` (OBS has no symlink API). Options map as:
+The OBS entry exports everything the OSS entry does except `putSymlink` (OBS has no symlink API). Options:
 
-| option | OSS | OBS |
+| option | type | description |
 |---|---|---|
-| `accessKeyId` | Aliyun AccessKeyId | Huawei Cloud Access Key Id |
-| `accessKeySecret` | Aliyun AccessKeySecret | Huawei Cloud Secret Access Key |
-| `region` | `oss-cn-beijing` | e.g. `cn-north-4`, `cn-east-3` |
-| `bucket` | `my-bucket` | plain bucket name (no APPID suffix) |
-| `stsToken` | OSS STS token | OBS temporary-credential SecurityToken (`x-obs-security-token`) |
-| `endpoint` / `secure` / `timeout` | same | same |
+| `accessKeyId` | `string` | Huawei Cloud Access Key Id |
+| `accessKeySecret` | `string` | Huawei Cloud Secret Access Key |
+| `stsToken` | `string` | temporary-credential SecurityToken (`x-obs-security-token`) |
+| `region` | `string` | e.g. `cn-north-4`, `cn-east-3` |
+| `bucket` | `string` | plain bucket name (no APPID suffix) |
+| `endpoint` | `string` | custom endpoint, no protocol prefix (the `secure` option selects it) |
+| `secure` | `boolean` | use HTTPS (`true`) or HTTP (`false`), default `false` |
+| `timeout` | `string \| number` | instance-level timeout for all operations, default 60s |
 
 Notes:
 
@@ -361,16 +367,18 @@ put(
 );
 ```
 
-The Azure entry exports `put`, `signatureUrl`, `initMultipartUpload`, `uploadPart`, `completeMultipartUpload`, `multipartUpload` and `bindOptions`. Options map as:
+The Azure entry exports `put`, `signatureUrl`, `initMultipartUpload`, `uploadPart`, `completeMultipartUpload`, `multipartUpload` and `bindOptions`. Options:
 
-| option | OSS | Azure Blob |
+| option | type | description |
 |---|---|---|
-| `accessKeyId` | Aliyun AccessKeyId | storage account name |
-| `accessKeySecret` | Aliyun AccessKeySecret | the **base64** account key (used after base64-decoding, per SharedKey) |
-| `bucket` | `my-bucket` | container name |
-| `region` | `oss-cn-beijing` | not used (no region concept in the Blob service) |
-| `stsToken` | OSS STS token | not used (use a SAS or stored access policy instead) |
-| `endpoint` / `secure` / `timeout` | same | same (`secure` defaults to `true`) |
+| `accessKeyId` | `string` | storage account name |
+| `accessKeySecret` | `string` | the **base64** account key (used after base64-decoding, per SharedKey) |
+| `bucket` | `string` | container name |
+| `region` | `string` | not used (no region concept in the Blob service) |
+| `stsToken` | `string` | not used (use a SAS or stored access policy instead) |
+| `endpoint` | `string` | custom endpoint, no protocol prefix |
+| `secure` | `boolean` | use HTTPS (`true`) or HTTP (`false`), default `true` |
+| `timeout` | `string \| number` | instance-level timeout for all operations, default 60s |
 
 Notes:
 
@@ -439,7 +447,7 @@ If the target storage's multipart API is not S3-shaped (e.g. Azure's block blobs
 The first argument of every operation. Only `accessKeyId` and `accessKeySecret` are required; the rest are optional:
 
 ```ts
-interface TinyOSSOptions {
+interface Options {
   accessKeyId: string;        // Aliyun AccessKeyId
   accessKeySecret: string;    // Aliyun AccessKeySecret
   stsToken?: string;          // temporary credentials (recommended in browser)
@@ -460,24 +468,24 @@ Upload the blob.
 
 ```ts
 put(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
-  blob: TinyOSS.BlobLike | string, // BlobLike = Blob | ArrayBuffer | Uint8Array
-  putOptions?: TinyOSS.PutOptions  // { onprogress?: (e: TinyOSS.Progress) => any }
+  blob: BlobLike | string, // BlobLike = Blob | ArrayBuffer | Uint8Array
+  putOptions?: PutOptions  // { onprogress?: (e: Progress) => any }
 ): Promise<any>
 ```
 
 #### Arguments
 
-* **options** (Object): the client options, see above.
-* **objectName** (String): the object name.
-* **blob** (Blob|File|ArrayBuffer|Uint8Array|String): the object to be uploaded.
-* **putOptions?** (Object): optional upload options.
-  + **onprogress?** (Function): the upload progress event listener receiving an [progress event](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/progress_event) object as a parameter.
+* **options**: `Options` — the client options, see above.
+* **objectName**: `string` — the object name.
+* **blob**: `BlobLike | string` — the object to be uploaded (`BlobLike = Blob | ArrayBuffer | Uint8Array`).
+* **putOptions?**: `PutOptions` — optional upload options.
+  + **onprogress?**: `(e: Progress) => any` — the upload progress event listener receiving a [progress event](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/progress_event) object as a parameter.
 
 #### Return
 
-* **(Promise)**
+* `Promise<any>`
 
 ### putSymlink(options, objectName, targetObjectName)
 
@@ -485,7 +493,7 @@ Create a symlink.
 
 ```ts
 putSymlink(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
   targetObjectName: string
 ): Promise<any>
@@ -493,13 +501,13 @@ putSymlink(
 
 #### Arguments
 
-* **options** (Object): the client options, see above.
-* **objectName** (String): the symlink object name.
-* **targetObjectName** (String): the target object name.
+* **options**: `Options` — the client options, see above.
+* **objectName**: `string` — the symlink object name.
+* **targetObjectName**: `string` — the target object name.
 
 #### Return
 
-* **(Promise)**
+* `Promise<any>`
 
 ### signatureUrl(options, objectName, urlOptions)
 
@@ -507,22 +515,24 @@ Get a signature url to download the file.
 
 ```ts
 signatureUrl(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
-  urlOptions?: TinyOSS.SignatureUrlOptions // { expires?: number; method?: HTTPMethods; response?: ResponseHeaderType }
+  urlOptions?: SignatureUrlOptions // { expires?: number; method?: HTTPMethods; response?: ResponseHeaderType }
 ): string
 ```
 
 #### Arguments
 
-* **options** (Object): the client options, see above.
-* **objectName** (String): the object name.
-* **urlOptions?** (Object): optional signature options.
-  + **expires?** (Number): the url expires (unit: seconds), default is 1800.
+* **options**: `Options` — the client options, see above.
+* **objectName**: `string` — the object name.
+* **urlOptions?**: `SignatureUrlOptions` — optional signature options.
+  + **expires?**: `number` — the url expiry (unit: seconds), default is 1800.
+  + **method?**: `HTTPMethods` — the HTTP method, default is `'GET'`.
+  + **response?**: `ResponseHeaderType` — response headers for download.
 
 #### Return
 
-* **(String)**
+* `string`
 
 ## LICENSE
 

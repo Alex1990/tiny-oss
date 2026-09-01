@@ -37,7 +37,32 @@
  */
 
 export type { Protocol, RequestParams } from './protocol';
-export type { TinyOSS } from './types';
+export type {
+  BlobLike,
+  Checkpoint,
+  CompleteMultipartUploadResult,
+  HTTPMethods,
+  InitMultipartUploadResult,
+  ListPartsResult,
+  ListQuery,
+  ListUploadsQuery,
+  ListUploadsResult,
+  MultipartOptions,
+  MultipartUploadOptions,
+  ObjectCallback,
+  Options,
+  Part,
+  PartInfo,
+  Progress,
+  PutOptions,
+  ResponseHeaderType,
+  SignatureUrlOptions,
+  SourceData,
+  UploadInfo,
+  UploadPartCopyOptions,
+  UploadPartCopyResult,
+  UploadPartResult,
+} from './types';
 
 export {
   createPut,

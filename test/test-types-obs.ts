@@ -13,10 +13,16 @@ import {
   uploadPartCopy,
   multipartUpload,
   bindOptions,
-  type TinyOSS,
+  type CompleteMultipartUploadResult,
+  type InitMultipartUploadResult,
+  type ListPartsResult,
+  type ListUploadsResult,
+  type Options,
+  type UploadPartCopyResult,
+  type UploadPartResult,
 } from '../dist/obs';
 
-const options: TinyOSS.TinyOSSOptions = {
+const options: Options = {
   accessKeyId: 'AKIDxxxxxxxxxxxxxxxx',
   accessKeySecret: 'secret',
   bucket: 'examplebucket',
@@ -29,14 +35,14 @@ const blob = new Blob(['test'], { type: 'text/plain' });
 // Every operation keeps the same signature as the OSS entry.
 const putPromise: Promise<any> = put(options, 'test.txt', blob);
 const url: string = signatureUrl(options, 'test.txt', { expires: 600 });
-const initResult: Promise<TinyOSS.InitMultipartUploadResult> = initMultipartUpload(options, 'test.txt');
-const uploadPartResult: Promise<TinyOSS.UploadPartResult> = uploadPart(options, 'test.txt', 'u1', 1, blob, 0, 1024);
-const completeResult: Promise<TinyOSS.CompleteMultipartUploadResult> = completeMultipartUpload(options, 'test.txt', 'u1', [{ number: 1, etag: '"e"' }]);
+const initResult: Promise<InitMultipartUploadResult> = initMultipartUpload(options, 'test.txt');
+const uploadPartResult: Promise<UploadPartResult> = uploadPart(options, 'test.txt', 'u1', 1, blob, 0, 1024);
+const completeResult: Promise<CompleteMultipartUploadResult> = completeMultipartUpload(options, 'test.txt', 'u1', [{ number: 1, etag: '"e"' }]);
 const abortResult: Promise<void> = abortMultipartUpload(options, 'test.txt', 'u1');
-const listPartsResult: Promise<TinyOSS.ListPartsResult> = listParts(options, 'test.txt', 'u1');
-const listUploadsResult: Promise<TinyOSS.ListUploadsResult> = listUploads(options, { prefix: 'x' });
-const copyResult: Promise<TinyOSS.UploadPartCopyResult> = uploadPartCopy(options, 'test.txt', 'u1', 1, 'bytes=0-1023', { sourceKey: 'src.txt' });
-const multiResult: Promise<TinyOSS.CompleteMultipartUploadResult> = multipartUpload(options, 'test.txt', blob);
+const listPartsResult: Promise<ListPartsResult> = listParts(options, 'test.txt', 'u1');
+const listUploadsResult: Promise<ListUploadsResult> = listUploads(options, { prefix: 'x' });
+const copyResult: Promise<UploadPartCopyResult> = uploadPartCopy(options, 'test.txt', 'u1', 1, 'bytes=0-1023', { sourceKey: 'src.txt' });
+const multiResult: Promise<CompleteMultipartUploadResult> = multipartUpload(options, 'test.txt', blob);
 const upload = bindOptions(put, options);
 const boundPromise: Promise<any> = upload('bound.txt', blob);
 

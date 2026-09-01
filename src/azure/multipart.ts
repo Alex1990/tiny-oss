@@ -1,7 +1,7 @@
 import base64js from 'base64-js';
 import { blobToBuffer, getContentMd5, encodeUtf8 } from '../utils';
 import { request as azureRequest } from './request';
-import type { TinyOSS } from '../types';
+import type { BlobLike, CompleteMultipartUploadResult, InitMultipartUploadResult, MultipartOptions, Options, PartInfo, UploadPartResult } from '../types';
 
 /**
  * Azure Block Blob multipart primitives. Azure has no server-side
@@ -32,10 +32,10 @@ function localUploadId(): string {
 const pendingMeta = new Map<string, Record<string, any>>();
 
 export function initMultipartUpload(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
-  multipartOptions: TinyOSS.MultipartOptions = {}
-): Promise<TinyOSS.InitMultipartUploadResult> {
+  multipartOptions: MultipartOptions = {}
+): Promise<InitMultipartUploadResult> {
   // Block blobs need no initiation request; the id is a client label.
   void options;
   const uploadId = localUploadId();
@@ -44,15 +44,15 @@ export function initMultipartUpload(
 }
 
 export function uploadPart(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
   uploadId: string,
   partNo: number,
-  data: TinyOSS.BlobLike | string,
+  data: BlobLike | string,
   start: number,
   end: number,
-  multipartOptions: TinyOSS.MultipartOptions = {}
-): Promise<TinyOSS.UploadPartResult> {
+  multipartOptions: MultipartOptions = {}
+): Promise<UploadPartResult> {
   void uploadId;
   const partData = ArrayBuffer.isView(data) && !(data instanceof DataView)
     ? data.subarray(start, end)
@@ -82,12 +82,12 @@ export function uploadPart(
 }
 
 export function completeMultipartUpload(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
   uploadId: string,
-  parts: TinyOSS.PartInfo[],
-  multipartOptions: TinyOSS.MultipartOptions = {}
-): Promise<TinyOSS.CompleteMultipartUploadResult> {
+  parts: PartInfo[],
+  multipartOptions: MultipartOptions = {}
+): Promise<CompleteMultipartUploadResult> {
   const metaHeaders = pendingMeta.get(uploadId);
   pendingMeta.delete(uploadId);
   const ordered = [...parts].sort((a, b) => a.number - b.number);

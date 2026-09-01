@@ -2,7 +2,7 @@ import { getTransport } from '../transport';
 import { normalizeOptions, resolveTimeout, dataSize } from '../ops/request';
 import { getObsSignature, encodeObsUrl } from './signature';
 import { resolveObsHost } from './host';
-import type { TinyOSS } from '../types';
+import type { Options } from '../types';
 import type { RequestParams } from '../protocol';
 
 /** OBS defaults: Huawei Cloud China North 4 region, http, 60s timeout. */
@@ -19,7 +19,7 @@ const OBS_DEFAULTS = {
  * sub-resource query parameters; the object key is URL-encoded with '/'
  * preserved, in both the signature and the request URL.
  */
-export function request(options: TinyOSS.TinyOSSOptions, params: RequestParams): Promise<any> {
+export function request(options: Options, params: RequestParams): Promise<any> {
   const opts = normalizeOptions(options, OBS_DEFAULTS);
   const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = opts;
   const headers: Record<string, any> = {

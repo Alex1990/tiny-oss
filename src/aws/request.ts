@@ -2,7 +2,7 @@ import { getTransport } from '../transport';
 import { normalizeOptions, resolveTimeout, dataSize } from '../ops/request';
 import { getAwsSignature, awsUriEscapePath, iso8601 } from './signature';
 import { resolveAwsHost } from './host';
-import type { TinyOSS } from '../types';
+import type { Options } from '../types';
 import type { RequestParams } from '../protocol';
 
 /** AWS defaults: us-east-1 region, http, 60s timeout. */
@@ -19,7 +19,7 @@ const AWS_DEFAULTS = {
  * SDK) and x-amz-security-token headers. The object key is URI-escaped
  * ('/' kept) in both the signature and the request URL.
  */
-export function request(options: TinyOSS.TinyOSSOptions, params: RequestParams): Promise<any> {
+export function request(options: Options, params: RequestParams): Promise<any> {
   const opts = normalizeOptions(options, AWS_DEFAULTS);
   const { accessKeyId, accessKeySecret, stsToken, bucket, secure, region, pathStyle } = opts;
   const host = resolveAwsHost(opts);

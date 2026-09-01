@@ -1,7 +1,7 @@
 import { normalizeOptions } from '../ops/request';
 import { getAwsSignature, awsUriEscapePath, iso8601, canonicalQueryString } from './signature';
 import { resolveAwsHost } from './host';
-import type { TinyOSS } from '../types';
+import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types';
 
 /** AWS defaults: us-east-1 region, http, 60s timeout. */
 const AWS_DEFAULTS = {
@@ -33,9 +33,9 @@ const AWS_DEFAULTS = {
  * @return pre-signed URL
  */
 export function awsSignUrl(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
-  urlOptions: TinyOSS.SignatureUrlOptions = {}
+  urlOptions: SignatureUrlOptions = {}
 ): string {
   const { expires = 1800, method, response } = urlOptions;
   const opts = normalizeOptions(options, AWS_DEFAULTS);
@@ -44,7 +44,7 @@ export function awsSignUrl(
   if (response) {
     Object.keys(response).forEach((k) => {
       const key = `response-${k.toLowerCase()}`;
-      query[key] = response[k as keyof TinyOSS.ResponseHeaderType];
+      query[key] = response[k as keyof ResponseHeaderType];
     });
   }
   Object.keys(urlOptions).forEach((key) => {

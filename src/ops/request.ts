@@ -1,6 +1,6 @@
 import { getTransport } from '../transport';
 import { assertOptions, getSignature, encodeUtf8 } from '../utils';
-import type { TinyOSS } from '../types';
+import type { Options } from '../types';
 import type { RequestParams } from '../protocol';
 
 const DEFAULT_OPTIONS = {
@@ -18,9 +18,9 @@ const DEFAULT_OPTIONS = {
  * their own defaults (e.g. OBS region 'cn-north-4').
  */
 export function normalizeOptions(
-  options: TinyOSS.TinyOSSOptions = {} as TinyOSS.TinyOSSOptions,
+  options: Options = {} as Options,
   defaults: Record<string, any> = DEFAULT_OPTIONS
-): TinyOSS.TinyOSSOptions {
+): Options {
   assertOptions(options);
   return Object.assign({}, defaults, options);
 }
@@ -29,7 +29,7 @@ export function normalizeOptions(
  * Resolve the OSS host the requests are sent to. An explicit endpoint
  * wins over the bucket/region combination.
  */
-export function resolveHost(options: TinyOSS.TinyOSSOptions): string {
+export function resolveHost(options: Options): string {
   const { bucket, region, endpoint, internal } = options;
   if (endpoint) return endpoint;
   // assertOptions guarantees bucket or endpoint, and endpoint is handled above.
@@ -43,7 +43,7 @@ export function resolveHost(options: TinyOSS.TinyOSSOptions): string {
  * Resolve the per-request timeout, honoring a per-request override and
  * tolerating string timeouts. Shared by every provider.
  */
-export function resolveTimeout(options: TinyOSS.TinyOSSOptions, fallback?: number): number | undefined {
+export function resolveTimeout(options: Options, fallback?: number): number | undefined {
   const value = fallback || options.timeout;
   return typeof value === 'string' ? parseInt(value, 10) : value;
 }
@@ -64,7 +64,7 @@ export function dataSize(data: any): number | undefined {
  * Authorization signature, and the URL is built from the host plus the
  * sub-resource query parameters.
  */
-export function request(options: TinyOSS.TinyOSSOptions, params: RequestParams): Promise<any> {
+export function request(options: Options, params: RequestParams): Promise<any> {
   const opts = normalizeOptions(options);
   const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = opts;
   const headers: Record<string, any> = {

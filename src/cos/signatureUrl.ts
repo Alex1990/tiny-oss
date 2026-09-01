@@ -1,7 +1,7 @@
 import { normalizeOptions } from '../ops/request';
 import { getCosAuth } from './signature';
 import { resolveCosHost } from './host';
-import type { TinyOSS } from '../types';
+import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types';
 
 /**
  * Get a signed url for a COS object.
@@ -18,9 +18,9 @@ import type { TinyOSS } from '../types';
  * @return signature url
  */
 export function cosSignUrl(
-  options: TinyOSS.TinyOSSOptions,
+  options: Options,
   objectName: string,
-  urlOptions: TinyOSS.SignatureUrlOptions = {}
+  urlOptions: SignatureUrlOptions = {}
 ): string {
   const { expires = 1800, method, process, response } = urlOptions;
   const opts = normalizeOptions(options);
@@ -30,7 +30,7 @@ export function cosSignUrl(
   if (process) query['pic-operations'] = process;
   if (response) {
     Object.keys(response).forEach((k) => {
-      query[`response-${k.toLowerCase()}`] = String(response[k as keyof TinyOSS.ResponseHeaderType]);
+      query[`response-${k.toLowerCase()}`] = String(response[k as keyof ResponseHeaderType]);
     });
   }
   Object.keys(urlOptions).forEach((key) => {

@@ -1,4 +1,4 @@
-import type { TinyOSS } from '../types';
+import type { MultipartOptions, Options } from '../types';
 import type { Protocol } from '../protocol';
 
 /**
@@ -8,10 +8,10 @@ import type { Protocol } from '../protocol';
  */
 export function createAbortMultipartUpload(protocol: Protocol) {
   return function abortMultipartUpload(
-    options: TinyOSS.TinyOSSOptions,
+    options: Options,
     objectName: string,
     uploadId: string,
-    multipartOptions: TinyOSS.MultipartOptions = {}
+    multipartOptions: MultipartOptions = {}
   ): Promise<void> {
     return protocol.request(options, {
       verb: 'DELETE',

@@ -1,5 +1,5 @@
 import { getXmlTag } from '../utils/xml';
-import type { TinyOSS } from '../types';
+import type { InitMultipartUploadResult, MultipartOptions, Options } from '../types';
 import type { Protocol } from '../protocol';
 
 /**
@@ -9,10 +9,10 @@ import type { Protocol } from '../protocol';
  */
 export function createInitMultipartUpload(protocol: Protocol) {
   return function initMultipartUpload(
-    options: TinyOSS.TinyOSSOptions,
+    options: Options,
     objectName: string,
-    multipartOptions: TinyOSS.MultipartOptions = {}
-  ): Promise<TinyOSS.InitMultipartUploadResult> {
+    multipartOptions: MultipartOptions = {}
+  ): Promise<InitMultipartUploadResult> {
     const headers: Record<string, any> = { ...multipartOptions.headers };
     return protocol.request(options, {
       verb: 'POST',

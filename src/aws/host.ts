@@ -1,4 +1,4 @@
-import type { TinyOSS } from '../types';
+import type { Options } from '../types';
 
 /**
  * Resolve the S3 host. An explicit endpoint wins over the
@@ -6,7 +6,7 @@ import type { TinyOSS } from '../types';
  * path-style addressing the bucket lives in the URL path, so the host
  * never carries it (S3-compatible stores like MinIO and R2).
  */
-export function resolveAwsHost(options: TinyOSS.TinyOSSOptions): string {
+export function resolveAwsHost(options: Options): string {
   const { bucket, region, endpoint, pathStyle } = options;
   if (endpoint) return endpoint;
   const suffix = region === 'us-east-1' ? 's3.amazonaws.com' : `s3.${region}.amazonaws.com`;

@@ -32,7 +32,32 @@ const multipartUpload = createMultipartUpload(AZURE_PROTOCOL, {
 });
 const signatureUrl = AZURE_PROTOCOL.signUrl;
 
-export type { TinyOSS } from '../types';
+export type {
+  BlobLike,
+  Checkpoint,
+  CompleteMultipartUploadResult,
+  HTTPMethods,
+  InitMultipartUploadResult,
+  ListPartsResult,
+  ListQuery,
+  ListUploadsQuery,
+  ListUploadsResult,
+  MultipartOptions,
+  MultipartUploadOptions,
+  ObjectCallback,
+  Options,
+  Part,
+  PartInfo,
+  Progress,
+  PutOptions,
+  ResponseHeaderType,
+  SignatureUrlOptions,
+  SourceData,
+  UploadInfo,
+  UploadPartCopyOptions,
+  UploadPartCopyResult,
+  UploadPartResult,
+} from '../types';
 export { setTransport, getTransport } from '../transport';
 export type { Transport, TransportOptions, TransportResponse } from '../transport';
 export { fetchTransport } from '../transports/fetch';

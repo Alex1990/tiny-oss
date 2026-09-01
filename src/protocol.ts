@@ -1,4 +1,4 @@
-import type { TinyOSS } from './types';
+import type { Options, Progress, SignatureUrlOptions } from './types';
 
 /** Per-request parameters, shared by every provider's request implementation. */
 export interface RequestParams {
@@ -9,7 +9,7 @@ export interface RequestParams {
   subResource?: Record<string, any>;
   data?: any;
   timeout?: number;
-  onprogress?: (e: TinyOSS.Progress) => any;
+  onprogress?: (e: Progress) => any;
 }
 
 /**
@@ -20,7 +20,7 @@ export interface RequestParams {
  */
 export interface Protocol {
   /** Sign and send a single request through the configured transport. */
-  request: (options: TinyOSS.TinyOSSOptions, params: RequestParams) => Promise<any>;
+  request: (options: Options, params: RequestParams) => Promise<any>;
   /** Object metadata header prefix, e.g. 'x-oss-meta-' or 'x-cos-meta-'. */
   metaPrefix: string;
   /** Copy source header for uploadPartCopy. */
@@ -32,5 +32,5 @@ export interface Protocol {
   /** Whether the provider has a symlink API (only OSS does). */
   supportsSymlink: boolean;
   /** Build a signed URL for download (or upload). */
-  signUrl: (options: TinyOSS.TinyOSSOptions, objectName: string, urlOptions?: TinyOSS.SignatureUrlOptions) => string;
+  signUrl: (options: Options, objectName: string, urlOptions?: SignatureUrlOptions) => string;
 }
