@@ -11,3 +11,4 @@ yarn.lock
 stats.json
 test-results
 test/__screenshots__
+.vitest-attachments
