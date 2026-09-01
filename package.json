@@ -40,7 +40,7 @@
   "scripts": {
     "clean": "rimraf dist",
     "lint": "oxlint src test",
-    "build": "vite build && vite build -c vite.cos.config.ts && vite build -c vite.obs.config.ts && vite build -c vite.aws.config.ts && vite build -c vite.azure.config.ts && vite build -c vite.protocol.config.ts && npm run build:types && npm run build:types:cos && npm run build:types:obs && npm run build:types:aws && npm run build:types:azure && npm run build:types:protocol",
+    "build": "vite build && vite build --mode cos && vite build --mode obs && vite build --mode aws && vite build --mode azure && vite build --mode protocol && npm run build:types && npm run build:types:cos && npm run build:types:obs && npm run build:types:aws && npm run build:types:azure && npm run build:types:protocol",
     "build:types": "dts-bundle-generator src/index.ts -o dist/index.d.ts --project tsconfig.json --sort",
     "build:types:cos": "dts-bundle-generator src/cos/index.ts -o dist/cos.d.ts --project tsconfig.json --sort",
     "build:types:obs": "dts-bundle-generator src/obs/index.ts -o dist/obs.d.ts --project tsconfig.json --sort",
