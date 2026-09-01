@@ -70,6 +70,14 @@
   "keywords": [
     "aliyun",
     "oss",
+    "cos",
+    "obs",
+    "s3",
+    "aws",
+    "azure",
+    "object-storage",
+    "cloud-storage",
+    "upload",
     "sdk"
   ],
   "author": "Alex Chao",
