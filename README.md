@@ -1,8 +1,10 @@
 # tiny-oss
 
-A tiny object storage SDK focused on uploading: Aliyun OSS, Tencent Cloud COS, Huawei Cloud OBS, AWS S3 (plus S3-compatible stores) and Azure Blob Storage under one core API; runs in browsers, Node.js, Service Workers and WeChat mini programs; extensible with custom providers. About 11kb (min+gzipped) for the full entry — tree-shaking drops the operations you don't import, so a bundle that only calls `put` is smaller.
+[![npm version](https://img.shields.io/npm/v/tiny-oss)](https://www.npmjs.com/package/tiny-oss)
 
 **English | [简体中文](README_zh-CN.md)**
+
+A tiny object storage SDK focused on uploading: Aliyun OSS, Tencent Cloud COS, Huawei Cloud OBS, AWS S3 (plus S3-compatible stores) and Azure Blob Storage under one core API; runs in browsers, Node.js, Service Workers and WeChat mini programs; extensible with custom providers. About 11kb (min+gzipped) for the full entry — tree-shaking drops the operations you don't import, so a bundle that only calls `put` is smaller.
 
 ## Supported providers
 
