@@ -39,7 +39,7 @@ export function awsSignUrl(
 ): string {
   const { expires = 1800, method, response } = urlOptions;
   const opts = normalizeOptions(options, AWS_DEFAULTS);
-  const { accessKeyId, accessKeySecret, stsToken, bucket, secure, region } = opts;
+  const { accessKeyId, accessKeySecret, stsToken, bucket, secure, region, pathStyle } = opts;
   const query: Record<string, any> = {};
   if (response) {
     Object.keys(response).forEach((k) => {
@@ -61,7 +61,8 @@ export function awsSignUrl(
   const securityToken = urlOptions['security-token'] || stsToken;
 
   const host = resolveAwsHost(opts);
-  const pathname = `/${awsUriEscapePath(objectName)}`;
+  const objectPath = `/${awsUriEscapePath(objectName)}`;
+  const pathname = pathStyle && bucket ? `/${bucket}${objectPath}` : objectPath;
   const amzDate = iso8601(new Date());
   const signQuery: Record<string, any> = {
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',

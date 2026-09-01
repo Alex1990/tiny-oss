@@ -12,14 +12,15 @@ const REGION = 'us-east-1';
 const BUCKET = 'examplebucket';
 const AMZ_DATE = '20260901T000000Z';
 
-function makeS3() {
+function makeS3(pathStyle = false, endpoint?: string) {
   return new AWS.S3({
     region: REGION,
     accessKeyId: AK,
     secretAccessKey: SK,
     signatureVersion: 'v4',
     sessionToken: 'TOKEN',
-    s3ForcePathStyle: false,
+    s3ForcePathStyle: pathStyle,
+    ...(endpoint ? { endpoint } : {}),
   });
 }
 
@@ -30,8 +31,8 @@ interface OracleResult {
   contentMd5?: string;
 }
 
-function authFor(verb: string, key: string, query?: Record<string, string>): OracleResult {
-  const s3 = makeS3();
+function authFor(verb: string, key: string, query?: Record<string, string>, pathStyle = false): OracleResult {
+  const s3 = makeS3(pathStyle, pathStyle ? 'minio.example.com' : undefined);
   let req: AWS.Request<any, any>;
   if (verb === 'PUT' && query && query.partNumber) {
     req = s3.uploadPart({ Bucket: BUCKET, Key: key, PartNumber: parseInt(query.partNumber, 10), UploadId: query.uploadId, Body: 'x' });
@@ -57,18 +58,19 @@ function authFor(verb: string, key: string, query?: Record<string, string>): Ora
   };
 }
 
-function buildMine(verb: string, key: string, query: Record<string, any> | undefined, oracle: OracleResult): string {
+function buildMine(verb: string, key: string, query: Record<string, any> | undefined, oracle: OracleResult, pathStyle = false): string {
   const headers: Record<string, any> = {
-    host: `${BUCKET}.s3.amazonaws.com`,
+    host: pathStyle ? 'minio.example.com' : `${BUCKET}.s3.amazonaws.com`,
     'x-amz-date': AMZ_DATE,
     'x-amz-content-sha256': oracle.contentSha256 || 'UNSIGNED-PAYLOAD',
     'x-amz-security-token': 'TOKEN',
   };
   if (oracle.ua) headers['x-amz-user-agent'] = oracle.ua;
   if (oracle.contentMd5) headers['Content-MD5'] = oracle.contentMd5;
+  const objectPath = `/${awsUriEscapePath(key)}`;
   const sig = getAwsSignature({
     method: verb,
-    pathname: `/${awsUriEscapePath(key)}`,
+    pathname: pathStyle ? `/${BUCKET}${objectPath}` : objectPath,
     query,
     headers,
     accessKeyId: AK,
@@ -103,6 +105,14 @@ describe('getAwsSignature matches the official AWS SDK v2 (oracle)', () => {
       expect(mine).toBe(oracle.auth);
     });
   }
+
+  it('path-style addressing (MinIO/R2) matches s3ForcePathStyle', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-01T00:00:00.000Z'));
+    const oracle = authFor('PUT', 'dir/file.txt', { partNumber: '1', uploadId: 'u1' }, true);
+    const mine = buildMine('PUT', 'dir/file.txt', { partNumber: '1', uploadId: 'u1' }, oracle, true);
+    expect(mine).toBe(oracle.auth);
+  });
 
   it('uses the current time for the default amz date', () => {
     vi.useFakeTimers();

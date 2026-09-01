@@ -10,6 +10,7 @@ export namespace TinyOSS {
     secure?: boolean; // instruct OSS client to use HTTPS (secure: true) or HTTP (secure: false) protocol.
     timeout?: string | number; // instance level timeout for all operations, default is 60s
     cname?: boolean; // use custom domain name
+    pathStyle?: boolean; // S3-style path addressing (bucket in the URL path). Required for S3-compatible endpoints such as MinIO and Cloudflare R2.
   }
 
   export interface Progress {

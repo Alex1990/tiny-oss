@@ -115,6 +115,37 @@ describe('aws request', () => {
       'https://examplebucket.s3.us-west-2.amazonaws.com/dir/file%20name.bin?partNumber=1&uploadId=u123'
     );
   });
+
+  it('path-style addressing puts the bucket in the URL path', async () => {
+    const calls: any[] = [];
+    setTransport(async (url: string, opts: any) => {
+      calls.push({ url, opts });
+      return { data: '', headers: {}, status: 200, statusText: 'OK' };
+    });
+    await request(
+      { ...OPTIONS, endpoint: 'minio.example.com', pathStyle: true },
+      { verb: 'PUT', objectName: 'a.txt' }
+    );
+    expect(calls[0].url).toBe('https://minio.example.com/examplebucket/a.txt');
+    expect(calls[0].opts.headers.host).toBe('minio.example.com');
+    expect(calls[0].opts.headers.Authorization).toMatch(
+      /^AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE\/\d{8}\/us-west-2\/s3\/aws4_request, SignedHeaders=.*, Signature=[0-9a-f]{64}$/
+    );
+  });
+
+  it('path-style pre-signed URL includes the bucket', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-01T00:00:00.000Z'));
+    const url = awsSignUrl(
+      { ...OPTIONS, endpoint: 'r2.example.com', pathStyle: true },
+      'dir/a.txt',
+      { expires: 60 }
+    );
+    const u = new URL(url);
+    expect(u.hostname).toBe('r2.example.com');
+    expect(u.pathname).toBe('/examplebucket/dir/a.txt');
+    expect(u.searchParams.get('X-Amz-SignedHeaders')).toBe('host');
+  });
 });
 
 describe('AWS entry point', () => {

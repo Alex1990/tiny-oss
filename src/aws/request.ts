@@ -21,7 +21,7 @@ const AWS_DEFAULTS = {
  */
 export function request(options: TinyOSS.TinyOSSOptions, params: RequestParams): Promise<any> {
   const opts = normalizeOptions(options, AWS_DEFAULTS);
-  const { accessKeyId, accessKeySecret, stsToken, bucket, secure, region } = opts;
+  const { accessKeyId, accessKeySecret, stsToken, bucket, secure, region, pathStyle } = opts;
   const host = resolveAwsHost(opts);
   const headers: Record<string, any> = {
     host,
@@ -30,7 +30,8 @@ export function request(options: TinyOSS.TinyOSSOptions, params: RequestParams):
     ...params.headers,
   };
   if (stsToken) headers['x-amz-security-token'] = stsToken;
-  const pathname = `/${awsUriEscapePath(params.objectName)}`;
+  const objectPath = `/${awsUriEscapePath(params.objectName)}`;
+  const pathname = pathStyle && bucket ? `/${bucket}${objectPath}` : objectPath;
   const { signature, credentialScope, signedHeaders } = getAwsSignature({
     method: params.verb,
     pathname,

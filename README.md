@@ -162,6 +162,44 @@ Notes:
 - The signer implements SigV4 with `UNSIGNED-PAYLOAD` (the official SDK disables body signing for S3), so it is byte-identical to `aws-sdk` v2.
 - Signatures are time-sensitive; a skewed client clock yields `403 RequestTimeTooSkewed`.
 
+### S3-compatible stores (MinIO, Cloudflare R2, …)
+
+S3-compatible stores speak SigV4, so the `tiny-oss/aws` entry works with **zero extra code** — just point the `endpoint` at the store and enable `pathStyle` (these stores address buckets in the URL path, like the official SDK's `forcePathStyle`):
+
+```js
+import { put, signatureUrl, multipartUpload } from 'tiny-oss/aws';
+
+// MinIO
+await put(
+  {
+    accessKeyId: 'minioadmin',
+    accessKeySecret: 'minioadmin',
+    region: 'us-east-1',
+    bucket: 'my-bucket',
+    endpoint: 'minio.example.com', // no protocol prefix
+    pathStyle: true,
+  },
+  'hello-world',
+  blob
+);
+
+// Cloudflare R2 — region is always 'auto'
+await put(
+  {
+    accessKeyId: 'your R2 Access Key ID',
+    accessKeySecret: 'your R2 Secret Access Key',
+    region: 'auto',
+    bucket: 'my-bucket',
+    endpoint: '<accountid>.r2.cloudflarestorage.com',
+    pathStyle: true,
+  },
+  'hello-world',
+  blob
+);
+```
+
+The endpoint must not carry a protocol (`http://`/`https://`) — the `secure` option selects it. Every operation (`put`, multipart, list, copy, signed URLs) works unchanged against these stores.
+
 ## Adding another object storage
 
 Every operation is a factory over a `Protocol` — the extension point. A provider only has to implement two functions (`request`, `signUrl`) and fill in five constants; all operations (`put`, multipart, list, copy, …) then work unchanged. The built-in providers are the reference recipes: `src/cos/`, `src/obs/`, `src/aws/`.

@@ -162,6 +162,44 @@ AWS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`�
 - 签名器实现 SigV4 并使用 `UNSIGNED-PAYLOAD`（官方 SDK 对 S3 默认不签名 body），与 `aws-sdk` v2 逐字节一致。
 - 签名对时间敏感，客户端时钟偏差会导致 403 `RequestTimeTooSkewed`。
 
+### S3 兼容存储（MinIO、Cloudflare R2 等）
+
+S3 兼容存储使用 SigV4，`tiny-oss/aws` 入口**零额外代码**即可接入——只需把 `endpoint` 指向存储并开启 `pathStyle`（这类存储把 bucket 放在 URL 路径中，对应官方 SDK 的 `forcePathStyle`）：
+
+```js
+import { put, signatureUrl, multipartUpload } from 'tiny-oss/aws';
+
+// MinIO
+await put(
+  {
+    accessKeyId: 'minioadmin',
+    accessKeySecret: 'minioadmin',
+    region: 'us-east-1',
+    bucket: 'my-bucket',
+    endpoint: 'minio.example.com', // 不要带协议前缀
+    pathStyle: true,
+  },
+  'hello-world',
+  blob
+);
+
+// Cloudflare R2 —— region 固定为 'auto'
+await put(
+  {
+    accessKeyId: '你的 R2 Access Key ID',
+    accessKeySecret: '你的 R2 Secret Access Key',
+    region: 'auto',
+    bucket: 'my-bucket',
+    endpoint: '<accountid>.r2.cloudflarestorage.com',
+    pathStyle: true,
+  },
+  'hello-world',
+  blob
+);
+```
+
+`endpoint` 不能带协议前缀（`http://`/`https://`）——由 `secure` 选项决定。所有操作（上传、分片、列举、拷贝、签名 URL）在这些存储上原样可用。
+
 ## 扩展其他对象存储
 
 每个操作都是基于 `Protocol` 的工厂——这就是扩展点。接入一个新存储只需要实现两个函数（`request`、`signUrl`）并填写五个常量，所有操作（上传、分片、列举、拷贝……）即全部可用。内置实现是最佳参考配方：`src/cos/`、`src/obs/`、`src/aws/`。
