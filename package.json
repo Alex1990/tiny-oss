@@ -22,6 +22,10 @@
       "types": "./dist/aws.d.ts",
       "import": "./dist/tiny-oss.aws.es.js"
     },
+    "./azure": {
+      "types": "./dist/azure.d.ts",
+      "import": "./dist/tiny-oss.azure.es.js"
+    },
     "./protocol": {
       "types": "./dist/protocol.d.ts",
       "import": "./dist/tiny-oss.protocol.es.js"
@@ -36,16 +40,18 @@
   "scripts": {
     "clean": "rimraf dist",
     "lint": "oxlint src test",
-    "build": "vite build && vite build -c vite.cos.config.ts && vite build -c vite.obs.config.ts && vite build -c vite.aws.config.ts && vite build -c vite.protocol.config.ts && npm run build:types && npm run build:types:cos && npm run build:types:obs && npm run build:types:aws && npm run build:types:protocol",
+    "build": "vite build && vite build -c vite.cos.config.ts && vite build -c vite.obs.config.ts && vite build -c vite.aws.config.ts && vite build -c vite.azure.config.ts && vite build -c vite.protocol.config.ts && npm run build:types && npm run build:types:cos && npm run build:types:obs && npm run build:types:aws && npm run build:types:azure && npm run build:types:protocol",
     "build:types": "dts-bundle-generator src/index.ts -o dist/index.d.ts --project tsconfig.json --sort",
     "build:types:cos": "dts-bundle-generator src/cos/index.ts -o dist/cos.d.ts --project tsconfig.json --sort",
     "build:types:obs": "dts-bundle-generator src/obs/index.ts -o dist/obs.d.ts --project tsconfig.json --sort",
     "build:types:aws": "dts-bundle-generator src/aws/index.ts -o dist/aws.d.ts --project tsconfig.json --sort",
+    "build:types:azure": "dts-bundle-generator src/azure/index.ts -o dist/azure.d.ts --project tsconfig.json --sort",
     "build:types:protocol": "dts-bundle-generator src/provider.ts -o dist/protocol.d.ts --project tsconfig.json --sort",
-    "check:types": "tsc --noEmit --skipLibCheck test/test-types.ts && tsc --noEmit --skipLibCheck test/test-types-cos.ts && tsc --noEmit --skipLibCheck test/test-types-obs.ts && tsc --noEmit --skipLibCheck test/test-types-aws.ts && tsc --noEmit --skipLibCheck test/test-types-protocol.ts",
+    "check:types": "tsc --noEmit --skipLibCheck test/test-types.ts && tsc --noEmit --skipLibCheck test/test-types-cos.ts && tsc --noEmit --skipLibCheck test/test-types-obs.ts && tsc --noEmit --skipLibCheck test/test-types-aws.ts && tsc --noEmit --skipLibCheck test/test-types-azure.ts && tsc --noEmit --skipLibCheck test/test-types-protocol.ts",
     "dev": "vite",
     "serve": "tsx test/server.ts",
     "test": "vitest",
+    "test:azure-oracle": "tsx test/azure-oracle.node.ts",
     "test:coverage": "vitest --coverage",
     "test:ci": "vitest run --browser.headless",
     "test:ci:coverage": "vitest run  --browser.headless --coverage",
@@ -72,6 +78,7 @@
   },
   "homepage": "https://github.com/Alex1990/tiny-oss#readme",
   "devDependencies": {
+    "@azure/storage-blob": "12.30.0",
     "@hono/node-server": "^1.19.11",
     "@testing-library/dom": "^10.4.1",
     "@types/ali-oss": "^6.23.3",

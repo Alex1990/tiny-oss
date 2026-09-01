@@ -1,6 +1,6 @@
 # tiny-oss
 
-A tiny aliyun oss sdk for browser which focus on uploading. Less than 10kb (min+gzipped). Also ships Tencent Cloud COS (`tiny-oss/cos`), Huawei Cloud OBS (`tiny-oss/obs`) and AWS S3 (`tiny-oss/aws`) entry points with the same API — see [Tencent Cloud COS](#tencent-cloud-cos), [Huawei Cloud OBS](#huawei-cloud-obs) and [AWS S3](#aws-s3).
+A tiny aliyun oss sdk for browser which focus on uploading. Less than 10kb (min+gzipped). Also ships Tencent Cloud COS (`tiny-oss/cos`), Huawei Cloud OBS (`tiny-oss/obs`), AWS S3 (`tiny-oss/aws`) and Azure Blob Storage (`tiny-oss/azure`) entry points with the same API — see [Tencent Cloud COS](#tencent-cloud-cos), [Huawei Cloud OBS](#huawei-cloud-obs), [AWS S3](#aws-s3) and [Azure Blob Storage](#azure-blob-storage).
 
 **English | [简体中文](README_zh-CN.md)**
 
@@ -162,6 +162,44 @@ Notes:
 - The signer implements SigV4 with `UNSIGNED-PAYLOAD` (the official SDK disables body signing for S3), so it is byte-identical to `aws-sdk` v2.
 - Signatures are time-sensitive; a skewed client clock yields `403 RequestTimeTooSkewed`.
 
+## Azure Blob Storage
+
+Azure Blob Storage speaks neither SigV4 nor any of the other schemes above: it uses its own **SharedKey** authorization and a different multipart model (block blobs). A dedicated entry point (`tiny-oss/azure`) implements both, so the API stays the same:
+
+```js
+import { put, multipartUpload, signatureUrl } from 'tiny-oss/azure';
+
+put(
+  {
+    accessKeyId: 'your storage account name',
+    accessKeySecret: 'your base64 account key',
+    bucket: 'your-container'
+  },
+  'hello-world',
+  blob
+);
+```
+
+The Azure entry exports `put`, `signatureUrl`, `initMultipartUpload`, `uploadPart`, `completeMultipartUpload`, `multipartUpload` and `bindOptions`. Options map as:
+
+| option | OSS | Azure Blob |
+|---|---|---|
+| `accessKeyId` | Aliyun AccessKeyId | storage account name |
+| `accessKeySecret` | Aliyun AccessKeySecret | the **base64** account key (used after base64-decoding, per SharedKey) |
+| `bucket` | `my-bucket` | container name |
+| `region` | `oss-cn-beijing` | not used (no region concept in the Blob service) |
+| `stsToken` | OSS STS token | not used (use a SAS or stored access policy instead) |
+| `endpoint` / `secure` / `timeout` | same | same (`secure` defaults to `true`) |
+
+Notes:
+
+- Every request carries `x-ms-date` and `x-ms-version`; the StringToSign is the 12-field SharedKey format with canonicalized `x-ms-*` headers and the canonicalized resource, verified byte-for-byte against `@azure/storage-common` and the MSDN example.
+- `signatureUrl` returns a service SAS (`sv=2020-12-06`, `sr=b`), byte-identical to `@azure/storage-blob`'s `generateBlobSASQueryParameters`. It is valid immediately; `method: 'PUT'` grants write.
+- `multipartUpload` uses Azure's block-blob model: parallel `Put Block` (`?comp=block&blockid=<base64>`) calls followed by a single `Put Block List` (`?comp=blocklist`). There is no server-side upload session, so `abortMultipartUpload`, `listParts`, `listUploads` and `uploadPartCopy` are intentionally absent.
+- Metadata passed to `multipartUpload` is applied on the final Put Block List, which is where Azure sets blob metadata.
+- Browser uploads require the container's CORS rule to allow your origin and expose the `ETag` response header for `multipartUpload`.
+- Use the shared-key (or SAS) flow only over HTTPS; the account key is a root credential — for anything user-facing prefer a server-generated SAS.
+
 ### S3-compatible stores (MinIO, Cloudflare R2, Google Cloud Storage, …)
 
 S3-compatible stores speak SigV4, so the `tiny-oss/aws` entry works with **zero extra code** — just point the `endpoint` at the store and enable `pathStyle` (these stores address buckets in the URL path, like the official SDK's `forcePathStyle`):
@@ -280,6 +318,8 @@ The shared helpers `normalizeOptions`, `resolveTimeout` and `dataSize` (also exp
 ### Contributing a provider to the repo
 
 Follow the `src/aws/` layout: `src/<provider>/{signature,host,request,signatureUrl,index}.ts`, then add the Vite build (`vite.<provider>.config.ts`), the `package.json` `exports` entry and `build:types:<provider>`. Signing must match the official SDK — the tests in `test/cos-signature.spec.ts`, `test/obs-signature.spec.ts` and `test/aws-signature.spec.ts` pin each signer against its official SDK as an oracle.
+
+If the target storage's multipart API is not S3-shaped (e.g. Azure's block blobs), don't force it through `createInitMultipartUpload`/`createUploadPart`/`createCompleteMultipartUpload`: write provider-specific primitives with the same signatures and inject them via `createMultipartUpload` (see `src/azure/multipart.ts`). Operations that have no counterpart — like `listUploads` for Azure — are simply omitted from the entry.
 
 ### Binding options once
 

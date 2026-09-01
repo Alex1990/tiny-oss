@@ -1,6 +1,6 @@
 # tiny-oss
 
-用于浏览器端的阿里云 OSS 极简版 SDK，专注于上传功能。小于 10kb (min+gzipped)。同时提供腾讯云 COS（`tiny-oss/cos`）、华为云 OBS（`tiny-oss/obs`）与 AWS S3（`tiny-oss/aws`）入口，API 完全一致——见[腾讯云 COS](#腾讯云-cos)、[华为云 OBS](#华为云-obs)与[AWS S3](#aws-s3)。
+用于浏览器端的阿里云 OSS 极简版 SDK，专注于上传功能。小于 10kb (min+gzipped)。同时提供腾讯云 COS（`tiny-oss/cos`）、华为云 OBS（`tiny-oss/obs`）、AWS S3（`tiny-oss/aws`）与 Azure Blob Storage（`tiny-oss/azure`）入口，API 完全一致——见[腾讯云 COS](#腾讯云-cos)、[华为云 OBS](#华为云-obs)、[AWS S3](#aws-s3)与[Azure Blob Storage](#azure-blob-storage)。
 
 **[English](README.md) | 简体中文**
 
@@ -162,6 +162,44 @@ AWS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`�
 - 签名器实现 SigV4 并使用 `UNSIGNED-PAYLOAD`（官方 SDK 对 S3 默认不签名 body），与 `aws-sdk` v2 逐字节一致。
 - 签名对时间敏感，客户端时钟偏差会导致 403 `RequestTimeTooSkewed`。
 
+## Azure Blob Storage
+
+Azure Blob Storage 不使用 SigV4，也不使用以上任何签名方案：它使用自成一派的 **SharedKey** 授权，分片模型也不同（Block Blob）。专用入口（`tiny-oss/azure`）实现了这两点，API 保持一致：
+
+```js
+import { put, multipartUpload, signatureUrl } from 'tiny-oss/azure';
+
+put(
+  {
+    accessKeyId: '你的存储账号名',
+    accessKeySecret: '你的 base64 账号密钥',
+    bucket: 'your-container'
+  },
+  'hello-world',
+  blob
+);
+```
+
+Azure 入口导出 `put`、`signatureUrl`、`initMultipartUpload`、`uploadPart`、`completeMultipartUpload`、`multipartUpload` 与 `bindOptions`。选项映射：
+
+| option | OSS | Azure Blob |
+|---|---|---|
+| `accessKeyId` | 阿里云 AccessKeyId | 存储账号名 |
+| `accessKeySecret` | 阿里云 AccessKeySecret | **base64 编码**的账号密钥（SharedKey 要求先 base64 解码再签名） |
+| `bucket` | `my-bucket` | 容器名 |
+| `region` | `oss-cn-beijing` | 不使用（Blob 服务无 region 概念） |
+| `stsToken` | OSS STS token | 不使用（改用 SAS 或存储访问策略） |
+| `endpoint` / `secure` / `timeout` | 相同 | 相同（`secure` 默认为 `true`） |
+
+说明：
+
+- 每个请求都带 `x-ms-date` 与 `x-ms-version`；StringToSign 采用 12 字段 SharedKey 格式，含 canonicalized `x-ms-*` 头与 canonicalized resource，与 `@azure/storage-common` 及 MSDN 官方示例逐字节一致（由 `npm run test:azure-oracle` 持续验证）。
+- `signatureUrl` 返回 service SAS（`sv=2020-12-06`、`sr=b`），与 `@azure/storage-blob` 的 `generateBlobSASQueryParameters` 逐字节一致；立即生效，`method: 'PUT'` 授予写权限。
+- `multipartUpload` 走 Azure 的 Block Blob 模型：并行 `Put Block`（`?comp=block&blockid=<base64>`）+ 一次 `Put Block List`（`?comp=blocklist`）提交。Azure 没有服务端上传会话，因此 `abortMultipartUpload`、`listParts`、`listUploads`、`uploadPartCopy` 有意缺席。
+- 传给 `multipartUpload` 的 meta 在最终的 Put Block List 上生效（Azure 在该请求设置 blob 元数据）。
+- 浏览器上传需要在容器配置跨域规则（允许你的站点并暴露 `ETag` 响应头以支持分片上传）。
+- 只在 HTTPS 下使用 SharedKey/SAS 流程；账号密钥是根凭据——面向用户场景优先使用服务端生成的 SAS。
+
 ### S3 兼容存储（MinIO、Cloudflare R2、Google Cloud Storage 等）
 
 S3 兼容存储使用 SigV4，`tiny-oss/aws` 入口**零额外代码**即可接入——只需把 `endpoint` 指向存储并开启 `pathStyle`（这类存储把 bucket 放在 URL 路径中，对应官方 SDK 的 `forcePathStyle`）：
@@ -280,6 +318,8 @@ export { put, multipartUpload, signatureUrl: myProtocol.signUrl };
 ### 向仓库贡献 provider
 
 参照 `src/aws/` 布局：`src/<provider>/{signature,host,request,signatureUrl,index}.ts`，然后加 Vite 构建（`vite.<provider>.config.ts`）、`package.json` 的 `exports` 条目与 `build:types:<provider>`。签名必须与官方 SDK 对齐——`test/cos-signature.spec.ts`、`test/obs-signature.spec.ts`、`test/aws-signature.spec.ts` 用各自官方 SDK 作 oracle 钉死签名器。
+
+如果目标存储的分片接口不是 S3 形态（如 Azure 的 Block Blob），不要强行套 `createInitMultipartUpload`/`createUploadPart`/`createCompleteMultipartUpload`：写同签名的 provider 专用原语，经 `createMultipartUpload` 注入（见 `src/azure/multipart.ts`）。没有对应 API 的操作（如 Azure 的 `listUploads`）直接从入口省略。
 
 ### 绑定配置一次
 

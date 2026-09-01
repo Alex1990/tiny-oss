@@ -31,6 +31,8 @@ export namespace TinyOSS {
     "content-type"?: string;
     "content-disposition"?: string;
     "cache-control"?: string;
+    "content-encoding"?: string;
+    "content-language"?: string;
   }
 
   export interface ObjectCallback {

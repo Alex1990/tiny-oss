@@ -25,6 +25,9 @@ const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
 const awsAccessKeySecret = process.env.AWS_ACCESS_KEY_SECRET;
 const awsBucket = process.env.AWS_BUCKET;
 const awsRegion = process.env.AWS_REGION;
+const azureAccount = process.env.AZURE_ACCOUNT;
+const azureAccountKey = process.env.AZURE_ACCOUNT_KEY;
+const azureContainer = process.env.AZURE_CONTAINER;
 
 const app = new Hono();
 const PORT = 8080;
@@ -85,6 +88,14 @@ app.get('/api/aws-config', (c) => {
     accessKeySecret: awsAccessKeySecret,
     bucket: awsBucket,
     region: awsRegion,
+  });
+});
+
+app.get('/api/azure-config', (c) => {
+  return c.json({
+    accessKeyId: azureAccount,
+    accessKeySecret: azureAccountKey,
+    bucket: azureContainer,
   });
 });
 
