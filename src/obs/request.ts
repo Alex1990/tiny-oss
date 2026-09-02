@@ -5,10 +5,9 @@ import { resolveObsHost } from './host';
 import type { Options } from '../types';
 import type { RequestParams } from '../protocol';
 
-/** OBS defaults: Huawei Cloud China North 4 region, http, 60s timeout. */
+/** OBS defaults: https (OBS endpoints are HTTPS-only), 60s timeout. */
 const OBS_DEFAULTS = {
-  region: 'cn-north-4',
-  secure: false,
+  secure: true,
   timeout: 60000,
 };
 

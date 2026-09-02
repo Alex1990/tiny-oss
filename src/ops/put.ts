@@ -1,4 +1,4 @@
-import { blobToBuffer, getContentMd5 } from '../utils';
+import { blobToBuffer, getContentMd5, isBlob } from '../utils';
 import type { BlobLike, Options, PutOptions } from '../types';
 import type { Protocol } from '../protocol';
 
@@ -19,7 +19,7 @@ export function createPut(protocol: Protocol) {
         const contentMd5 = getContentMd5(buf);
         const contentType = typeof data === 'string'
           ? 'text/plain; charset=utf-8'
-          : (data instanceof Blob ? data.type : 'application/octet-stream');
+          : (isBlob(data) ? data.type : 'application/octet-stream');
         const headers: Record<string, any> = {
           'Content-Md5': contentMd5,
           'Content-Type': contentType,

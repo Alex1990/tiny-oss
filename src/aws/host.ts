@@ -9,6 +9,7 @@ import type { Options } from '../types';
 export function resolveAwsHost(options: Options): string {
   const { bucket, region, endpoint, pathStyle } = options;
   if (endpoint) return endpoint;
+  if (!region) throw new Error('options.region is required (or set options.endpoint)');
   const suffix = region === 'us-east-1' ? 's3.amazonaws.com' : `s3.${region}.amazonaws.com`;
   return pathStyle ? suffix : `${bucket}.${suffix}`;
 }

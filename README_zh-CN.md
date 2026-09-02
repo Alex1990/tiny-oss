@@ -196,7 +196,7 @@ AWS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`�
 | `region` | `string` | 如 `us-east-1`、`ap-southeast-1` |
 | `bucket` | `string` | 普通 bucket 名 |
 | `endpoint` | `string` | 自定义端点，不带协议前缀（由 `secure` 决定） |
-| `secure` | `boolean` | 使用 HTTPS（`true`）还是 HTTP（`false`），默认 `false` |
+| `secure` | `boolean` | 使用 HTTPS（`true`）还是 HTTP（`false`），默认 `true` |
 | `timeout` | `string \| number` | 所有操作的实例级超时，默认 60s |
 
 注意事项：
@@ -220,6 +220,7 @@ await put(
     region: 'us-east-1',
     bucket: 'my-bucket',
     endpoint: 'minio.example.com', // 不要带协议前缀
+    secure: false, // 本地 MinIO 通常只提供 HTTP
     pathStyle: true,
   },
   'hello-world',
@@ -291,7 +292,7 @@ COS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`�
 | `region` | `string` | 如 `ap-guangzhou` |
 | `bucket` | `string` | 必须带 APPID 后缀，如 `examplebucket-1250000000` |
 | `endpoint` | `string` | 自定义端点，不带协议前缀（由 `secure` 决定） |
-| `secure` | `boolean` | 使用 HTTPS（`true`）还是 HTTP（`false`），默认 `false` |
+| `secure` | `boolean` | 使用 HTTPS（`true`）还是 HTTP（`false`），默认 `true` |
 | `timeout` | `string \| number` | 所有操作的实例级超时，默认 60s |
 
 注意事项：
@@ -331,7 +332,7 @@ OBS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`�
 | `region` | `string` | 如 `cn-north-4`、`cn-east-3` |
 | `bucket` | `string` | 普通 bucket 名（无 APPID 后缀） |
 | `endpoint` | `string` | 自定义端点，不带协议前缀（由 `secure` 决定） |
-| `secure` | `boolean` | 使用 HTTPS（`true`）还是 HTTP（`false`），默认 `false` |
+| `secure` | `boolean` | 使用 HTTPS（`true`）还是 HTTP（`false`），默认 `true` |
 | `timeout` | `string \| number` | 所有操作的实例级超时，默认 60s |
 
 注意事项：
@@ -339,6 +340,7 @@ OBS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`�
 - 浏览器上传 OBS 需要在存储桶配置跨域规则（允许你的站点并暴露 `ETag` 响应头以支持分片上传），推荐使用临时密钥（IAM 委托）而非永久密钥。
 - OBS 签名对时间敏感（`x-obs-date` 头），客户端时钟偏差会导致 403 `RequestTimeTooSkewed`。
 - OBS 签名器使用 OBS 的 "obs" 签名方案，与官方 `esdk-obs-browserjs` 逐字节一致。
+- OBS 端点仅支持 HTTPS，因此 SDK 默认将 `secure` 设为 `true`；除非连接自定义 HTTP 端点，否则请保持默认。
 
 ### Azure Blob Storage
 
@@ -444,9 +446,9 @@ interface Options {
   stsToken?: string;          // 临时凭证（浏览器端推荐使用）
   bucket?: string;            // 要访问的 bucket
   endpoint?: string;          // OSS 地域域名，优先于 region
-  region?: string;            // bucket 所在地域，默认为 'oss-cn-hangzhou'
+  region?: string;            // bucket 所在地域；除非设置了 endpoint，否则必填
   internal?: boolean;         // 是否通过阿里云内网访问，默认为 false
-  secure?: boolean;           // 使用 HTTPS（true）还是 HTTP（false），默认为 false
+  secure?: boolean;           // 使用 HTTPS（true）还是 HTTP（false），默认为 true
   timeout?: string | number;  // 所有操作的实例级超时，默认为 60s
   cname?: boolean;            // 使用自定义域名
   pathStyle?: boolean;        // S3 风格路径寻址（bucket 放在 URL 路径中）；S3 兼容端点（如 MinIO、Cloudflare R2）需要开启

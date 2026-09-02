@@ -1,4 +1,4 @@
-import { blobToBuffer, getContentMd5 } from '../utils';
+import { blobToBuffer, getContentMd5, isBlob, sliceUploadData } from '../utils';
 import type { BlobLike, MultipartOptions, Options, UploadPartResult } from '../types';
 import type { Protocol } from '../protocol';
 
@@ -18,14 +18,13 @@ export function createUploadPart(protocol: Protocol) {
     end: number,
     multipartOptions: MultipartOptions = {}
   ): Promise<UploadPartResult> {
-    // Uint8Array slicing is zero-copy (subarray); other inputs slice natively.
-    const partData = ArrayBuffer.isView(data) && !(data instanceof DataView)
-      ? data.subarray(start, end)
-      : data.slice(start, end);
+    // TypedArrays slice zero-copy; DataView/Blob/ArrayBuffer/string go
+    // through sliceUploadData's realm-proof branches.
+    const partData = sliceUploadData(data, start, end);
     const buf = await blobToBuffer(partData);
     const contentMd5 = getContentMd5(buf);
     // Only Blob carries a type; byte inputs default to octet-stream.
-    const contentType = partData instanceof Blob ? partData.type || 'application/octet-stream' : 'application/octet-stream';
+    const contentType = isBlob(partData) ? partData.type || 'application/octet-stream' : 'application/octet-stream';
     const headers: Record<string, any> = {
       'Content-Md5': contentMd5,
       'Content-Type': contentType,

@@ -184,8 +184,11 @@ function fromInteger(v: number): Uint8Array {
 }
 
 function convertToUint8Array(input: string | Uint8Array | ArrayBuffer | number): Uint8Array {
-  if (input instanceof Uint8Array) {
-    return input;
+  // instanceof is realm-bound; any TypedArray view carries subarray, which
+  // keeps the check precise across JS contexts (DataView has none).
+  const view = input as Uint8Array; // structural stand-in; checked below
+  if (ArrayBuffer.isView(input) && typeof view.subarray === 'function') {
+    return view;
   } else if (input instanceof ArrayBuffer) {
     return new Uint8Array(input);
   } else if (typeof input === 'string') {

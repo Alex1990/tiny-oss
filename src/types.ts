@@ -4,9 +4,9 @@ export interface Options {
   stsToken?: string; // used by temporary authorization
   bucket?: string; //  the default bucket you want to access If you don't have any bucket, please use putBucket() create one first.
   endpoint?: string; // oss region domain. It takes priority over region.
-  region?: string; // the bucket data region location, please see Data Regions, default is oss-cn-hangzhou.
+  region?: string; // the bucket data region location, please see Data Regions; required unless options.endpoint is set
   internal?: boolean; //  access OSS with aliyun internal network or not, default is false. If your servers are running on aliyun too, you can set true to save lot of money.
-  secure?: boolean; // instruct OSS client to use HTTPS (secure: true) or HTTP (secure: false) protocol.
+  secure?: boolean; // use HTTPS (true) or HTTP (false) protocol, default is true
   timeout?: string | number; // instance level timeout for all operations, default is 60s
   cname?: boolean; // use custom domain name
   pathStyle?: boolean; // S3-style path addressing (bucket in the URL path). Required for S3-compatible endpoints such as MinIO and Cloudflare R2.

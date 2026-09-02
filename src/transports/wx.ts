@@ -38,12 +38,21 @@ export function wxRequestTransport(url: string, options: TransportOptions): Prom
   if (onprogress && total) {
     onprogress({ loaded: 0, total, lengthComputable: false });
   }
+  // wx.request accepts a string or an ArrayBuffer. TypedArrays must be
+  // reduced to their buffer; instanceof is realm-bound, so views are
+  // detected with the subarray duck-check (DataView has none and never
+  // reaches here — upload data is Uint8Array or ArrayBuffer).
+  const view = data as Uint8Array; // structural stand-in; checked below
+  const body =
+    ArrayBuffer.isView(data) && typeof view.subarray === 'function'
+      ? (view.buffer as ArrayBuffer)
+      : (data as string | ArrayBuffer | undefined);
   return new Promise((resolve, reject) => {
     wx.request({
       url,
       method,
       header: headers,
-      data: data instanceof Uint8Array ? (data.buffer as ArrayBuffer) : (data as string | ArrayBuffer | undefined),
+      data: body,
       timeout,
       success: (res) => {
         if (onprogress && total) {

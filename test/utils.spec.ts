@@ -1,8 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   unix,
   blobToBuffer,
   encodeUtf8,
+  isArrayBuffer,
+  isBlob,
+  sliceUploadData,
   assertOptions,
   getContentMd5,
   getCanonicalizedOSSHeaders,
@@ -10,6 +13,43 @@ import {
   getSignature,
 } from '../src/utils';
 import { getXmlTag, getXmlTags } from '../src/utils/xml';
+
+// A second JS realm (iframe in browsers, vm context in Node): instanceof
+// fails across realms, which is exactly what the guards must survive.
+interface ForeignRealm {
+  ArrayBuffer: ArrayBufferConstructor;
+  Uint8Array: Uint8ArrayConstructor;
+}
+
+async function foreignRealm(): Promise<ForeignRealm | null> {
+  if (typeof document !== 'undefined' && document.body) {
+    try {
+      const frame = document.createElement('iframe');
+      frame.style.display = 'none';
+      document.body.appendChild(frame);
+      const win = frame.contentWindow;
+      frame.remove();
+      return win ? { ArrayBuffer: win.ArrayBuffer, Uint8Array: win.Uint8Array } : null;
+    } catch {
+      return null;
+    }
+  }
+  // node:vm exists only in Node; a static import would break the browser
+  // test bundle, so the Node branch loads it on demand (never reached
+  // in browsers, where the iframe branch above already returned).
+  try {
+    const vm = await import('node:vm');
+    // vm contexts share no intrinsics with this realm, same as an iframe.
+    return vm.runInNewContext('({ ArrayBuffer, Uint8Array })') as ForeignRealm;
+  } catch {
+    return null;
+  }
+}
+
+async function foreignArrayBuffer(size: number): Promise<ArrayBuffer | null> {
+  const realm = await foreignRealm();
+  return realm ? new realm.ArrayBuffer(size) : null;
+}
 
 describe('utils', () => {
   describe('unix', () => {
@@ -94,6 +134,80 @@ describe('utils', () => {
     it('should accept a string via UTF-8 encoding', async () => {
       const result = await blobToBuffer('你好abc');
       expect(new TextDecoder().decode(result)).toBe('你好abc');
+    });
+
+    it('should accept an ArrayBuffer from another JS context', async () => {
+      const foreign = await foreignArrayBuffer(4);
+      if (!foreign) return;
+      const result = await blobToBuffer(foreign);
+      expect(result).toBeInstanceOf(Uint8Array);
+      expect(result.byteLength).toBe(4);
+    });
+  });
+
+  describe('isBlob / isArrayBuffer', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('isBlob detects Blob instances only', () => {
+      expect(isBlob(new Blob(['x']))).toBe(true);
+      expect(isBlob(new Uint8Array(1))).toBe(false);
+      expect(isBlob(new ArrayBuffer(1))).toBe(false);
+    });
+
+    it('isBlob is false and safe when the Blob global is absent (WeChat)', () => {
+      vi.stubGlobal('Blob', undefined);
+      expect(isBlob(new Uint8Array(1))).toBe(false);
+      expect(isBlob({ size: 1, type: 'text/plain' })).toBe(false);
+    });
+
+    it('isArrayBuffer detects buffers from another JS context', async () => {
+      expect(isArrayBuffer(new ArrayBuffer(1))).toBe(true);
+      expect(isArrayBuffer(new Uint8Array(1))).toBe(false);
+      const foreign = await foreignArrayBuffer(1);
+      if (!foreign) return;
+      expect(foreign instanceof ArrayBuffer).toBe(false);
+      expect(isArrayBuffer(foreign)).toBe(true);
+    });
+
+    it('blobToBuffer accepts an ArrayBuffer when Blob is absent (WeChat)', async () => {
+      vi.stubGlobal('Blob', undefined);
+      const result = await blobToBuffer(new Uint8Array([1, 2, 3]).buffer);
+      expect(Array.from(result)).toEqual([1, 2, 3]);
+    });
+  });
+
+  describe('sliceUploadData', () => {
+    it('slices a Uint8Array zero-copy', () => {
+      const bytes = new Uint8Array([0, 1, 2, 3, 4, 5]);
+      const part = sliceUploadData(bytes, 1, 4) as Uint8Array;
+      expect(Array.from(part)).toEqual([1, 2, 3]);
+      expect(part.buffer).toBe(bytes.buffer);
+    });
+
+    it('slices ArrayBuffer and string by byte range', () => {
+      const bytes = new Uint8Array([0, 1, 2, 3]);
+      const buf = sliceUploadData(bytes.buffer, 1, 3) as ArrayBuffer;
+      expect(Array.from(new Uint8Array(buf))).toEqual([1, 2]);
+      expect(sliceUploadData('abcdef', 1, 3)).toBe('bc');
+    });
+
+    it('rebuilds a DataView window over the same buffer', () => {
+      const bytes = new Uint8Array([9, 8, 7, 6, 5]);
+      const view = new DataView(bytes.buffer, 1, 4); // window over [8, 7, 6, 5]
+      // DataView is outside BlobLike; cast only to cross the type boundary.
+      const part = sliceUploadData(view as unknown as Blob, 1, 3) as Uint8Array;
+      expect(Array.from(part)).toEqual([7, 6]);
+    });
+
+    it('slices a TypedArray from another JS context', async () => {
+      const realm = await foreignRealm();
+      if (!realm) return;
+      const foreign = new realm.Uint8Array([1, 2, 3, 4]);
+      expect(foreign instanceof Uint8Array).toBe(false); // cross-realm premise
+      const part = sliceUploadData(foreign as unknown as Blob, 1, 3) as Uint8Array;
+      expect(Array.from(part)).toEqual([2, 3]);
     });
   });
 

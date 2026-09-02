@@ -6,6 +6,12 @@ import { resolveCosHost } from './host';
 import type { Options } from '../types';
 import type { RequestParams } from '../protocol';
 
+/** COS defaults: https, 60s timeout (region and endpoint come from the caller). */
+const COS_DEFAULTS = {
+  secure: true,
+  timeout: 60000,
+};
+
 /**
  * Sign and send a single COS request through the configured transport.
  * Headers are completed with the host, the date, the temporary token and
@@ -16,7 +22,7 @@ import type { RequestParams } from '../protocol';
  * parameters, so both are fixed before the signature is computed.
  */
 export function request(options: Options, params: RequestParams): Promise<any> {
-  const opts = normalizeOptions(options);
+  const opts = normalizeOptions(options, COS_DEFAULTS);
   const { accessKeyId, accessKeySecret, stsToken, secure } = opts;
   const host = resolveCosHost(opts);
   const headers: Record<string, any> = {

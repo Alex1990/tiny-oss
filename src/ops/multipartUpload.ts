@@ -1,4 +1,4 @@
-import { encodeUtf8 } from '../utils';
+import { encodeUtf8, isBlob } from '../utils';
 import type { BlobLike, Checkpoint, CompleteMultipartUploadResult, InitMultipartUploadResult, MultipartOptions, MultipartUploadOptions, Options, PartInfo, UploadPartResult } from '../types';
 import type { Protocol } from '../protocol';
 
@@ -30,7 +30,7 @@ export interface MultipartUploadDeps {
 
 function getFileSize(data: BlobLike | string): number {
   if (typeof data === 'string') return encodeUtf8(data).length;
-  if (data instanceof Blob) return data.size;
+  if (isBlob(data)) return data.size;
   return data.byteLength;
 }
 

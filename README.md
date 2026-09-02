@@ -209,7 +209,7 @@ The AWS entry exports everything the OSS entry does except `putSymlink` (S3 has 
 | `region` | `string` | e.g. `us-east-1`, `ap-southeast-1` |
 | `bucket` | `string` | plain bucket name |
 | `endpoint` | `string` | custom endpoint, no protocol prefix (the `secure` option selects it) |
-| `secure` | `boolean` | use HTTPS (`true`) or HTTP (`false`), default `false` |
+| `secure` | `boolean` | use HTTPS (`true`) or HTTP (`false`), default `true` |
 | `timeout` | `string \| number` | instance-level timeout for all operations, default 60s |
 
 Notes:
@@ -233,6 +233,7 @@ await put(
     region: 'us-east-1',
     bucket: 'my-bucket',
     endpoint: 'minio.example.com', // no protocol prefix
+    secure: false, // local MinIO usually serves plain HTTP
     pathStyle: true,
   },
   'hello-world',
@@ -304,7 +305,7 @@ The COS entry exports everything the OSS entry does except `putSymlink` (COS has
 | `region` | `string` | e.g. `ap-guangzhou` |
 | `bucket` | `string` | must include the APPID suffix, e.g. `examplebucket-1250000000` |
 | `endpoint` | `string` | custom endpoint, no protocol prefix (the `secure` option selects it) |
-| `secure` | `boolean` | use HTTPS (`true`) or HTTP (`false`), default `false` |
+| `secure` | `boolean` | use HTTPS (`true`) or HTTP (`false`), default `true` |
 | `timeout` | `string \| number` | instance-level timeout for all operations, default 60s |
 
 Notes:
@@ -344,7 +345,7 @@ The OBS entry exports everything the OSS entry does except `putSymlink` (OBS has
 | `region` | `string` | e.g. `cn-north-4`, `cn-east-3` |
 | `bucket` | `string` | plain bucket name (no APPID suffix) |
 | `endpoint` | `string` | custom endpoint, no protocol prefix (the `secure` option selects it) |
-| `secure` | `boolean` | use HTTPS (`true`) or HTTP (`false`), default `false` |
+| `secure` | `boolean` | use HTTPS (`true`) or HTTP (`false`), default `true` |
 | `timeout` | `string \| number` | instance-level timeout for all operations, default 60s |
 
 Notes:
@@ -352,6 +353,7 @@ Notes:
 - Browser uploads to OBS require the bucket's CORS rule to allow your origin and expose the `ETag` response header for multipart uploads; temporary credentials (IAM agency) are recommended over permanent keys.
 - OBS signatures are time-sensitive (the `x-obs-date` header); a skewed client clock yields `403 RequestTimeTooSkewed`.
 - The OBS signer uses the OBS "obs" signature scheme, matching the official `esdk-obs-browserjs` byte for byte.
+- OBS endpoints only serve HTTPS, so the SDK defaults `secure` to `true`; keep the default unless you connect to a custom HTTP endpoint.
 
 ### Azure Blob Storage
 
@@ -457,9 +459,9 @@ interface Options {
   stsToken?: string;          // temporary credentials (recommended in browser)
   bucket?: string;            // the bucket to access
   endpoint?: string;          // the region domain; takes priority over region
-  region?: string;            // the bucket's data region, default is 'oss-cn-hangzhou'
+  region?: string;            // the bucket's data region; required unless endpoint is set
   internal?: boolean;         // access OSS over Aliyun's internal network, default is false
-  secure?: boolean;           // use HTTPS (true) or HTTP (false), default is false
+  secure?: boolean;           // use HTTPS (true) or HTTP (false), default is true
   timeout?: string | number;  // instance-level timeout for all operations, default is 60s
   cname?: boolean;            // use a custom domain name
   pathStyle?: boolean;        // S3-style path addressing (bucket in the URL path); required for S3-compatible endpoints such as MinIO and Cloudflare R2

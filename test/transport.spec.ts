@@ -34,7 +34,7 @@ describe('transport', () => {
       string,
       { method: string; headers: Record<string, string>; total?: number },
     ];
-    expect(url).toBe('http://test-bucket.oss-cn-hangzhou.aliyuncs.com/a.txt');
+    expect(url).toBe('https://test-bucket.oss-cn-hangzhou.aliyuncs.com/a.txt');
     expect(transportOptions.method).toBe('PUT');
     expect(transportOptions.headers.Authorization).toContain('OSS ak:');
   });
@@ -68,5 +68,11 @@ describe('transport', () => {
     await request(options, { verb: 'PUT', objectName: 'a.bin', data: new Uint8Array([1, 2, 3]) });
     const transportOptions = spy.mock.calls[0][1] as { total?: number };
     expect(transportOptions.total).toBe(3);
+  });
+
+  it('requires region when no endpoint is set', () => {
+    expect(() =>
+      request({ accessKeyId: 'ak', accessKeySecret: 'sk', bucket: 'test-bucket' }, { verb: 'GET', objectName: 'a.txt' })
+    ).toThrow(/region/);
   });
 });

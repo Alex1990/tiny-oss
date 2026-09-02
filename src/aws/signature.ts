@@ -48,7 +48,10 @@ function sha256Hex(str: string): string {
 
 function hmacSha256Hex(key: string | Uint8Array, message: string): string {
   const hmac = hmacSha256();
-  hmac.setKey(key instanceof Uint8Array ? key : encodeUtf8(key));
+  // instanceof is realm-bound; any TypedArray view carries subarray.
+  const keyView = key as Uint8Array; // structural stand-in; checked below
+  const secret = ArrayBuffer.isView(key) && typeof keyView.subarray === 'function' ? keyView : encodeUtf8(key as string);
+  hmac.setKey(secret);
   hmac.update(encodeUtf8(message));
   return bytesToHex(new Uint8Array(hmac.finalize()));
 }

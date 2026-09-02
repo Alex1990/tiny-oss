@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { resolveCosHost } from '../src/cos/host';
 import { cosSignUrl } from '../src/cos/signatureUrl';
 import { request as cosRequest } from '../src/cos/request';
@@ -29,6 +29,10 @@ describe('resolveCosHost', () => {
 
   it('lets an explicit endpoint win', () => {
     expect(resolveCosHost({ ...COS_OPTIONS, endpoint: 'cdn.example.com' })).toBe('cdn.example.com');
+  });
+
+  it('throws when neither region nor endpoint is set', () => {
+    expect(() => resolveCosHost({ bucket: 'examplebucket-1250000000' })).toThrow(/region/);
   });
 });
 
@@ -63,6 +67,14 @@ describe('cosSignUrl', () => {
   it('honors secure:false with an http scheme', () => {
     const url = cosSignUrl({ ...COS_OPTIONS, secure: false }, 'a.txt');
     expect(url.startsWith('http://')).toBe(true);
+  });
+
+  it('defaults to https when secure is unset', () => {
+    const url = cosSignUrl(
+      { accessKeyId: 'AKIDtest123', accessKeySecret: 'secret123', region: 'ap-guangzhou', bucket: 'examplebucket-1250000000' },
+      'a.txt'
+    );
+    expect(url.startsWith('https://')).toBe(true);
   });
 });
 
@@ -101,6 +113,72 @@ describe('COS request', () => {
     });
     await cosRequest(COS_OPTIONS, { verb: 'GET', objectName: '', subResource: { uploads: '' } });
     expect(calls[0].url).toBe('https://examplebucket-1250000000.cos.ap-guangzhou.myqcloud.com/?uploads');
+  });
+
+  it('requests default to https when secure is unset', async () => {
+    let url = '';
+    setTransport(async (u: string) => {
+      url = u;
+      return { data: '<Result/>', headers: {}, status: 200, statusText: 'OK' };
+    });
+    await cosRequest(
+      { accessKeyId: 'AKIDtest123', accessKeySecret: 'secret123', region: 'ap-guangzhou', bucket: 'examplebucket-1250000000' },
+      { verb: 'GET', objectName: 'a.txt' }
+    );
+    expect(url.startsWith('https://')).toBe(true);
+  });
+});
+
+describe('mini program environment (no Blob global)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('put accepts an ArrayBuffer and sizes it without touching Blob', async () => {
+    vi.stubGlobal('Blob', undefined);
+    const calls: { url: string; opts: { method: string; headers: Record<string, string>; data?: unknown; total?: number } }[] = [];
+    setTransport(async (url: string, opts) => {
+      calls.push({ url, opts: { method: opts.method, headers: opts.headers, data: opts.data, total: opts.total } });
+      return { data: '<Result/>', headers: {}, status: 200, statusText: 'OK' };
+    });
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    await cosEntry.put(COS_OPTIONS, 'mini.bin', bytes.buffer as ArrayBuffer);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].opts.total).toBe(4);
+    expect(calls[0].opts.data).toBe(bytes.buffer);
+    expect(calls[0].opts.headers['Content-Type']).toBe('application/octet-stream');
+  });
+
+  it('uploadPart accepts an ArrayBuffer without touching Blob', async () => {
+    vi.stubGlobal('Blob', undefined);
+    const calls: { url: string; opts: { method: string; headers: Record<string, string>; data?: unknown; total?: number } }[] = [];
+    setTransport(async (url: string, opts) => {
+      calls.push({ url, opts: { method: opts.method, headers: opts.headers, data: opts.data, total: opts.total } });
+      return { data: '<Result/>', headers: {}, status: 200, statusText: 'OK' };
+    });
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    await cosEntry.uploadPart(COS_OPTIONS, 'mini.bin', 'uploadId-1', 1, bytes.buffer as ArrayBuffer, 0, 4);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].opts.headers['Content-Type']).toBe('application/octet-stream');
+  });
+
+  it('multipartUpload sizes byte input without touching Blob', async () => {
+    vi.stubGlobal('Blob', undefined);
+    let initCalls = 0;
+    const multipartUpload = createMultipartUpload(
+      { metaPrefix: 'x-cos-meta-' } as Protocol,
+      {
+        initMultipartUpload: async () => {
+          initCalls++;
+          return { name: 'x', uploadId: 'u1' };
+        },
+        uploadPart: async () => ({ name: 'x', etag: '"e"' }),
+        completeMultipartUpload: async () => ({ name: 'x', etag: '"E"', bucket: 'b' }),
+      }
+    );
+    const file = new Uint8Array(200 * 1024);
+    await multipartUpload(COS_OPTIONS, 'mini.bin', file, { partSize: 100 * 1024 });
+    expect(initCalls).toBe(1);
   });
 });
 

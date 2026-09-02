@@ -3,10 +3,9 @@ import { getAwsSignature, awsUriEscapePath, iso8601, canonicalQueryString } from
 import { resolveAwsHost } from './host';
 import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types';
 
-/** AWS defaults: us-east-1 region, http, 60s timeout. */
+/** AWS defaults: https, 60s timeout. */
 const AWS_DEFAULTS = {
-  region: 'us-east-1',
-  secure: false,
+  secure: true,
   timeout: 60000,
 };
 

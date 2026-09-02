@@ -1,5 +1,5 @@
 import base64js from 'base64-js';
-import { blobToBuffer, getContentMd5, encodeUtf8 } from '../utils';
+import { blobToBuffer, getContentMd5, encodeUtf8, sliceUploadData } from '../utils';
 import { request as azureRequest } from './request';
 import type { BlobLike, CompleteMultipartUploadResult, InitMultipartUploadResult, MultipartOptions, Options, PartInfo, UploadPartResult } from '../types';
 
@@ -54,9 +54,7 @@ export function uploadPart(
   multipartOptions: MultipartOptions = {}
 ): Promise<UploadPartResult> {
   void uploadId;
-  const partData = ArrayBuffer.isView(data) && !(data instanceof DataView)
-    ? data.subarray(start, end)
-    : data.slice(start, end);
+  const partData = sliceUploadData(data, start, end);
   return blobToBuffer(partData).then((buf) => {
     const blockId = blockIdFor(partNo);
     const headers: Record<string, any> = {

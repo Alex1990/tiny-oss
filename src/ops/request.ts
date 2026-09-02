@@ -1,13 +1,12 @@
 import { getTransport } from '../transport';
-import { assertOptions, getSignature, encodeUtf8 } from '../utils';
+import { assertOptions, getSignature, encodeUtf8, isArrayBuffer, isBlob } from '../utils';
 import type { Options } from '../types';
 import type { RequestParams } from '../protocol';
 
 const DEFAULT_OPTIONS = {
-  region: 'oss-cn-hangzhou',
   internal: false,
   cname: false,
-  secure: false,
+  secure: true,
   timeout: 60000,
 };
 
@@ -32,6 +31,9 @@ export function normalizeOptions(
 export function resolveHost(options: Options): string {
   const { bucket, region, endpoint, internal } = options;
   if (endpoint) return endpoint;
+  // No SDK default for region: without an explicit region or endpoint
+  // there is no host to build.
+  if (!region) throw new Error('options.region is required (or set options.endpoint)');
   // assertOptions guarantees bucket or endpoint, and endpoint is handled above.
   let host = bucket as string;
   if (internal) host += '-internal';
@@ -52,8 +54,8 @@ export function resolveTimeout(options: Options, fallback?: number): number | un
 export function dataSize(data: any): number | undefined {
   if (data == null) return undefined;
   if (typeof data === 'string') return encodeUtf8(data).length;
-  if (data instanceof Blob) return data.size;
-  if (data instanceof ArrayBuffer) return data.byteLength;
+  if (isBlob(data)) return data.size;
+  if (isArrayBuffer(data)) return data.byteLength;
   if (ArrayBuffer.isView(data)) return data.byteLength;
   return undefined;
 }

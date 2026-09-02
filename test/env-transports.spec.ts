@@ -65,6 +65,34 @@ describe('wxRequestTransport', () => {
       wxRequestTransport('http://example.com', { method: 'GET', headers: {} })
     ).rejects.toThrow('network down');
   });
+
+  it('reduces a foreign-realm Uint8Array to its buffer', async () => {
+    // Separate realm via iframe (browser runtimes); skip where unavailable.
+    if (typeof document === 'undefined' || !document.body) return;
+    const frame = document.createElement('iframe');
+    frame.style.display = 'none';
+    document.body.appendChild(frame);
+    const win = frame.contentWindow!;
+    frame.remove();
+    const foreign = new win.Uint8Array([7, 8, 9]);
+    expect(foreign instanceof Uint8Array).toBe(false); // cross-realm premise
+
+    const calls: unknown[] = [];
+    globals.wx = {
+      request: (opts) => {
+        calls.push(opts);
+        const o = opts as { success: (res: unknown) => void };
+        o.success({ data: '', header: {}, statusCode: 200 });
+      },
+    };
+    await wxRequestTransport('http://example.com/f.bin', {
+      method: 'PUT',
+      headers: {},
+      data: foreign,
+    });
+    const call = calls[0] as { data: ArrayBuffer | string };
+    expect(new Uint8Array(call.data as ArrayBuffer)).toEqual(new Uint8Array([7, 8, 9]));
+  });
 });
 
 describe('fetchTransport', () => {

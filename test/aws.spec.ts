@@ -25,6 +25,10 @@ describe('resolveAwsHost', () => {
   it('prefers an explicit endpoint', () => {
     expect(resolveAwsHost({ ...OPTIONS, endpoint: 's3.example.com' })).toBe('s3.example.com');
   });
+
+  it('throws when neither region nor endpoint is set', () => {
+    expect(() => resolveAwsHost({ bucket: 'examplebucket' })).toThrow(/region/);
+  });
 });
 
 describe('awsSignUrl', () => {
@@ -58,6 +62,14 @@ describe('awsSignUrl', () => {
       response: { 'content-disposition': 'attachment' },
     });
     expect(url).toContain('response-content-disposition=attachment');
+  });
+
+  it('defaults to https when secure is unset', () => {
+    const url = awsSignUrl(
+      { accessKeyId: 'AKIDEXAMPLE', accessKeySecret: 'SECRETKEY', region: 'us-west-2', bucket: 'examplebucket' },
+      'exampleobject'
+    );
+    expect(url.startsWith('https://')).toBe(true);
   });
 });
 

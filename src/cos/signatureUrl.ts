@@ -3,6 +3,12 @@ import { getCosAuth } from './signature';
 import { resolveCosHost } from './host';
 import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types';
 
+/** COS defaults: https, 60s timeout (region and endpoint come from the caller). */
+const COS_DEFAULTS = {
+  secure: true,
+  timeout: 60000,
+};
+
 /**
  * Get a signed url for a COS object.
  *
@@ -23,7 +29,7 @@ export function cosSignUrl(
   urlOptions: SignatureUrlOptions = {}
 ): string {
   const { expires = 1800, method, process, response } = urlOptions;
-  const opts = normalizeOptions(options);
+  const opts = normalizeOptions(options, COS_DEFAULTS);
   const { accessKeyId, accessKeySecret, stsToken, secure } = opts;
   const host = resolveCosHost(opts);
   const query: Record<string, string> = {};

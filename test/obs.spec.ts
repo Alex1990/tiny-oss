@@ -21,6 +21,10 @@ describe('resolveObsHost', () => {
   it('prefers an explicit endpoint', () => {
     expect(resolveObsHost({ ...OPTIONS, endpoint: 'obs.example.com' })).toBe('obs.example.com');
   });
+
+  it('throws when neither region nor endpoint is set', () => {
+    expect(() => resolveObsHost({ bucket: 'examplebucket' })).toThrow(/region/);
+  });
 });
 
 describe('obsSignUrl', () => {
@@ -65,11 +69,32 @@ describe('obsSignUrl', () => {
     const url = obsSignUrl(OPTIONS, 'exampleobject', { method: 'PUT' });
     expect(url.startsWith('https://')).toBe(true);
   });
+
+  it('defaults to https when secure is unset (OBS serves HTTPS only)', () => {
+    const url = obsSignUrl(
+      { accessKeyId: 'AKIDEXAMPLE', accessKeySecret: 'SECRETKEY', region: 'cn-north-4', bucket: 'examplebucket' },
+      'exampleobject'
+    );
+    expect(url.startsWith('https://')).toBe(true);
+  });
 });
 
 describe('obs request', () => {
   afterEach(() => {
     setTransport(getTransport());
+  });
+
+  it('defaults to https when secure is unset (OBS serves HTTPS only)', async () => {
+    let url = '';
+    setTransport(async (u: string) => {
+      url = u;
+      return { data: '', headers: {}, status: 200, statusText: 'OK' };
+    });
+    await request(
+      { accessKeyId: 'AKIDEXAMPLE', accessKeySecret: 'SECRETKEY', region: 'cn-north-4', bucket: 'examplebucket' },
+      { verb: 'GET', objectName: 'exampleobject' }
+    );
+    expect(url.startsWith('https://')).toBe(true);
   });
 
   it('signs with x-obs-date, security token and Authorization header', async () => {
