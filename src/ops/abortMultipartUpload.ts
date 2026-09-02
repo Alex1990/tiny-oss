@@ -1,5 +1,5 @@
-import type { MultipartOptions, Options } from '../types';
-import type { Protocol } from '../protocol';
+import type { MultipartOptions, Options } from '../types'
+import type { Protocol } from '../protocol'
 
 /**
  * Abort a multipart upload.
@@ -11,16 +11,18 @@ export function createAbortMultipartUpload(protocol: Protocol) {
     options: Options,
     objectName: string,
     uploadId: string,
-    multipartOptions: MultipartOptions = {}
+    multipartOptions: MultipartOptions = {},
   ): Promise<void> {
-    return protocol.request(options, {
-      verb: 'DELETE',
-      objectName,
-      headers: { ...multipartOptions.headers },
-      subResource: { uploadId },
-      timeout: multipartOptions.timeout,
-    }).then(() => {
-      return;
-    });
-  };
+    return protocol
+      .request(options, {
+        verb: 'DELETE',
+        objectName,
+        headers: { ...multipartOptions.headers },
+        subResource: { uploadId },
+        timeout: multipartOptions.timeout,
+      })
+      .then(() => {
+        return
+      })
+  }
 }

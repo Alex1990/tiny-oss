@@ -14,38 +14,64 @@ import {
   type InitMultipartUploadResult,
   type Options,
   type UploadPartResult,
-} from '../dist/azure';
+} from '../dist/azure'
 
 const options: Options = {
   accessKeyId: 'myaccount',
   accessKeySecret: 'base64accountkey',
   bucket: 'mycontainer',
   secure: true,
-};
+}
 
-const blob = new Blob(['test'], { type: 'text/plain' });
+const blob = new Blob(['test'], { type: 'text/plain' })
 
 // Every operation keeps the same signature as the OSS entry.
-const putPromise: Promise<any> = put(options, 'test.txt', blob);
-const url: string = signatureUrl(options, 'test.txt', { expires: 600 });
-const initResult: Promise<InitMultipartUploadResult> = initMultipartUpload(options, 'test.txt');
-const uploadPartResult: Promise<UploadPartResult> = uploadPart(options, 'test.txt', 'u1', 1, blob, 0, 1024);
-const completeResult: Promise<CompleteMultipartUploadResult> = completeMultipartUpload(options, 'test.txt', 'u1', [{ number: 1, etag: 'MDAwMDE=' }]);
-const multiResult: Promise<CompleteMultipartUploadResult> = multipartUpload(options, 'test.txt', blob);
-const upload = bindOptions(put, options);
-const boundPromise: Promise<any> = upload('bound.txt', blob);
+const putPromise: Promise<any> = put(options, 'test.txt', blob)
+const url: string = signatureUrl(options, 'test.txt', { expires: 600 })
+const initResult: Promise<InitMultipartUploadResult> = initMultipartUpload(options, 'test.txt')
+const uploadPartResult: Promise<UploadPartResult> = uploadPart(
+  options,
+  'test.txt',
+  'u1',
+  1,
+  blob,
+  0,
+  1024,
+)
+const completeResult: Promise<CompleteMultipartUploadResult> = completeMultipartUpload(
+  options,
+  'test.txt',
+  'u1',
+  [{ number: 1, etag: 'MDAwMDE=' }],
+)
+const multiResult: Promise<CompleteMultipartUploadResult> = multipartUpload(
+  options,
+  'test.txt',
+  blob,
+)
+const upload = bindOptions(put, options)
+const boundPromise: Promise<any> = upload('bound.txt', blob)
 
 // Azure has no S3-style multipart sessions: these must not exist on the
 // azure entry.
 // @ts-expect-error - putSymlink must not exist on the azure entry
-import { putSymlink } from '../dist/azure';
+import { putSymlink } from '../dist/azure'
 // @ts-expect-error - abortMultipartUpload must not exist on the azure entry
-import { abortMultipartUpload } from '../dist/azure';
+import { abortMultipartUpload } from '../dist/azure'
 // @ts-expect-error - listParts must not exist on the azure entry
-import { listParts } from '../dist/azure';
+import { listParts } from '../dist/azure'
 // @ts-expect-error - listUploads must not exist on the azure entry
-import { listUploads } from '../dist/azure';
+import { listUploads } from '../dist/azure'
 // @ts-expect-error - uploadPartCopy must not exist on the azure entry
-import { uploadPartCopy } from '../dist/azure';
+import { uploadPartCopy } from '../dist/azure'
 
-console.log('All Azure type tests passed!', putPromise, url, initResult, uploadPartResult, completeResult, multiResult, boundPromise);
+console.log(
+  'All Azure type tests passed!',
+  putPromise,
+  url,
+  initResult,
+  uploadPartResult,
+  completeResult,
+  multiResult,
+  boundPromise,
+)

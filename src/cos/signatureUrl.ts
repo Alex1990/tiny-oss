@@ -1,13 +1,13 @@
-import { normalizeOptions } from '../ops/request';
-import { getCosAuth } from './signature';
-import { resolveCosHost } from './host';
-import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types';
+import { normalizeOptions } from '../ops/request'
+import { getCosAuth } from './signature'
+import { resolveCosHost } from './host'
+import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types'
 
 /** COS defaults: https, 60s timeout (region and endpoint come from the caller). */
 const COS_DEFAULTS = {
   secure: true,
   timeout: 60000,
-};
+}
 
 /**
  * Get a signed url for a COS object.
@@ -26,29 +26,35 @@ const COS_DEFAULTS = {
 export function cosSignUrl(
   options: Options,
   objectName: string,
-  urlOptions: SignatureUrlOptions = {}
+  urlOptions: SignatureUrlOptions = {},
 ): string {
-  const { expires = 1800, method, process, response } = urlOptions;
-  const opts = normalizeOptions(options, COS_DEFAULTS);
-  const { accessKeyId, accessKeySecret, stsToken, secure } = opts;
-  const host = resolveCosHost(opts);
-  const query: Record<string, string> = {};
-  if (process) query['pic-operations'] = process;
+  const { expires = 1800, method, process, response } = urlOptions
+  const opts = normalizeOptions(options, COS_DEFAULTS)
+  const { accessKeyId, accessKeySecret, stsToken, secure } = opts
+  const host = resolveCosHost(opts)
+  const query: Record<string, string> = {}
+  if (process) query['pic-operations'] = process
   if (response) {
     Object.keys(response).forEach((k) => {
-      query[`response-${k.toLowerCase()}`] = String(response[k as keyof ResponseHeaderType]);
-    });
+      query[`response-${k.toLowerCase()}`] = String(response[k as keyof ResponseHeaderType])
+    })
   }
   Object.keys(urlOptions).forEach((key) => {
-    const lowerKey = key.toLowerCase();
+    const lowerKey = key.toLowerCase()
     if (lowerKey.indexOf('x-cos-') === 0) {
-      query[lowerKey] = String(urlOptions[key]);
-    } else if (lowerKey !== 'expires' && lowerKey !== 'response' && lowerKey !== 'process' && lowerKey !== 'method' && lowerKey !== 'security-token') {
-      query[lowerKey] = String(urlOptions[key]);
+      query[lowerKey] = String(urlOptions[key])
+    } else if (
+      lowerKey !== 'expires' &&
+      lowerKey !== 'response' &&
+      lowerKey !== 'process' &&
+      lowerKey !== 'method' &&
+      lowerKey !== 'security-token'
+    ) {
+      query[lowerKey] = String(urlOptions[key])
     }
-  });
-  const securityToken = urlOptions['security-token'] || stsToken;
-  const pathname = objectName === '' ? '/' : `/${objectName}`;
+  })
+  const securityToken = urlOptions['security-token'] || stsToken
+  const pathname = objectName === '' ? '/' : `/${objectName}`
   const authorization = getCosAuth({
     method: method || 'GET',
     pathname,
@@ -58,21 +64,21 @@ export function cosSignUrl(
     secretKey: accessKeySecret,
     expires,
     host,
-  });
-  const protocol = secure ? 'https' : 'http';
-  let url = `${protocol}://${host}${pathname}?`;
+  })
+  const protocol = secure ? 'https' : 'http'
+  let url = `${protocol}://${host}${pathname}?`
   // The Authorization value embeds ';' inside q-sign-time/q-key-time;
   // URL-encode every parameter value so the link stays parseable.
   url += authorization
     .split('&')
     .map((pair) => {
-      const eq = pair.indexOf('=');
-      return `${pair.slice(0, eq)}=${encodeURIComponent(pair.slice(eq + 1))}`;
+      const eq = pair.indexOf('=')
+      return `${pair.slice(0, eq)}=${encodeURIComponent(pair.slice(eq + 1))}`
     })
-    .join('&');
-  if (securityToken) url += `&x-cos-security-token=${encodeURIComponent(securityToken)}`;
+    .join('&')
+  if (securityToken) url += `&x-cos-security-token=${encodeURIComponent(securityToken)}`
   Object.keys(query).forEach((k) => {
-    url += `&${k}=${encodeURIComponent(query[k])}`;
-  });
-  return url;
+    url += `&${k}=${encodeURIComponent(query[k])}`
+  })
+  return url
 }

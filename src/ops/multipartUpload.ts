@@ -1,14 +1,24 @@
-import { encodeUtf8, isBlob } from '../utils';
-import type { BlobLike, Checkpoint, CompleteMultipartUploadResult, InitMultipartUploadResult, MultipartOptions, MultipartUploadOptions, Options, PartInfo, UploadPartResult } from '../types';
-import type { Protocol } from '../protocol';
+import { encodeUtf8, isBlob } from '../utils'
+import type {
+  BlobLike,
+  Checkpoint,
+  CompleteMultipartUploadResult,
+  InitMultipartUploadResult,
+  MultipartOptions,
+  MultipartUploadOptions,
+  Options,
+  PartInfo,
+  UploadPartResult,
+} from '../types'
+import type { Protocol } from '../protocol'
 
 /** The multipart primitives multipartUpload drives, injected by the entry point. */
 export interface MultipartUploadDeps {
   initMultipartUpload: (
     options: Options,
     objectName: string,
-    multipartOptions?: MultipartOptions
-  ) => Promise<InitMultipartUploadResult>;
+    multipartOptions?: MultipartOptions,
+  ) => Promise<InitMultipartUploadResult>
   uploadPart: (
     options: Options,
     objectName: string,
@@ -17,21 +27,21 @@ export interface MultipartUploadDeps {
     data: BlobLike | string,
     start: number,
     end: number,
-    multipartOptions?: MultipartOptions
-  ) => Promise<UploadPartResult>;
+    multipartOptions?: MultipartOptions,
+  ) => Promise<UploadPartResult>
   completeMultipartUpload: (
     options: Options,
     objectName: string,
     uploadId: string,
     parts: PartInfo[],
-    multipartOptions?: MultipartOptions
-  ) => Promise<CompleteMultipartUploadResult>;
+    multipartOptions?: MultipartOptions,
+  ) => Promise<CompleteMultipartUploadResult>
 }
 
 function getFileSize(data: BlobLike | string): number {
-  if (typeof data === 'string') return encodeUtf8(data).length;
-  if (isBlob(data)) return data.size;
-  return data.byteLength;
+  if (typeof data === 'string') return encodeUtf8(data).length
+  if (isBlob(data)) return data.size
+  return data.byteLength
 }
 
 /**
@@ -45,7 +55,7 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
     options: Options,
     objectName: string,
     file: BlobLike | string,
-    multipartOptions: MultipartUploadOptions = {}
+    multipartOptions: MultipartUploadOptions = {},
   ): Promise<CompleteMultipartUploadResult> {
     const {
       parallel = 5,
@@ -55,40 +65,42 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
       meta,
       mime,
       headers = {},
-    } = multipartOptions;
+    } = multipartOptions
 
-    let uploadId: string;
-    let doneParts: PartInfo[] = [];
-    let actualPartSize = Math.max(partSize, 100 * 1024); // minimum 100KB
+    let uploadId: string
+    let doneParts: PartInfo[] = []
+    let actualPartSize = Math.max(partSize, 100 * 1024) // minimum 100KB
 
-    const fileSize = getFileSize(file);
+    const fileSize = getFileSize(file)
     if (fileSize === 0) {
-      throw new Error('multipart upload requires a non-empty file');
+      throw new Error('multipart upload requires a non-empty file')
     }
 
     // Use checkpoint if available
     if (checkpoint && checkpoint.uploadId && getFileSize(checkpoint.file) === fileSize) {
-      uploadId = checkpoint.uploadId;
-      doneParts = checkpoint.doneParts || [];
+      uploadId = checkpoint.uploadId
+      doneParts = checkpoint.doneParts || []
       // Resume with the part size the checkpoint was created with, otherwise
       // start/end ranges and the final part list would be computed wrong.
-      if (checkpoint.partSize) actualPartSize = checkpoint.partSize;
+      if (checkpoint.partSize) actualPartSize = checkpoint.partSize
     } else {
       // Initialize multipart upload
-      const initHeaders: Record<string, any> = { ...headers };
-      if (mime) initHeaders['Content-Type'] = mime;
+      const initHeaders: Record<string, any> = { ...headers }
+      if (mime) initHeaders['Content-Type'] = mime
       if (meta) {
         Object.keys(meta).forEach((key) => {
-          initHeaders[`${protocol.metaPrefix}${key}`] = meta[key];
-        });
+          initHeaders[`${protocol.metaPrefix}${key}`] = meta[key]
+        })
       }
-      const initResult = await deps.initMultipartUpload(options, objectName, { headers: initHeaders });
-      uploadId = initResult.uploadId;
+      const initResult = await deps.initMultipartUpload(options, objectName, {
+        headers: initHeaders,
+      })
+      uploadId = initResult.uploadId
     }
 
     // Calculate parts
-    const numParts = Math.ceil(fileSize / actualPartSize);
-    const parts: PartInfo[] = [];
+    const numParts = Math.ceil(fileSize / actualPartSize)
+    const parts: PartInfo[] = []
 
     // Build checkpoint object
     const currentCheckpoint: Checkpoint = {
@@ -98,76 +110,93 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
       partSize: actualPartSize,
       parts: [],
       doneParts: [...doneParts],
-    };
+    }
 
     // Calculate parts to upload
     for (let i = 1; i <= numParts; i++) {
-      const start = (i - 1) * actualPartSize;
-      const end = Math.min(i * actualPartSize, fileSize);
-      const isDone = doneParts.some((p) => p.number === i);
+      const start = (i - 1) * actualPartSize
+      const end = Math.min(i * actualPartSize, fileSize)
+      const isDone = doneParts.some((p) => p.number === i)
       if (!isDone) {
-        currentCheckpoint.parts.push({ number: i, etag: '' });
+        currentCheckpoint.parts.push({ number: i, etag: '' })
       }
-      parts.push({ number: i, etag: '' });
+      parts.push({ number: i, etag: '' })
     }
 
     // Upload parts with concurrency control
-    const uploadPartWithRetry = async (partNo: number, start: number, end: number): Promise<PartInfo> => {
+    const uploadPartWithRetry = async (
+      partNo: number,
+      start: number,
+      end: number,
+    ): Promise<PartInfo> => {
       const uploadOnce = async (): Promise<UploadPartResult> => {
-        const result = await deps.uploadPart(options, objectName, uploadId, partNo, file, start, end);
+        const result = await deps.uploadPart(
+          options,
+          objectName,
+          uploadId,
+          partNo,
+          file,
+          start,
+          end,
+        )
         // The browser can only read the ETag response header when the bucket
         // CORS rule exposes it; otherwise completeMultipartUpload would fail
         // with an opaque InvalidPart error.
         if (!result.etag) {
-          throw new Error('cannot read the ETag of the uploaded part; make sure the bucket CORS rule exposes the ETag response header');
+          throw new Error(
+            'cannot read the ETag of the uploaded part; make sure the bucket CORS rule exposes the ETag response header',
+          )
         }
-        return result;
-      };
-      let result: UploadPartResult;
+        return result
+      }
+      let result: UploadPartResult
       try {
-        result = await uploadOnce();
+        result = await uploadOnce()
       } catch (err) {
         // Retry once on error
-        result = await uploadOnce();
+        result = await uploadOnce()
       }
       // Update checkpoint
-      currentCheckpoint.doneParts.push({ number: partNo, etag: result.etag });
+      currentCheckpoint.doneParts.push({ number: partNo, etag: result.etag })
       // Call progress callback
       if (progress) {
-        const percentage = currentCheckpoint.doneParts.length / numParts;
-        progress(percentage, currentCheckpoint, result);
+        const percentage = currentCheckpoint.doneParts.length / numParts
+        progress(percentage, currentCheckpoint, result)
       }
-      return { number: partNo, etag: result.etag };
-    };
+      return { number: partNo, etag: result.etag }
+    }
 
     // Upload parts in parallel with concurrency limit
-    const pendingParts = currentCheckpoint.parts.filter((p) => !doneParts.some((dp) => dp.number === p.number));
-    const uploadTasks: Promise<PartInfo>[] = [];
-    const executing: Promise<PartInfo>[] = [];
+    const pendingParts = currentCheckpoint.parts.filter(
+      (p) => !doneParts.some((dp) => dp.number === p.number),
+    )
+    const uploadTasks: Promise<PartInfo>[] = []
+    const executing: Promise<PartInfo>[] = []
 
     for (const part of pendingParts) {
-      const start = (part.number - 1) * actualPartSize;
-      const end = Math.min(part.number * actualPartSize, fileSize);
-      const task = uploadPartWithRetry(part.number, start, end);
-      uploadTasks.push(task);
-      executing.push(task);
+      const start = (part.number - 1) * actualPartSize
+      const end = Math.min(part.number * actualPartSize, fileSize)
+      const task = uploadPartWithRetry(part.number, start, end)
+      uploadTasks.push(task)
+      executing.push(task)
       // Remove the task from the in-flight pool once it settles, so the
       // next Promise.race never sees an already-resolved promise.
       task.finally(() => {
-        const index = executing.indexOf(task);
-        if (index > -1) executing.splice(index, 1);
-      });
+        const index = executing.indexOf(task)
+        if (index > -1) executing.splice(index, 1)
+      })
       if (executing.length >= parallel) {
-        await Promise.race(executing);
+        await Promise.race(executing)
       }
     }
 
-    await Promise.all(uploadTasks);
+    await Promise.all(uploadTasks)
 
     // Complete multipart upload
-    const completeParts = [...doneParts, ...currentCheckpoint.doneParts]
-      .filter((p, index, self) => self.findIndex((sp) => sp.number === p.number) === index);
+    const completeParts = [...doneParts, ...currentCheckpoint.doneParts].filter(
+      (p, index, self) => self.findIndex((sp) => sp.number === p.number) === index,
+    )
 
-    return deps.completeMultipartUpload(options, objectName, uploadId, completeParts);
-  };
+    return deps.completeMultipartUpload(options, objectName, uploadId, completeParts)
+  }
 }

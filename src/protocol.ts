@@ -1,15 +1,15 @@
-import type { Options, Progress, SignatureUrlOptions } from './types';
+import type { Options, Progress, SignatureUrlOptions } from './types'
 
 /** Per-request parameters, shared by every provider's request implementation. */
 export interface RequestParams {
-  verb: string;
-  objectName: string;
-  contentMd5?: string;
-  headers?: Record<string, any>;
-  subResource?: Record<string, any>;
-  data?: any;
-  timeout?: number;
-  onprogress?: (e: Progress) => any;
+  verb: string
+  objectName: string
+  contentMd5?: string
+  headers?: Record<string, any>
+  subResource?: Record<string, any>
+  data?: any
+  timeout?: number
+  onprogress?: (e: Progress) => any
 }
 
 /**
@@ -20,17 +20,17 @@ export interface RequestParams {
  */
 export interface Protocol {
   /** Sign and send a single request through the configured transport. */
-  request: (options: Options, params: RequestParams) => Promise<any>;
+  request: (options: Options, params: RequestParams) => Promise<any>
   /** Object metadata header prefix, e.g. 'x-oss-meta-' or 'x-cos-meta-'. */
-  metaPrefix: string;
+  metaPrefix: string
   /** Copy source header for uploadPartCopy. */
-  copySourceHeader: string;
+  copySourceHeader: string
   /** Copy source range header for uploadPartCopy. */
-  copySourceRangeHeader: string;
+  copySourceRangeHeader: string
   /** listUploads marker query key: OSS 'marker', COS 'key-marker'. */
-  listUploadsMarkerKey: string;
+  listUploadsMarkerKey: string
   /** Whether the provider has a symlink API (only OSS does). */
-  supportsSymlink: boolean;
+  supportsSymlink: boolean
   /** Build a signed URL for download (or upload). */
-  signUrl: (options: Options, objectName: string, urlOptions?: SignatureUrlOptions) => string;
+  signUrl: (options: Options, objectName: string, urlOptions?: SignatureUrlOptions) => string
 }

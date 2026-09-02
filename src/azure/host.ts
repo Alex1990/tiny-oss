@@ -1,4 +1,4 @@
-import type { Options } from '../types';
+import type { Options } from '../types'
 
 /**
  * Resolve the Azure Blob Storage host. An explicit endpoint wins (for
@@ -7,9 +7,9 @@ import type { Options } from '../types';
  * the access key ID.
  */
 export function resolveAzureHost(options: Options): string {
-  const { accessKeyId, endpoint } = options;
-  if (endpoint) return endpoint;
-  return `${accessKeyId}.blob.core.windows.net`;
+  const { accessKeyId, endpoint } = options
+  if (endpoint) return endpoint
+  return `${accessKeyId}.blob.core.windows.net`
 }
 
 /**
@@ -19,5 +19,5 @@ export function resolveAzureHost(options: Options): string {
  * requires the URI-encoded form.
  */
 export function azureEscapePath(objectName: string): string {
-  return objectName.split('/').map(encodeURIComponent).join('/');
+  return objectName.split('/').map(encodeURIComponent).join('/')
 }

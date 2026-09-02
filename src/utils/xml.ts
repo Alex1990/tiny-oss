@@ -11,8 +11,8 @@
  * Extract the text content of the first element with the given tag.
  */
 export function getXmlTag(xml: string, tag: string): string {
-  const match = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(xml);
-  return match ? match[1] : '';
+  const match = new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`).exec(xml)
+  return match ? match[1] : ''
 }
 
 /**
@@ -20,11 +20,11 @@ export function getXmlTag(xml: string, tag: string): string {
  * given tag, in document order.
  */
 export function getXmlTags(xml: string, tag: string): string[] {
-  const regex = new RegExp(`<${tag}>[\\s\\S]*?</${tag}>`, 'g');
-  const tags: string[] = [];
-  let match: RegExpExecArray | null;
+  const regex = new RegExp(`<${tag}>[\\s\\S]*?</${tag}>`, 'g')
+  const tags: string[] = []
+  let match: RegExpExecArray | null
   while ((match = regex.exec(xml)) !== null) {
-    tags.push(match[0]);
+    tags.push(match[0])
   }
-  return tags;
+  return tags
 }

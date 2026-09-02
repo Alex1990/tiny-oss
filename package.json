@@ -41,6 +41,8 @@
   "scripts": {
     "clean": "rimraf dist",
     "lint": "oxlint src test",
+    "fmt": "oxfmt src test",
+    "fmt:check": "oxfmt --check src test",
     "build": "vite build && vite build --mode cos && vite build --mode obs && vite build --mode aws && vite build --mode azure && vite build --mode protocol && npm run build:types && npm run build:types:cos && npm run build:types:obs && npm run build:types:aws && npm run build:types:azure && npm run build:types:protocol",
     "build:types": "dts-bundle-generator src/index.ts -o dist/index.d.ts --project tsconfig.json --sort",
     "build:types:cos": "dts-bundle-generator src/cos/index.ts -o dist/cos.d.ts --project tsconfig.json --sort",
@@ -64,6 +66,7 @@
   },
   "lint-staged": {
     "*.ts": [
+      "oxfmt --write",
       "oxlint --fix"
     ]
   },
@@ -103,6 +106,7 @@
     "hono": "^4.12.34",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
+    "oxfmt": "^0.66.0",
     "oxlint": "^1.41.0",
     "playwright": "^1.57.0",
     "rimraf": "^6.1.3",

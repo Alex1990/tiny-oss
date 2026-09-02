@@ -1,14 +1,14 @@
-import { unix } from '../utils';
-import { normalizeOptions } from '../ops/request';
-import { getObsSignature, encodeObsUrl } from './signature';
-import { resolveObsHost } from './host';
-import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types';
+import { unix } from '../utils'
+import { normalizeOptions } from '../ops/request'
+import { getObsSignature, encodeObsUrl } from './signature'
+import { resolveObsHost } from './host'
+import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types'
 
 /** OBS defaults: https (OBS endpoints are HTTPS-only), 60s timeout. */
 const OBS_DEFAULTS = {
   secure: true,
   timeout: 60000,
-};
+}
 
 /**
  * Get a signed OBS URL (the OBS "obs" scheme), mirroring the official
@@ -30,34 +30,39 @@ const OBS_DEFAULTS = {
 export function obsSignUrl(
   options: Options,
   objectName: string,
-  urlOptions: SignatureUrlOptions = {}
+  urlOptions: SignatureUrlOptions = {},
 ): string {
-  const { expires = 1800, method, process, response } = urlOptions;
-  const opts = normalizeOptions(options, OBS_DEFAULTS);
-  const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = opts;
-  const subResource: Record<string, any> = {};
-  if (process) subResource['x-image-process'] = process;
+  const { expires = 1800, method, process, response } = urlOptions
+  const opts = normalizeOptions(options, OBS_DEFAULTS)
+  const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = opts
+  const subResource: Record<string, any> = {}
+  if (process) subResource['x-image-process'] = process
   if (response) {
     Object.keys(response).forEach((k) => {
-      const key = `response-${k.toLowerCase()}`;
-      subResource[key] = response[k as keyof ResponseHeaderType];
-    });
+      const key = `response-${k.toLowerCase()}`
+      subResource[key] = response[k as keyof ResponseHeaderType]
+    })
   }
-  const headers: Record<string, any> = {};
+  const headers: Record<string, any> = {}
   Object.keys(urlOptions).forEach((key) => {
-    const lowerKey = key.toLowerCase();
-    const value = urlOptions[key];
+    const lowerKey = key.toLowerCase()
+    const value = urlOptions[key]
     if (lowerKey.indexOf('x-obs-') === 0) {
-      headers[lowerKey] = value;
+      headers[lowerKey] = value
     } else if (lowerKey === 'content-md5' || lowerKey === 'content-type') {
-      headers[lowerKey] = value;
-    } else if (lowerKey !== 'expires' && lowerKey !== 'response' && lowerKey !== 'process' && lowerKey !== 'method') {
-      subResource[lowerKey] = value;
+      headers[lowerKey] = value
+    } else if (
+      lowerKey !== 'expires' &&
+      lowerKey !== 'response' &&
+      lowerKey !== 'process' &&
+      lowerKey !== 'method'
+    ) {
+      subResource[lowerKey] = value
     }
-  });
-  const securityToken = urlOptions['security-token'] || stsToken;
-  if (securityToken) subResource['x-obs-security-token'] = securityToken;
-  const expireUnix = unix() + expires;
+  })
+  const securityToken = urlOptions['security-token'] || stsToken
+  if (securityToken) subResource['x-obs-security-token'] = securityToken
+  const expireUnix = unix() + expires
   const signature = getObsSignature({
     verb: method || 'GET',
     contentMd5: headers['content-md5'],
@@ -67,21 +72,23 @@ export function obsSignUrl(
     accessKeySecret,
     subResource,
     expires: expireUnix,
-  });
-  const protocol = secure ? 'https' : 'http';
-  let url = `${protocol}://${resolveObsHost(opts)}/${encodeObsUrl(objectName, true)}`;
+  })
+  const protocol = secure ? 'https' : 'http'
+  let url = `${protocol}://${resolveObsHost(opts)}/${encodeObsUrl(objectName, true)}`
   const query: Record<string, string> = {
     AccessKeyId: accessKeyId,
     Expires: String(expireUnix),
-  };
+  }
   Object.keys(subResource).forEach((k) => {
-    query[k] = String(subResource[k]);
-  });
-  const keys = Object.keys(query).sort();
-  const qs = keys.map((k) => {
-    const v = query[k];
-    return v === '' ? encodeObsUrl(k, true) : `${encodeObsUrl(k, true)}=${encodeObsUrl(v, true)}`;
-  }).join('&');
-  url += `?${qs}&Signature=${encodeObsUrl(signature, true)}`;
-  return url;
+    query[k] = String(subResource[k])
+  })
+  const keys = Object.keys(query).sort()
+  const qs = keys
+    .map((k) => {
+      const v = query[k]
+      return v === '' ? encodeObsUrl(k, true) : `${encodeObsUrl(k, true)}=${encodeObsUrl(v, true)}`
+    })
+    .join('&')
+  url += `?${qs}&Signature=${encodeObsUrl(signature, true)}`
+  return url
 }

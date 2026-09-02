@@ -1,5 +1,5 @@
-import type { Options } from '../types';
-import type { Protocol } from '../protocol';
+import type { Options } from '../types'
+import type { Protocol } from '../protocol'
 
 /**
  * Put a symlink. Only OSS supports symlinks; COS has no such API, so
@@ -12,19 +12,19 @@ export function createPutSymlink(protocol: Protocol) {
   return function putSymlink(
     options: Options,
     objectName: string,
-    targetObjectName: string
+    targetObjectName: string,
   ): Promise<any> {
     if (!protocol.supportsSymlink) {
-      return Promise.reject(new Error('the provider does not support symlink'));
+      return Promise.reject(new Error('the provider does not support symlink'))
     }
     const headers: Record<string, any> = {
       'x-oss-symlink-target': encodeURI(targetObjectName),
-    };
+    }
     return protocol.request(options, {
       verb: 'PUT',
       objectName,
       headers,
       subResource: { symlink: '' },
-    });
-  };
+    })
+  }
 }

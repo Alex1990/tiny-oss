@@ -1,17 +1,22 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { getObsSignature, encodeObsUrl } from '../src/obs/signature';
-import { obsSignUrl } from '../src/obs/signatureUrl';
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { getObsSignature, encodeObsUrl } from '../src/obs/signature'
+import { obsSignUrl } from '../src/obs/signatureUrl'
 // Official Huawei Cloud OBS SDK used as an oracle: our signer must
 // produce byte-identical Authorization headers and signed URLs.
-import ObsClient from 'esdk-obs-browserjs';
+import ObsClient from 'esdk-obs-browserjs'
 
-const AK = 'AKIDEXAMPLE';
-const SK = 'SECRETKEY';
-const REGION = 'cn-north-4';
-const SERVER = 'obs.cn-north-4.myhuaweicloud.com';
-const BUCKET = 'bucket';
-const HOST = `${BUCKET}.${SERVER}`;
-const OBS_CTX = { signature: 'obs', headerPrefix: 'x-obs-', headerMetaPrefix: 'x-obs-meta-', authPrefix: 'OBS' };
+const AK = 'AKIDEXAMPLE'
+const SK = 'SECRETKEY'
+const REGION = 'cn-north-4'
+const SERVER = 'obs.cn-north-4.myhuaweicloud.com'
+const BUCKET = 'bucket'
+const HOST = `${BUCKET}.${SERVER}`
+const OBS_CTX = {
+  signature: 'obs',
+  headerPrefix: 'x-obs-',
+  headerMetaPrefix: 'x-obs-meta-',
+  authPrefix: 'OBS',
+}
 
 function makeClient() {
   return new ObsClient({
@@ -22,16 +27,16 @@ function makeClient() {
     region: REGION,
     security_token: 'TOKEN',
     is_secure: false,
-  });
+  })
 }
 
 interface HeaderCase {
-  name: string;
-  verb: string;
-  objectName: string;
-  headers?: Record<string, any>;
-  contentMd5?: string;
-  subResource?: Record<string, any>;
+  name: string
+  verb: string
+  objectName: string
+  headers?: Record<string, any>
+  contentMd5?: string
+  subResource?: Record<string, any>
 }
 
 const HEADER_CASES: HeaderCase[] = [
@@ -110,24 +115,24 @@ const HEADER_CASES: HeaderCase[] = [
       'Content-Type': '',
     },
   },
-];
+]
 
 describe('getObsSignature matches the official OBS SDK (oracle)', () => {
   for (const c of HEADER_CASES) {
     it(c.name, () => {
-      const client = makeClient();
+      const client = makeClient()
       const opt = {
         method: c.verb,
         uri: `/${BUCKET}/${c.objectName}`,
         urlPath: '',
         headers: { ...c.headers },
-      };
+      }
       if (c.subResource) {
         opt.urlPath = `?${Object.keys(c.subResource)
           .map((k) => (c.subResource![k] === '' ? k : `${k}=${c.subResource![k]}`))
-          .join('&')}`;
+          .join('&')}`
       }
-      client.util.doAuth(opt, 'PutObject', OBS_CTX);
+      client.util.doAuth(opt, 'PutObject', OBS_CTX)
       const mine = getObsSignature({
         verb: c.verb,
         contentMd5: c.contentMd5,
@@ -136,52 +141,81 @@ describe('getObsSignature matches the official OBS SDK (oracle)', () => {
         objectName: c.objectName,
         accessKeySecret: SK,
         subResource: c.subResource,
-      });
-      expect(`OBS ${AK}:${mine}`).toBe(opt.headers.Authorization);
-    });
+      })
+      expect(`OBS ${AK}:${mine}`).toBe(opt.headers.Authorization)
+    })
   }
-});
+})
 
-const FIXED_TIME = new Date('2026-09-01T00:00:00.000Z');
+const FIXED_TIME = new Date('2026-09-01T00:00:00.000Z')
 
 function stripPort(url: string): string {
-  return url.replace(/:80\//, '/').replace(/:443\//, '/');
+  return url.replace(/:80\//, '/').replace(/:443\//, '/')
 }
 
 describe('obsSignUrl matches the official OBS SDK (oracle)', () => {
   afterEach(() => {
-    vi.useRealTimers();
-  });
+    vi.useRealTimers()
+  })
 
-  const cases: Array<{ name: string; key: string; urlOptions?: Record<string, any>; officialExpires?: number }> = [
-    { name: 'plain GET download', key: 'exampleobject', urlOptions: { expires: 1800 }, officialExpires: 1800 },
-    { name: 'object key with non-ASCII characters', key: 'exampleobject(中文)', urlOptions: { expires: 1800 }, officialExpires: 1800 },
-    { name: 'response-* headers and x-image-process', key: 'exampleobject', urlOptions: { expires: 1800, response: { 'content-disposition': 'attachment', 'content-type': 'text/plain' }, process: 'image/resize,w_100' }, officialExpires: 1800 },
-    { name: 'custom expires', key: 'exampleobject', urlOptions: { expires: 60 }, officialExpires: 60 },
-  ];
+  const cases: Array<{
+    name: string
+    key: string
+    urlOptions?: Record<string, any>
+    officialExpires?: number
+  }> = [
+    {
+      name: 'plain GET download',
+      key: 'exampleobject',
+      urlOptions: { expires: 1800 },
+      officialExpires: 1800,
+    },
+    {
+      name: 'object key with non-ASCII characters',
+      key: 'exampleobject(中文)',
+      urlOptions: { expires: 1800 },
+      officialExpires: 1800,
+    },
+    {
+      name: 'response-* headers and x-image-process',
+      key: 'exampleobject',
+      urlOptions: {
+        expires: 1800,
+        response: { 'content-disposition': 'attachment', 'content-type': 'text/plain' },
+        process: 'image/resize,w_100',
+      },
+      officialExpires: 1800,
+    },
+    {
+      name: 'custom expires',
+      key: 'exampleobject',
+      urlOptions: { expires: 60 },
+      officialExpires: 60,
+    },
+  ]
 
   for (const c of cases) {
     it(c.name, () => {
-      vi.useFakeTimers();
-      vi.setSystemTime(FIXED_TIME);
-      const client = makeClient();
+      vi.useFakeTimers()
+      vi.setSystemTime(FIXED_TIME)
+      const client = makeClient()
       const official = client.createSignedUrlSync({
         Method: 'GET',
         Bucket: BUCKET,
         Key: c.key,
         Expires: c.officialExpires!,
         QueryParams: (() => {
-          const q: Record<string, string> = {};
+          const q: Record<string, string> = {}
           if (c.urlOptions && c.urlOptions.response) {
             Object.keys(c.urlOptions.response).forEach((k) => {
-              q[`response-${k}`] = c.urlOptions!.response[k];
-            });
+              q[`response-${k}`] = c.urlOptions!.response[k]
+            })
           }
-          if (c.urlOptions && c.urlOptions.process) q['x-image-process'] = c.urlOptions.process;
-          return Object.keys(q).length ? q : undefined;
+          if (c.urlOptions && c.urlOptions.process) q['x-image-process'] = c.urlOptions.process
+          return Object.keys(q).length ? q : undefined
         })(),
         signatureContext: OBS_CTX,
-      }).SignedUrl;
+      }).SignedUrl
       const mine = obsSignUrl(
         {
           accessKeyId: AK,
@@ -192,31 +226,31 @@ describe('obsSignUrl matches the official OBS SDK (oracle)', () => {
           stsToken: 'TOKEN',
         },
         c.key,
-        (c.urlOptions || {}) as any
-      );
-      expect(stripPort(mine)).toBe(stripPort(official));
-    });
+        (c.urlOptions || {}) as any,
+      )
+      expect(stripPort(mine)).toBe(stripPort(official))
+    })
   }
 
   it('the default validity is 1800s like the OSS entry', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(FIXED_TIME);
+    vi.useFakeTimers()
+    vi.setSystemTime(FIXED_TIME)
     const url = obsSignUrl(
       { accessKeyId: AK, accessKeySecret: SK, region: REGION, bucket: BUCKET, secure: false },
-      'exampleobject'
-    );
-    const exp = /Expires=(\d+)/.exec(url);
-    expect(exp).toBeTruthy();
-    expect(parseInt(exp![1], 10)).toBe(Math.floor(FIXED_TIME.getTime() / 1000) + 1800);
-  });
-});
+      'exampleobject',
+    )
+    const exp = /Expires=(\d+)/.exec(url)
+    expect(exp).toBeTruthy()
+    expect(parseInt(exp![1], 10)).toBe(Math.floor(FIXED_TIME.getTime() / 1000) + 1800)
+  })
+})
 
 describe('encodeObsUrl', () => {
   it('encodes the RFC 3986 chars that encodeURIComponent leaves alone', () => {
-    expect(encodeObsUrl("!'()*", false)).toBe('%21%27%28%29%2A');
-  });
+    expect(encodeObsUrl("!'()*", false)).toBe('%21%27%28%29%2A')
+  })
 
   it('preserves slashes when keepSlash is on', () => {
-    expect(encodeObsUrl('a/b c', true)).toBe('a/b%20c');
-  });
-});
+    expect(encodeObsUrl('a/b c', true)).toBe('a/b%20c')
+  })
+})

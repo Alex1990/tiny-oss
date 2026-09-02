@@ -1,4 +1,4 @@
-import type { TransportOptions, TransportResponse } from '../transport';
+import type { TransportOptions, TransportResponse } from '../transport'
 
 /**
  * fetch-based transport for Service Workers and Node.js, where
@@ -7,14 +7,14 @@ import type { TransportOptions, TransportResponse } from '../transport';
  * 100% event after, with lengthComputable false.
  */
 export function fetchTransport(url: string, options: TransportOptions): Promise<TransportResponse> {
-  const { method, headers, data, timeout, onprogress, total } = options;
-  const controller = new AbortController();
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  const { method, headers, data, timeout, onprogress, total } = options
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
   if (timeout) {
-    timer = setTimeout(() => controller.abort(), timeout);
+    timer = setTimeout(() => controller.abort(), timeout)
   }
   if (onprogress && total) {
-    onprogress({ loaded: 0, total, lengthComputable: false });
+    onprogress({ loaded: 0, total, lengthComputable: false })
   }
   return fetch(url, {
     method,
@@ -23,25 +23,25 @@ export function fetchTransport(url: string, options: TransportOptions): Promise<
     signal: controller.signal,
   })
     .then(async (res) => {
-      const text = await res.text();
+      const text = await res.text()
       if (res.status < 200 || res.status >= 300) {
-        throw new Error(`the request is error: ${res.status} ${res.statusText} ${text}`);
+        throw new Error(`the request is error: ${res.status} ${res.statusText} ${text}`)
       }
       if (onprogress && total) {
-        onprogress({ loaded: total, total, lengthComputable: false });
+        onprogress({ loaded: total, total, lengthComputable: false })
       }
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = {}
       res.headers.forEach((value, key) => {
-        headers[key] = value;
-      });
+        headers[key] = value
+      })
       return {
         data: text,
         headers,
         status: res.status,
         statusText: res.statusText,
-      };
+      }
     })
     .finally(() => {
-      if (timer) clearTimeout(timer);
-    });
+      if (timer) clearTimeout(timer)
+    })
 }

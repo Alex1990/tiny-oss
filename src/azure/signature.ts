@@ -1,6 +1,6 @@
-import base64js from 'base64-js';
-import { hmacSha256 } from '../aws/sha256';
-import { encodeUtf8 } from '../utils';
+import base64js from 'base64-js'
+import { hmacSha256 } from '../aws/sha256'
+import { encodeUtf8 } from '../utils'
 
 /**
  * Azure Blob Storage Shared Key authorization (Blob service, version
@@ -15,9 +15,9 @@ import { encodeUtf8 } from '../utils';
 /** URL-decode a canonicalized query value, tolerating unencoded input. */
 function decodeQueryValue(value: string): string {
   try {
-    return decodeURIComponent(value);
+    return decodeURIComponent(value)
   } catch {
-    return value;
+    return value
   }
 }
 
@@ -29,20 +29,20 @@ export function getCanonicalizedAzureHeaders(headers: Record<string, any>): stri
   const names = Object.keys(headers)
     .map((name) => name.toLowerCase())
     .filter((name) => name.indexOf('x-ms-') === 0)
-    .sort();
-  let result = '';
+    .sort()
+  let result = ''
   names.forEach((name) => {
-    const original = Object.keys(headers).find((key) => key.toLowerCase() === name);
-    const value = String(headers[original as string]).trim();
-    result += `${name}:${value}\n`;
-  });
-  return result;
+    const original = Object.keys(headers).find((key) => key.toLowerCase() === name)
+    const value = String(headers[original as string]).trim()
+    result += `${name}:${value}\n`
+  })
+  return result
 }
 
 function comparePairs(a: [string, string], b: [string, string]): number {
-  if (a[0] !== b[0]) return a[0] < b[0] ? -1 : 1;
-  if (a[1] !== b[1]) return a[1] < b[1] ? -1 : 1;
-  return 0;
+  if (a[0] !== b[0]) return a[0] < b[0] ? -1 : 1
+  if (a[1] !== b[1]) return a[1] < b[1] ? -1 : 1
+  return 0
 }
 
 /**
@@ -53,29 +53,31 @@ function comparePairs(a: [string, string], b: [string, string]): number {
 export function getCanonicalizedAzureResource(
   account: string,
   pathname: string,
-  query?: Record<string, any>
+  query?: Record<string, any>,
 ): string {
-  let result = `/${account}${pathname}`;
+  let result = `/${account}${pathname}`
   if (query) {
-    const pairs: Array<[string, string]> = [];
+    const pairs: Array<[string, string]> = []
     Object.keys(query).forEach((key) => {
-      const name = key.toLowerCase();
-      const raw = query[key];
+      const name = key.toLowerCase()
+      const raw = query[key]
       // The official SDK drops parameters without a value (URLs where
       // the '=' is missing or the value is empty) before signing.
-      if (raw == null || raw === '') return;
-      const values = Array.isArray(raw) ? raw : [raw];
+      if (raw == null || raw === '') return
+      const values = Array.isArray(raw) ? raw : [raw]
       // The official SDK lower-cases the key (no URL-decode) and
       // URL-decodes the value before signing.
-      const decoded = values.map((value: any) => decodeQueryValue(value == null ? '' : String(value))).sort();
-      pairs.push([name, decoded.join(',')]);
-    });
-    pairs.sort(comparePairs);
+      const decoded = values
+        .map((value: any) => decodeQueryValue(value == null ? '' : String(value)))
+        .sort()
+      pairs.push([name, decoded.join(',')])
+    })
+    pairs.sort(comparePairs)
     pairs.forEach(([name, value]) => {
-      result += `\n${name}:${value}`;
-    });
+      result += `\n${name}:${value}`
+    })
   }
-  return result;
+  return result
 }
 
 /**
@@ -83,30 +85,31 @@ export function getCanonicalizedAzureResource(
  *   SharedKey <account>:<base64(HMAC-SHA256(base64decode(key), StringToSign))>
  */
 export function getSharedKeyAuthorization(options: {
-  verb: string;
-  headers: Record<string, any>;
-  pathname: string;
-  query?: Record<string, any>;
-  account: string;
-  accountKey: string;
-  contentMd5?: string;
-  contentType?: string;
-  contentLength?: number;
+  verb: string
+  headers: Record<string, any>
+  pathname: string
+  query?: Record<string, any>
+  account: string
+  accountKey: string
+  contentMd5?: string
+  contentType?: string
+  contentLength?: number
 }): string {
-  const { verb, headers, pathname, query, account, accountKey } = options;
-  const contentMd5 = options.contentMd5 || '';
-  const contentType = options.contentType || '';
+  const { verb, headers, pathname, query, account, accountKey } = options
+  const contentMd5 = options.contentMd5 || ''
+  const contentType = options.contentType || ''
   // Content-Length must be empty when the request body is absent or zero.
-  const contentLength = options.contentLength ? String(options.contentLength) : '';
+  const contentLength = options.contentLength ? String(options.contentLength) : ''
   // The Date field is empty because x-ms-date (canonicalized below) is present.
-  const fields = [verb, '', '', contentLength, contentMd5, contentType, '', '', '', '', '', ''];
-  const stringToSign = fields.join('\n')
-    + '\n'
-    + getCanonicalizedAzureHeaders(headers)
-    + getCanonicalizedAzureResource(account, pathname, query);
-  const hmac = hmacSha256();
-  hmac.setKey(base64js.toByteArray(accountKey));
-  hmac.update(encodeUtf8(stringToSign));
-  const signature = base64js.fromByteArray(new Uint8Array(hmac.finalize()));
-  return `SharedKey ${account}:${signature}`;
+  const fields = [verb, '', '', contentLength, contentMd5, contentType, '', '', '', '', '', '']
+  const stringToSign =
+    fields.join('\n') +
+    '\n' +
+    getCanonicalizedAzureHeaders(headers) +
+    getCanonicalizedAzureResource(account, pathname, query)
+  const hmac = hmacSha256()
+  hmac.setKey(base64js.toByteArray(accountKey))
+  hmac.update(encodeUtf8(stringToSign))
+  const signature = base64js.fromByteArray(new Uint8Array(hmac.finalize()))
+  return `SharedKey ${account}:${signature}`
 }

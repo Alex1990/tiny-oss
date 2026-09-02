@@ -1,9 +1,9 @@
-import type { Protocol } from '../protocol';
-import { request as azureRequest } from './request';
-import { azureSignUrl } from './signatureUrl';
-import { createPut } from '../ops/put';
-import { createMultipartUpload } from '../ops/multipartUpload';
-import { initMultipartUpload, uploadPart, completeMultipartUpload } from './multipart';
+import type { Protocol } from '../protocol'
+import { request as azureRequest } from './request'
+import { azureSignUrl } from './signatureUrl'
+import { createPut } from '../ops/put'
+import { createMultipartUpload } from '../ops/multipartUpload'
+import { initMultipartUpload, uploadPart, completeMultipartUpload } from './multipart'
 
 /**
  * The Azure Blob Storage protocol (SharedKey authorization, service
@@ -22,15 +22,15 @@ const AZURE_PROTOCOL: Protocol = {
   listUploadsMarkerKey: 'marker',
   supportsSymlink: false,
   signUrl: azureSignUrl,
-};
+}
 
-const put = createPut(AZURE_PROTOCOL);
+const put = createPut(AZURE_PROTOCOL)
 const multipartUpload = createMultipartUpload(AZURE_PROTOCOL, {
   initMultipartUpload,
   uploadPart,
   completeMultipartUpload,
-});
-const signatureUrl = AZURE_PROTOCOL.signUrl;
+})
+const signatureUrl = AZURE_PROTOCOL.signUrl
 
 export type {
   BlobLike,
@@ -57,12 +57,12 @@ export type {
   UploadPartCopyOptions,
   UploadPartCopyResult,
   UploadPartResult,
-} from '../types';
-export { setTransport, getTransport } from '../transport';
-export type { Transport, TransportOptions, TransportResponse } from '../transport';
-export { fetchTransport } from '../transports/fetch';
-export { wxRequestTransport } from '../transports/wx';
-export { bindOptions } from '../ops/bindOptions';
+} from '../types'
+export { setTransport, getTransport } from '../transport'
+export type { Transport, TransportOptions, TransportResponse } from '../transport'
+export { fetchTransport } from '../transports/fetch'
+export { wxRequestTransport } from '../transports/wx'
+export { bindOptions } from '../ops/bindOptions'
 export {
   put,
   initMultipartUpload,
@@ -70,4 +70,4 @@ export {
   completeMultipartUpload,
   multipartUpload,
   signatureUrl,
-};
+}

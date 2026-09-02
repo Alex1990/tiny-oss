@@ -1,15 +1,15 @@
-import { getTransport } from '../transport';
-import { normalizeOptions, resolveTimeout, dataSize } from '../ops/request';
-import { getAwsSignature, awsUriEscapePath, iso8601 } from './signature';
-import { resolveAwsHost } from './host';
-import type { Options } from '../types';
-import type { RequestParams } from '../protocol';
+import { getTransport } from '../transport'
+import { normalizeOptions, resolveTimeout, dataSize } from '../ops/request'
+import { getAwsSignature, awsUriEscapePath, iso8601 } from './signature'
+import { resolveAwsHost } from './host'
+import type { Options } from '../types'
+import type { RequestParams } from '../protocol'
 
 /** AWS defaults: https, 60s timeout. */
 const AWS_DEFAULTS = {
   secure: true,
   timeout: 60000,
-};
+}
 
 /**
  * Sign and send a single S3 request through the configured transport.
@@ -19,18 +19,18 @@ const AWS_DEFAULTS = {
  * ('/' kept) in both the signature and the request URL.
  */
 export function request(options: Options, params: RequestParams): Promise<any> {
-  const opts = normalizeOptions(options, AWS_DEFAULTS);
-  const { accessKeyId, accessKeySecret, stsToken, bucket, secure, region, pathStyle } = opts;
-  const host = resolveAwsHost(opts);
+  const opts = normalizeOptions(options, AWS_DEFAULTS)
+  const { accessKeyId, accessKeySecret, stsToken, bucket, secure, region, pathStyle } = opts
+  const host = resolveAwsHost(opts)
   const headers: Record<string, any> = {
     host,
     'x-amz-date': iso8601(new Date()),
     'x-amz-content-sha256': 'UNSIGNED-PAYLOAD',
     ...params.headers,
-  };
-  if (stsToken) headers['x-amz-security-token'] = stsToken;
-  const objectPath = `/${awsUriEscapePath(params.objectName)}`;
-  const pathname = pathStyle && bucket ? `/${bucket}${objectPath}` : objectPath;
+  }
+  if (stsToken) headers['x-amz-security-token'] = stsToken
+  const objectPath = `/${awsUriEscapePath(params.objectName)}`
+  const pathname = pathStyle && bucket ? `/${bucket}${objectPath}` : objectPath
   const { signature, credentialScope, signedHeaders } = getAwsSignature({
     method: params.verb,
     pathname,
@@ -39,18 +39,18 @@ export function request(options: Options, params: RequestParams): Promise<any> {
     accessKeyId,
     secretAccessKey: accessKeySecret,
     region: region as string,
-  });
-  headers.Authorization = `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-  const protocol = secure ? 'https' : 'http';
-  let url = `${protocol}://${host}${pathname}`;
+  })
+  headers.Authorization = `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
+  const protocol = secure ? 'https' : 'http'
+  let url = `${protocol}://${host}${pathname}`
   if (params.subResource) {
     const qs = Object.keys(params.subResource)
       .map((key) => {
-        const value = params.subResource![key];
-        return value === '' || value == null ? key : `${key}=${encodeURIComponent(value)}`;
+        const value = params.subResource![key]
+        return value === '' || value == null ? key : `${key}=${encodeURIComponent(value)}`
       })
-      .join('&');
-    if (qs) url += `?${qs}`;
+      .join('&')
+    if (qs) url += `?${qs}`
   }
   return getTransport()(url, {
     method: params.verb,
@@ -59,5 +59,5 @@ export function request(options: Options, params: RequestParams): Promise<any> {
     timeout: params.timeout == null ? resolveTimeout(opts) : params.timeout,
     onprogress: params.onprogress,
     total: dataSize(params.data),
-  });
+  })
 }

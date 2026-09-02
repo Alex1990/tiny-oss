@@ -1,16 +1,16 @@
-import { getTransport } from '../transport';
-import { encodeUtf8 } from '../utils';
-import { normalizeOptions, resolveTimeout, dataSize } from '../ops/request';
-import { getCosAuth } from './signature';
-import { resolveCosHost } from './host';
-import type { Options } from '../types';
-import type { RequestParams } from '../protocol';
+import { getTransport } from '../transport'
+import { encodeUtf8 } from '../utils'
+import { normalizeOptions, resolveTimeout, dataSize } from '../ops/request'
+import { getCosAuth } from './signature'
+import { resolveCosHost } from './host'
+import type { Options } from '../types'
+import type { RequestParams } from '../protocol'
 
 /** COS defaults: https, 60s timeout (region and endpoint come from the caller). */
 const COS_DEFAULTS = {
   secure: true,
   timeout: 60000,
-};
+}
 
 /**
  * Sign and send a single COS request through the configured transport.
@@ -22,16 +22,16 @@ const COS_DEFAULTS = {
  * parameters, so both are fixed before the signature is computed.
  */
 export function request(options: Options, params: RequestParams): Promise<any> {
-  const opts = normalizeOptions(options, COS_DEFAULTS);
-  const { accessKeyId, accessKeySecret, stsToken, secure } = opts;
-  const host = resolveCosHost(opts);
+  const opts = normalizeOptions(options, COS_DEFAULTS)
+  const { accessKeyId, accessKeySecret, stsToken, secure } = opts
+  const host = resolveCosHost(opts)
   const headers: Record<string, any> = {
     Host: host,
     Date: new Date().toUTCString(),
     ...params.headers,
-  };
-  if (stsToken) headers['x-cos-security-token'] = stsToken;
-  const pathname = params.objectName === '' ? '/' : `/${params.objectName}`;
+  }
+  if (stsToken) headers['x-cos-security-token'] = stsToken
+  const pathname = params.objectName === '' ? '/' : `/${params.objectName}`
   const authorization = getCosAuth({
     method: params.verb,
     pathname,
@@ -40,18 +40,18 @@ export function request(options: Options, params: RequestParams): Promise<any> {
     secretId: accessKeyId,
     secretKey: accessKeySecret,
     host,
-  });
-  headers.Authorization = authorization;
-  const protocol = secure ? 'https' : 'http';
-  let url = `${protocol}://${host}${pathname}`;
+  })
+  headers.Authorization = authorization
+  const protocol = secure ? 'https' : 'http'
+  let url = `${protocol}://${host}${pathname}`
   if (params.subResource) {
     const qs = Object.keys(params.subResource)
       .map((key) => {
-        const value = params.subResource![key];
-        return value === '' || value == null ? key : `${key}=${encodeURIComponent(value)}`;
+        const value = params.subResource![key]
+        return value === '' || value == null ? key : `${key}=${encodeURIComponent(value)}`
       })
-      .join('&');
-    if (qs) url += `?${qs}`;
+      .join('&')
+    if (qs) url += `?${qs}`
   }
   return getTransport()(url, {
     method: params.verb,
@@ -60,5 +60,5 @@ export function request(options: Options, params: RequestParams): Promise<any> {
     timeout: params.timeout == null ? resolveTimeout(opts) : params.timeout,
     onprogress: params.onprogress,
     total: dataSize(params.data),
-  });
+  })
 }

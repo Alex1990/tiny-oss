@@ -14,7 +14,7 @@
  */
 export function bindOptions<O, A extends unknown[], R>(
   operation: (options: O, ...args: A) => R,
-  options: O
+  options: O,
 ): (...args: A) => R {
-  return (...args: A): R => operation(options, ...args);
+  return (...args: A): R => operation(options, ...args)
 }

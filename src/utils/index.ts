@@ -1,53 +1,54 @@
-import md5 from 'md5';
-import base64js from 'base64-js';
-import { Digest } from '../digest';
-import { encodeUtf8 } from './utf8';
+import md5 from 'md5'
+import base64js from 'base64-js'
+import { Digest } from '../digest'
+import { encodeUtf8 } from './utf8'
 
 function isDate(obj: any): boolean {
-  return obj instanceof Date && !isNaN(obj.getTime());
+  return obj instanceof Date && !isNaN(obj.getTime())
 }
 
 function unix(date?: string | number | Date): number {
-  const now = Date.now();
-  const timestamp = date ? new Date(date).getTime() : now;
-  const validTimestamp = isNaN(timestamp) ? now : timestamp;
-  return Math.floor(validTimestamp / 1000);
+  const now = Date.now()
+  const timestamp = date ? new Date(date).getTime() : now
+  const validTimestamp = isNaN(timestamp) ? now : timestamp
+  return Math.floor(validTimestamp / 1000)
 }
 
 function isBlob(v: unknown): v is Blob {
-  return typeof Blob !== 'undefined' && v instanceof Blob;
+  return typeof Blob !== 'undefined' && v instanceof Blob
 }
 
 function isArrayBuffer(v: unknown): v is ArrayBuffer {
   return (
     typeof ArrayBuffer !== 'undefined' &&
-    (v instanceof ArrayBuffer ||
-      Object.prototype.toString.call(v) === '[object ArrayBuffer]')
-  );
+    (v instanceof ArrayBuffer || Object.prototype.toString.call(v) === '[object ArrayBuffer]')
+  )
 }
 
 function blobToBuffer(blob: Blob | ArrayBuffer | Uint8Array | string): Promise<Uint8Array> {
   if (typeof blob === 'string') {
-    return Promise.resolve(encodeUtf8(blob));
+    return Promise.resolve(encodeUtf8(blob))
   }
   if (isArrayBuffer(blob)) {
-    return Promise.resolve(new Uint8Array(blob));
+    return Promise.resolve(new Uint8Array(blob))
   }
   if (ArrayBuffer.isView(blob)) {
-    return Promise.resolve(new Uint8Array(blob.buffer, blob.byteOffset, blob.byteLength));
+    return Promise.resolve(new Uint8Array(blob.buffer, blob.byteOffset, blob.byteLength))
   }
   if (isBlob(blob)) {
     // Blob: modern browsers and Service Workers provide blob.arrayBuffer().
-    return blob.arrayBuffer().then((buf) => new Uint8Array(buf));
+    return blob.arrayBuffer().then((buf) => new Uint8Array(buf))
   }
   // Cross-context safety net: wx.fs.readFile may hand us a buffer from another
   // JS context that defeats instanceof; byteLength is the last realm-proof signal.
-  const bufferLike: unknown = blob;
+  const bufferLike: unknown = blob
   if (bufferLike && typeof bufferLike === 'object' && 'byteLength' in bufferLike) {
-    const buffer = bufferLike as ArrayBuffer; // construct-only, mirrors the isArrayBuffer branch
-    return Promise.resolve(new Uint8Array(buffer));
+    const buffer = bufferLike as ArrayBuffer // construct-only, mirrors the isArrayBuffer branch
+    return Promise.resolve(new Uint8Array(buffer))
   }
-  return Promise.reject(new TypeError('unsupported upload data type: ' + Object.prototype.toString.call(blob)));
+  return Promise.reject(
+    new TypeError('unsupported upload data type: ' + Object.prototype.toString.call(blob)),
+  )
 }
 
 /**
@@ -57,90 +58,99 @@ function blobToBuffer(blob: Blob | ArrayBuffer | Uint8Array | string): Promise<U
  * window over the same buffer; Blob/ArrayBuffer/string slice natively.
  * Every branch is realm-proof — no instanceof across JS contexts.
  */
-function sliceUploadData(data: Blob | ArrayBuffer | Uint8Array | string, start: number, end: number): Blob | ArrayBuffer | Uint8Array | string {
-  const view = data as Uint8Array; // structural stand-in; subarray presence is checked below
+function sliceUploadData(
+  data: Blob | ArrayBuffer | Uint8Array | string,
+  start: number,
+  end: number,
+): Blob | ArrayBuffer | Uint8Array | string {
+  const view = data as Uint8Array // structural stand-in; subarray presence is checked below
   if (ArrayBuffer.isView(data) && typeof view.subarray === 'function') {
-    return view.subarray(start, end);
+    return view.subarray(start, end)
   }
   if (ArrayBuffer.isView(data)) {
     // DataView or another view without subarray: reuse the underlying buffer.
-    return new Uint8Array(view.buffer, view.byteOffset + start, end - start);
+    return new Uint8Array(view.buffer, view.byteOffset + start, end - start)
   }
-  return data.slice(start, end);
+  return data.slice(start, end)
 }
 
 interface Options {
-  accessKeyId?: string;
-  accessKeySecret?: string;
-  bucket?: string;
-  endpoint?: string;
+  accessKeyId?: string
+  accessKeySecret?: string
+  bucket?: string
+  endpoint?: string
 }
 
 function assertOptions(options: Options): void {
-  const { accessKeyId, accessKeySecret, bucket, endpoint } = options;
-  if (!accessKeyId) throw new Error('need accessKeyId');
-  if (!accessKeySecret) throw new Error('need accessKeySecret');
-  if (!bucket && !endpoint) throw new Error('need bucket or endpoint');
+  const { accessKeyId, accessKeySecret, bucket, endpoint } = options
+  if (!accessKeyId) throw new Error('need accessKeyId')
+  if (!accessKeySecret) throw new Error('need accessKeySecret')
+  if (!bucket && !endpoint) throw new Error('need bucket or endpoint')
 }
 
 function hexToBuffer(hex: string): Uint8Array {
-  const arr = [];
+  const arr = []
   for (let i = 0; i < hex.length; i += 2) {
-    arr.push(parseInt(hex[i] + hex[i + 1], 16));
+    arr.push(parseInt(hex[i] + hex[i + 1], 16))
   }
-  return Uint8Array.from(arr);
+  return Uint8Array.from(arr)
 }
 
 function getContentMd5(buf: Uint8Array): string {
-  const bytes = Array.prototype.slice.call(buf, 0);
-  const md5Buf = hexToBuffer(md5(bytes));
-  return base64js.fromByteArray(md5Buf);
+  const bytes = Array.prototype.slice.call(buf, 0)
+  const md5Buf = hexToBuffer(md5(bytes))
+  return base64js.fromByteArray(md5Buf)
 }
 
 function getCanonicalizedOSSHeaders(headers: Record<string, any>): string {
-  let result = '';
-  let headerNames = Object.keys(headers);
-  headerNames = headerNames.map(name => name.toLowerCase());
-  headerNames.sort();
+  let result = ''
+  let headerNames = Object.keys(headers)
+  headerNames = headerNames.map((name) => name.toLowerCase())
+  headerNames.sort()
   headerNames.forEach((name) => {
     if (name.indexOf('x-oss-') === 0) {
-      result += `${name}:${headers[name]}\n`;
+      result += `${name}:${headers[name]}\n`
     }
-  });
-  return result;
+  })
+  return result
 }
 
-function getCanonicalizedResource(bucket = '', objectName = '', parameters?: Record<string, any>): string {
-  let resourcePath = '';
-  if (bucket) resourcePath += `/${bucket}`;
+function getCanonicalizedResource(
+  bucket = '',
+  objectName = '',
+  parameters?: Record<string, any>,
+): string {
+  let resourcePath = ''
+  if (bucket) resourcePath += `/${bucket}`
   if (objectName) {
-    if (objectName.charAt(0) !== '/') resourcePath += '/';
-    resourcePath += objectName;
+    if (objectName.charAt(0) !== '/') resourcePath += '/'
+    resourcePath += objectName
   }
-  let canonicalizedResource = `${resourcePath}`;
-  let separatorString = '?';
+  let canonicalizedResource = `${resourcePath}`
+  let separatorString = '?'
   if (parameters) {
-    const compareFunc = (entry1: string, entry2: string) => entry1 > entry2 ? 1 : (entry1 < entry2 ? -1 : 0);
+    const compareFunc = (entry1: string, entry2: string) =>
+      entry1 > entry2 ? 1 : entry1 < entry2 ? -1 : 0
     const processFunc = (key: string) => {
-      canonicalizedResource += separatorString + key;
-      if (parameters[key]) canonicalizedResource += `=${parameters[key]}`;
-      separatorString = '&';
-    };
-    Object.keys(parameters).sort(compareFunc).forEach(processFunc);
+      canonicalizedResource += separatorString + key
+      if (parameters[key]) canonicalizedResource += `=${parameters[key]}`
+      separatorString = '&'
+    }
+    Object.keys(parameters).sort(compareFunc).forEach(processFunc)
   }
-  return canonicalizedResource;
+  return canonicalizedResource
 }
 
 interface SignatureOptions {
-  type?: 'header' | 'url';
-  verb?: string;
-  contentMd5?: string;
-  expires?: number;
-  bucket?: string;
-  objectName?: string;
-  accessKeySecret: string;
-  headers?: Record<string, any>;
-  subResource?: Record<string, any>;
+  type?: 'header' | 'url'
+  verb?: string
+  contentMd5?: string
+  expires?: number
+  bucket?: string
+  objectName?: string
+  accessKeySecret: string
+  headers?: Record<string, any>
+  subResource?: Record<string, any>
 }
 
 function getSignature(options: SignatureOptions): string {
@@ -154,25 +164,25 @@ function getSignature(options: SignatureOptions): string {
     accessKeySecret,
     headers = {},
     subResource,
-  } = options;
-  const date = headers['x-oss-date'] || '';
-  const contentType = headers['Content-Type'] || '';
-  const data = [verb, contentMd5, contentType];
+  } = options
+  const date = headers['x-oss-date'] || ''
+  const contentType = headers['Content-Type'] || ''
+  const data = [verb, contentMd5, contentType]
   if (type === 'header') {
-    data.push(date);
+    data.push(date)
   } else {
-    data.push(expires);
+    data.push(expires)
   }
-  const canonicalizedOSSHeaders = getCanonicalizedOSSHeaders(headers);
-  const canonicalizedResource = getCanonicalizedResource(bucket, objectName, subResource);
-  data.push(`${canonicalizedOSSHeaders}${canonicalizedResource}`);
-  const text = data.join('\n');
-  const hmac = Digest.HMAC_SHA1();
-  hmac.setKey(accessKeySecret);
-  hmac.update(text);
-  const hashBuf = new Uint8Array(hmac.finalize());
-  const signature = base64js.fromByteArray(hashBuf);
-  return signature;
+  const canonicalizedOSSHeaders = getCanonicalizedOSSHeaders(headers)
+  const canonicalizedResource = getCanonicalizedResource(bucket, objectName, subResource)
+  data.push(`${canonicalizedOSSHeaders}${canonicalizedResource}`)
+  const text = data.join('\n')
+  const hmac = Digest.HMAC_SHA1()
+  hmac.setKey(accessKeySecret)
+  hmac.update(text)
+  const hashBuf = new Uint8Array(hmac.finalize())
+  const signature = base64js.fromByteArray(hashBuf)
+  return signature
 }
 
 export {
@@ -187,4 +197,4 @@ export {
   getCanonicalizedOSSHeaders,
   getCanonicalizedResource,
   getSignature,
-};
+}

@@ -1,6 +1,6 @@
-import { getSignature, unix } from '../utils';
-import { normalizeOptions, resolveHost } from './request';
-import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types';
+import { getSignature, unix } from '../utils'
+import { normalizeOptions, resolveHost } from './request'
+import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types'
 
 /**
  * Get a signed url for an OSS object.
@@ -13,36 +13,41 @@ import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types'
 export function ossSignUrl(
   options: Options,
   objectName: string,
-  urlOptions: SignatureUrlOptions = {}
+  urlOptions: SignatureUrlOptions = {},
 ): string {
-  const { expires = 1800, method, process, response } = urlOptions;
-  const opts = normalizeOptions(options);
-  const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = opts;
-  const headers: Record<string, any> = {};
-  const subResource: Record<string, any> = {};
-  if (process) subResource['x-oss-process'] = process;
+  const { expires = 1800, method, process, response } = urlOptions
+  const opts = normalizeOptions(options)
+  const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = opts
+  const headers: Record<string, any> = {}
+  const subResource: Record<string, any> = {}
+  if (process) subResource['x-oss-process'] = process
   if (response) {
     Object.keys(response).forEach((k) => {
-      const key = `response-${k.toLowerCase()}`;
-      subResource[key] = response[k as keyof ResponseHeaderType];
-    });
+      const key = `response-${k.toLowerCase()}`
+      subResource[key] = response[k as keyof ResponseHeaderType]
+    })
   }
   Object.keys(urlOptions).forEach((key) => {
-    const lowerKey = key.toLowerCase();
-    const value = urlOptions[key];
+    const lowerKey = key.toLowerCase()
+    const value = urlOptions[key]
     if (lowerKey.indexOf('x-oss-') === 0) {
-      headers[lowerKey] = value;
+      headers[lowerKey] = value
     } else if (lowerKey.indexOf('content-md5') === 0) {
-      headers[key] = value;
+      headers[key] = value
     } else if (lowerKey.indexOf('content-type') === 0) {
-      headers[key] = value;
-    } else if (lowerKey !== 'expires' && lowerKey !== 'response' && lowerKey !== 'process' && lowerKey !== 'method') {
-      subResource[lowerKey] = value;
+      headers[key] = value
+    } else if (
+      lowerKey !== 'expires' &&
+      lowerKey !== 'response' &&
+      lowerKey !== 'process' &&
+      lowerKey !== 'method'
+    ) {
+      subResource[lowerKey] = value
     }
-  });
-  const securityToken = urlOptions['security-token'] || stsToken;
-  if (securityToken) subResource['security-token'] = securityToken;
-  const expireUnix = unix() + expires;
+  })
+  const securityToken = urlOptions['security-token'] || stsToken
+  if (securityToken) subResource['security-token'] = securityToken
+  const expireUnix = unix() + expires
   const signature = getSignature({
     type: 'url',
     verb: method || 'GET',
@@ -52,14 +57,14 @@ export function ossSignUrl(
     headers,
     subResource,
     expires: expireUnix,
-  });
-  const protocol = secure ? 'https' : 'http';
-  let url = `${protocol}://${resolveHost(opts)}/${objectName}`;
-  url += `?OSSAccessKeyId=${accessKeyId}`;
-  url += `&Expires=${expireUnix}`;
-  url += `&Signature=${encodeURIComponent(signature)}`;
+  })
+  const protocol = secure ? 'https' : 'http'
+  let url = `${protocol}://${resolveHost(opts)}/${objectName}`
+  url += `?OSSAccessKeyId=${accessKeyId}`
+  url += `&Expires=${expireUnix}`
+  url += `&Signature=${encodeURIComponent(signature)}`
   Object.keys(subResource).forEach((k) => {
-    url += `&${k}=${encodeURIComponent(subResource[k])}`;
-  });
-  return url;
+    url += `&${k}=${encodeURIComponent(subResource[k])}`
+  })
+  return url
 }

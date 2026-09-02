@@ -1,14 +1,14 @@
-import { getTransport } from '../transport';
-import { assertOptions, getSignature, encodeUtf8, isArrayBuffer, isBlob } from '../utils';
-import type { Options } from '../types';
-import type { RequestParams } from '../protocol';
+import { getTransport } from '../transport'
+import { assertOptions, getSignature, encodeUtf8, isArrayBuffer, isBlob } from '../utils'
+import type { Options } from '../types'
+import type { RequestParams } from '../protocol'
 
 const DEFAULT_OPTIONS = {
   internal: false,
   cname: false,
   secure: true,
   timeout: 60000,
-};
+}
 
 /**
  * Validate and fill in defaults for client options. The result is a
@@ -18,10 +18,10 @@ const DEFAULT_OPTIONS = {
  */
 export function normalizeOptions(
   options: Options = {} as Options,
-  defaults: Record<string, any> = DEFAULT_OPTIONS
+  defaults: Record<string, any> = DEFAULT_OPTIONS,
 ): Options {
-  assertOptions(options);
-  return Object.assign({}, defaults, options);
+  assertOptions(options)
+  return Object.assign({}, defaults, options)
 }
 
 /**
@@ -29,16 +29,16 @@ export function normalizeOptions(
  * wins over the bucket/region combination.
  */
 export function resolveHost(options: Options): string {
-  const { bucket, region, endpoint, internal } = options;
-  if (endpoint) return endpoint;
+  const { bucket, region, endpoint, internal } = options
+  if (endpoint) return endpoint
   // No SDK default for region: without an explicit region or endpoint
   // there is no host to build.
-  if (!region) throw new Error('options.region is required (or set options.endpoint)');
+  if (!region) throw new Error('options.region is required (or set options.endpoint)')
   // assertOptions guarantees bucket or endpoint, and endpoint is handled above.
-  let host = bucket as string;
-  if (internal) host += '-internal';
-  host += `.${region}.aliyuncs.com`;
-  return host;
+  let host = bucket as string
+  if (internal) host += '-internal'
+  host += `.${region}.aliyuncs.com`
+  return host
 }
 
 /**
@@ -46,18 +46,18 @@ export function resolveHost(options: Options): string {
  * tolerating string timeouts. Shared by every provider.
  */
 export function resolveTimeout(options: Options, fallback?: number): number | undefined {
-  const value = fallback || options.timeout;
-  return typeof value === 'string' ? parseInt(value, 10) : value;
+  const value = fallback || options.timeout
+  return typeof value === 'string' ? parseInt(value, 10) : value
 }
 
 /** Total payload size in bytes, for transports that need it. Shared by every provider. */
 export function dataSize(data: any): number | undefined {
-  if (data == null) return undefined;
-  if (typeof data === 'string') return encodeUtf8(data).length;
-  if (isBlob(data)) return data.size;
-  if (isArrayBuffer(data)) return data.byteLength;
-  if (ArrayBuffer.isView(data)) return data.byteLength;
-  return undefined;
+  if (data == null) return undefined
+  if (typeof data === 'string') return encodeUtf8(data).length
+  if (isBlob(data)) return data.size
+  if (isArrayBuffer(data)) return data.byteLength
+  if (ArrayBuffer.isView(data)) return data.byteLength
+  return undefined
 }
 
 /**
@@ -67,13 +67,13 @@ export function dataSize(data: any): number | undefined {
  * sub-resource query parameters.
  */
 export function request(options: Options, params: RequestParams): Promise<any> {
-  const opts = normalizeOptions(options);
-  const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = opts;
+  const opts = normalizeOptions(options)
+  const { accessKeyId, accessKeySecret, stsToken, bucket, secure } = opts
   const headers: Record<string, any> = {
     'x-oss-date': new Date().toUTCString(),
     ...params.headers,
-  };
-  if (stsToken) headers['x-oss-security-token'] = stsToken;
+  }
+  if (stsToken) headers['x-oss-security-token'] = stsToken
   const signature = getSignature({
     verb: params.verb,
     contentMd5: params.contentMd5,
@@ -82,18 +82,18 @@ export function request(options: Options, params: RequestParams): Promise<any> {
     objectName: params.objectName,
     accessKeySecret,
     subResource: params.subResource,
-  });
-  headers.Authorization = `OSS ${accessKeyId}:${signature}`;
-  const protocol = secure ? 'https' : 'http';
-  let url = `${protocol}://${resolveHost(opts)}/${params.objectName}`;
+  })
+  headers.Authorization = `OSS ${accessKeyId}:${signature}`
+  const protocol = secure ? 'https' : 'http'
+  let url = `${protocol}://${resolveHost(opts)}/${params.objectName}`
   if (params.subResource) {
     const qs = Object.keys(params.subResource)
       .map((key) => {
-        const value = params.subResource![key];
-        return value === '' || value == null ? key : `${key}=${encodeURIComponent(value)}`;
+        const value = params.subResource![key]
+        return value === '' || value == null ? key : `${key}=${encodeURIComponent(value)}`
       })
-      .join('&');
-    if (qs) url += `?${qs}`;
+      .join('&')
+    if (qs) url += `?${qs}`
   }
   return getTransport()(url, {
     method: params.verb,
@@ -102,5 +102,5 @@ export function request(options: Options, params: RequestParams): Promise<any> {
     timeout: params.timeout == null ? resolveTimeout(opts) : params.timeout,
     onprogress: params.onprogress,
     total: dataSize(params.data),
-  });
+  })
 }
