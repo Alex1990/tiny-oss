@@ -130,6 +130,11 @@ describe('azureSignUrl (fixed vectors, computed with @azure/storage-blob)', () =
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-01T00:00:00.000Z'))
     const url = azureSignUrl(OPTIONS, '目录/文件.txt', { method: 'PUT', expires: 300 })
+    // Assert the raw URL string BEFORE any URL parser runs: WHATWG parsers
+    // silently re-encode bare non-ASCII paths, so post-parse pathname
+    // checks would stay green if azureEscapePath were removed.
+    expect(url).not.toContain('目录')
+    expect(url).toContain('/mycontainer/%E7%9B%AE%E5%BD%95/%E6%96%87%E4%BB%B6.txt?')
     const u = new URL(url)
     expect(u.searchParams.get('sp')).toBe('w')
     expect(u.pathname).toBe('/mycontainer/%E7%9B%AE%E5%BD%95/%E6%96%87%E4%BB%B6.txt')
