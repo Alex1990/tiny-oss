@@ -59,7 +59,12 @@ export function ossSignUrl(
     expires: expireUnix,
   })
   const protocol = secure ? 'https' : 'http'
-  let url = `${protocol}://${resolveHost(opts)}/${objectName}`
+  // Percent-encode each path segment (UTF-8) so non-ASCII names survive
+  // any HTTP client; '/' stays a separator. The signature covers the
+  // un-encoded name — OSS decodes the request path before comparing,
+  // mirroring ali-oss's encoded URL / raw resource split.
+  const encodedName = objectName.split('/').map(encodeURIComponent).join('/')
+  let url = `${protocol}://${resolveHost(opts)}/${encodedName}`
   url += `?OSSAccessKeyId=${accessKeyId}`
   url += `&Expires=${expireUnix}`
   url += `&Signature=${encodeURIComponent(signature)}`

@@ -164,8 +164,8 @@ function getSignature(options: SignatureOptions): string {
   data.push(`${canonicalizedOSSHeaders}${canonicalizedResource}`)
   const text = data.join('\n')
   const hmac = hmacSha1()
-  hmac.setKey(accessKeySecret)
-  hmac.update(text)
+  hmac.setKey(encodeUtf8(accessKeySecret))
+  hmac.update(encodeUtf8(text))
   const hashBuf = new Uint8Array(hmac.finalize())
   const signature = fromUint8Array(hashBuf)
   return signature

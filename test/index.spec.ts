@@ -107,6 +107,27 @@ describe('integration', () => {
     }
   })
 
+  it('signatureUrl with non-ASCII object name', async () => {
+    const content = 'signatureUrl 中文: hello 你好'
+    const objectName = `中文文件-${Date.now()}.txt`
+    const res = await fetch('http://localhost:8080/api/oss-config')
+    const data = (await res.json()) as OssConfig
+    const { accessKeyId, accessKeySecret, region, bucket } = data
+    const options = { accessKeyId, accessKeySecret, region, bucket }
+    const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket })
+    const blob = new Blob([content], { type: 'text/plain' })
+    await oss.put(objectName, blob)
+    try {
+      const url = signatureUrl(options, objectName)
+      expect(url).toContain('OSSAccessKeyId=')
+      const getRes = await fetch(url)
+      expect(getRes.status).toBe(200)
+      expect(await getRes.text()).toBe(content)
+    } finally {
+      await oss.delete(objectName)
+    }
+  })
+
   it('multipartUpload', async () => {
     const objectName = getObjectName()
     const res = await fetch('http://localhost:8080/api/oss-config')

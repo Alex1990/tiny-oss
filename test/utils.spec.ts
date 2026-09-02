@@ -483,6 +483,20 @@ describe('utils', () => {
       expect(typeof result).toBe('string')
       expect(result.length).toBeGreaterThan(0)
     })
+    it('should sign non-ASCII object names with UTF-8 bytes (ali-oss oracle)', () => {
+      // Official ali-oss signs the raw string with Buffer.from(str, 'utf-8');
+      // a per-charCode (latin1) truncation would break Chinese keys with 403.
+      const result = getSignature({
+        type: 'url',
+        verb: 'GET',
+        expires: 1700000000,
+        bucket: 'test-bucket',
+        objectName: '中文 文件.txt',
+        accessKeySecret: 'test-secret',
+      })
+
+      expect(result).toBe('HMZv0D2l4RuUk4QhtFBDzknCeU8=')
+    })
 
     it('should use default values when not provided', () => {
       const result = getSignature({
