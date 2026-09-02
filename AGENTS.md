@@ -23,3 +23,17 @@ tiny-oss is a tiny object storage SDK focused on uploading, with a functional AP
 ## References
 
 - Usage and per-provider options: `README.md`; building a custom provider: README "Extension" section and `src/provider.ts`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs for this repo live as GitHub issues, accessed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical roles with default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
