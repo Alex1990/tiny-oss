@@ -331,10 +331,8 @@ describe('utils', () => {
       const content = new TextEncoder().encode('Hello, World!')
       const result = getContentMd5(content)
 
-      expect(typeof result).toBe('string')
-      expect(result.length).toBeGreaterThan(0)
-      // Verify it's a valid base64 string
-      expect(() => atob(result)).not.toThrow()
+      // MD5 of "Hello, World!" in base64
+      expect(result).toBe('ZajifYh5KDgxtmS9i38K1A==')
     })
 
     it('should return consistent hash for same content', () => {

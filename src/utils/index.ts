@@ -1,6 +1,6 @@
-import md5 from 'md5'
 import { fromUint8Array } from 'js-base64'
 import { Digest } from '../digest'
+import { md5 } from './md5'
 import { encodeUtf8 } from './utf8'
 
 function isDate(obj: any): boolean {
@@ -88,18 +88,8 @@ function assertOptions(options: Options): void {
   if (!bucket && !endpoint) throw new Error('need bucket or endpoint')
 }
 
-function hexToBuffer(hex: string): Uint8Array {
-  const arr = []
-  for (let i = 0; i < hex.length; i += 2) {
-    arr.push(parseInt(hex[i] + hex[i + 1], 16))
-  }
-  return Uint8Array.from(arr)
-}
-
 function getContentMd5(buf: Uint8Array): string {
-  const bytes = Array.prototype.slice.call(buf, 0)
-  const md5Buf = hexToBuffer(md5(bytes))
-  return fromUint8Array(md5Buf)
+  return fromUint8Array(new Uint8Array(md5().digest(buf)))
 }
 
 function getCanonicalizedOSSHeaders(headers: Record<string, any>): string {
