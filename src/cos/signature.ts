@@ -1,4 +1,4 @@
-import { Digest } from '../digest'
+import { Digest } from '../utils/digest'
 import { encodeUtf8 } from '../utils/utf8'
 
 /**

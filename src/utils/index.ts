@@ -1,5 +1,5 @@
 import { fromUint8Array } from 'js-base64'
-import { Digest } from '../digest'
+import { Digest } from './digest'
 import { md5 } from './md5'
 import { encodeUtf8 } from './utf8'
 

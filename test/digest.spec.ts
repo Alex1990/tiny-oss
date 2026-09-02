@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Digest } from '../src/digest'
+import { Digest } from '../src/utils/digest'
 
 describe('Digest', () => {
   describe('SHA1', () => {

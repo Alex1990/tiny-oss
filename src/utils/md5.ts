@@ -1,5 +1,5 @@
-import { createDigest } from '../digest'
-import type { DigestInterface } from '../digest'
+import { createDigest } from './digest'
+import type { DigestInterface } from './digest'
 
 /* MD5 Engine (RFC 1321) */
 

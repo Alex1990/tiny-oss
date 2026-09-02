@@ -1,5 +1,5 @@
-import { createDigest, createHMAC } from '../digest'
-import type { DigestInterface, HMACInterface } from '../digest'
+import { createDigest, createHMAC } from './digest'
+import type { DigestInterface, HMACInterface } from './digest'
 
 /* SHA-256 Engine */
 
