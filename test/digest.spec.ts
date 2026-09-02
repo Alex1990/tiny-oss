@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { Digest } from '../src/utils/digest'
+import { hmacSha1, sha1 as sha1Factory } from '../src/utils/sha1'
 
-describe('Digest', () => {
+describe('hash utils', () => {
   describe('SHA1', () => {
     it('should create a SHA1 digest instance', () => {
-      const sha1 = Digest.SHA1()
+      const sha1 = sha1Factory()
       expect(sha1).toBeDefined()
       expect(typeof sha1.update).toBe('function')
       expect(typeof sha1.finalize).toBe('function')
@@ -14,12 +14,12 @@ describe('Digest', () => {
     })
 
     it('should return correct digest length', () => {
-      const sha1 = Digest.SHA1()
+      const sha1 = sha1Factory()
       expect(sha1.digestLength()).toBe(20)
     })
 
     it('should hash empty string correctly', () => {
-      const sha1 = Digest.SHA1()
+      const sha1 = sha1Factory()
       const result = sha1.digest('')
       expect(result).toBeInstanceOf(ArrayBuffer)
       expect(result.byteLength).toBe(20)
@@ -33,7 +33,7 @@ describe('Digest', () => {
     })
 
     it('should hash string correctly', () => {
-      const sha1 = Digest.SHA1()
+      const sha1 = sha1Factory()
       const result = sha1.digest('Hello, World!')
       expect(result).toBeInstanceOf(ArrayBuffer)
       expect(result.byteLength).toBe(20)
@@ -47,7 +47,7 @@ describe('Digest', () => {
     })
 
     it('should hash Uint8Array correctly', () => {
-      const sha1 = Digest.SHA1()
+      const sha1 = sha1Factory()
       const input = new Uint8Array([72, 101, 108, 108, 111]) // "Hello"
       const result = sha1.digest(input)
       expect(result).toBeInstanceOf(ArrayBuffer)
@@ -55,7 +55,7 @@ describe('Digest', () => {
     })
 
     it('should hash ArrayBuffer correctly', () => {
-      const sha1 = Digest.SHA1()
+      const sha1 = sha1Factory()
       const buffer = new ArrayBuffer(5)
       const view = new Uint8Array(buffer)
       view.set([72, 101, 108, 108, 111])
@@ -65,34 +65,34 @@ describe('Digest', () => {
     })
 
     it('should handle incremental updates', () => {
-      const sha1 = Digest.SHA1()
+      const sha1 = sha1Factory()
       sha1.update('Hello')
       sha1.update(', ')
       sha1.update('World!')
       const result = sha1.finalize()
 
       // Should match the digest of the complete string
-      const sha1Direct = Digest.SHA1()
+      const sha1Direct = sha1Factory()
       const expected = sha1Direct.digest('Hello, World!')
 
       expect(new Uint8Array(result)).toEqual(new Uint8Array(expected))
     })
 
     it('should reset correctly', () => {
-      const sha1 = Digest.SHA1()
+      const sha1 = sha1Factory()
       sha1.update('data')
       sha1.reset()
       sha1.update('Hello, World!')
       const result = sha1.finalize()
 
-      const sha1Direct = Digest.SHA1()
+      const sha1Direct = sha1Factory()
       const expected = sha1Direct.digest('Hello, World!')
 
       expect(new Uint8Array(result)).toEqual(new Uint8Array(expected))
     })
 
     it('should handle long input', () => {
-      const sha1 = Digest.SHA1()
+      const sha1 = sha1Factory()
       const longString = 'a'.repeat(1000)
       const result = sha1.digest(longString)
       expect(result).toBeInstanceOf(ArrayBuffer)
@@ -102,7 +102,7 @@ describe('Digest', () => {
 
   describe('HMAC_SHA1', () => {
     it('should create an HMAC-SHA1 instance', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       expect(hmac).toBeDefined()
       expect(typeof hmac.setKey).toBe('function')
       expect(typeof hmac.update).toBe('function')
@@ -113,12 +113,12 @@ describe('Digest', () => {
     })
 
     it('should return correct HMAC length', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       expect(hmac.hmacLength()).toBe(20)
     })
 
     it('should throw error if key is not set', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       expect(() => {
         hmac.update('data')
         hmac.finalize()
@@ -126,7 +126,7 @@ describe('Digest', () => {
     })
 
     it('should compute HMAC with string key', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       hmac.setKey('secret')
       const result = hmac.mac('Hello, World!')
 
@@ -135,7 +135,7 @@ describe('Digest', () => {
     })
 
     it('should compute HMAC with Uint8Array key', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       const key = new Uint8Array([115, 101, 99, 114, 101, 116]) // "secret"
       hmac.setKey(key)
       const result = hmac.mac('Hello, World!')
@@ -145,11 +145,11 @@ describe('Digest', () => {
     })
 
     it('should produce consistent results', () => {
-      const hmac1 = Digest.HMAC_SHA1()
+      const hmac1 = hmacSha1()
       hmac1.setKey('key')
       const result1 = hmac1.mac('message')
 
-      const hmac2 = Digest.HMAC_SHA1()
+      const hmac2 = hmacSha1()
       hmac2.setKey('key')
       const result2 = hmac2.mac('message')
 
@@ -157,11 +157,11 @@ describe('Digest', () => {
     })
 
     it('should produce different results for different keys', () => {
-      const hmac1 = Digest.HMAC_SHA1()
+      const hmac1 = hmacSha1()
       hmac1.setKey('key1')
       const result1 = hmac1.mac('message')
 
-      const hmac2 = Digest.HMAC_SHA1()
+      const hmac2 = hmacSha1()
       hmac2.setKey('key2')
       const result2 = hmac2.mac('message')
 
@@ -169,11 +169,11 @@ describe('Digest', () => {
     })
 
     it('should produce different results for different messages', () => {
-      const hmac1 = Digest.HMAC_SHA1()
+      const hmac1 = hmacSha1()
       hmac1.setKey('key')
       const result1 = hmac1.mac('message1')
 
-      const hmac2 = Digest.HMAC_SHA1()
+      const hmac2 = hmacSha1()
       hmac2.setKey('key')
       const result2 = hmac2.mac('message2')
 
@@ -181,14 +181,14 @@ describe('Digest', () => {
     })
 
     it('should handle incremental updates', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       hmac.setKey('secret')
       hmac.update('Hello')
       hmac.update(', ')
       hmac.update('World!')
       const result = hmac.finalize()
 
-      const hmacDirect = Digest.HMAC_SHA1()
+      const hmacDirect = hmacSha1()
       hmacDirect.setKey('secret')
       const expected = hmacDirect.mac('Hello, World!')
 
@@ -196,7 +196,7 @@ describe('Digest', () => {
     })
 
     it('should reset correctly', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       hmac.setKey('secret')
       hmac.update('some data')
       hmac.reset()
@@ -204,7 +204,7 @@ describe('Digest', () => {
       hmac.update('Hello, World!')
       const result = hmac.finalize()
 
-      const hmacDirect = Digest.HMAC_SHA1()
+      const hmacDirect = hmacSha1()
       hmacDirect.setKey('secret')
       const expected = hmacDirect.mac('Hello, World!')
 
@@ -212,7 +212,7 @@ describe('Digest', () => {
     })
 
     it('should handle long key (longer than 64 bytes)', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       const longKey = 'a'.repeat(100)
       hmac.setKey(longKey)
       const result = hmac.mac('message')
@@ -222,7 +222,7 @@ describe('Digest', () => {
     })
 
     it('should handle empty message', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       hmac.setKey('secret')
       const result = hmac.mac('')
 
@@ -231,7 +231,7 @@ describe('Digest', () => {
     })
 
     it('should handle numeric input', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       hmac.setKey(123) // Must be <= 255
       const result = hmac.mac(45) // Must be <= 255
 
@@ -240,14 +240,14 @@ describe('Digest', () => {
     })
 
     it('should throw error for invalid numeric input', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       expect(() => {
         hmac.setKey(256) // Greater than 0xFF
       }).toThrow('For more than one byte, use an array buffer')
     })
 
     it('should throw error for negative numeric input', () => {
-      const hmac = Digest.HMAC_SHA1()
+      const hmac = hmacSha1()
       expect(() => {
         hmac.setKey(-1)
       }).toThrow('Input value must be positive')

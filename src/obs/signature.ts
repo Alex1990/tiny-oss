@@ -1,4 +1,4 @@
-import { Digest } from '../utils/digest'
+import { hmacSha1 } from '../utils/sha1'
 import { encodeUtf8 } from '../utils/utf8'
 import { fromUint8Array } from 'js-base64'
 
@@ -206,7 +206,7 @@ export function getObsSignature(opt: ObsSignatureOptions): string {
   // x-obs-* headers, then the resource — same layout as the official SDK.
   parts.push(canonicalObsHeaders(headers) + resource)
   const text = parts.join('\n')
-  const hmac = Digest.HMAC_SHA1()
+  const hmac = hmacSha1()
   hmac.setKey(encodeUtf8(opt.accessKeySecret))
   hmac.update(encodeUtf8(text))
   return fromUint8Array(new Uint8Array(hmac.finalize()))

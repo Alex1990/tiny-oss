@@ -1,4 +1,4 @@
-import { Digest } from '../utils/digest'
+import { hmacSha1, sha1 } from '../utils/sha1'
 import { encodeUtf8 } from '../utils/utf8'
 
 /**
@@ -39,11 +39,11 @@ function bytesToHex(bytes: Uint8Array): string {
 }
 
 function sha1Hex(str: string): string {
-  return bytesToHex(new Uint8Array(Digest.SHA1().digest(encodeUtf8(str))))
+  return bytesToHex(new Uint8Array(sha1().digest(encodeUtf8(str))))
 }
 
 function hmacSha1Hex(key: string, message: string): string {
-  const hmac = Digest.HMAC_SHA1()
+  const hmac = hmacSha1()
   hmac.setKey(encodeUtf8(key))
   hmac.update(encodeUtf8(message))
   return bytesToHex(new Uint8Array(hmac.finalize()))

@@ -1,11 +1,7 @@
 import { fromUint8Array } from 'js-base64'
-import { Digest } from './digest'
+import { hmacSha1 } from './sha1'
 import { md5 } from './md5'
 import { encodeUtf8 } from './utf8'
-
-function isDate(obj: any): boolean {
-  return obj instanceof Date && !isNaN(obj.getTime())
-}
 
 function unix(date?: string | number | Date): number {
   const now = Date.now()
@@ -167,7 +163,7 @@ function getSignature(options: SignatureOptions): string {
   const canonicalizedResource = getCanonicalizedResource(bucket, objectName, subResource)
   data.push(`${canonicalizedOSSHeaders}${canonicalizedResource}`)
   const text = data.join('\n')
-  const hmac = Digest.HMAC_SHA1()
+  const hmac = hmacSha1()
   hmac.setKey(accessKeySecret)
   hmac.update(text)
   const hashBuf = new Uint8Array(hmac.finalize())
