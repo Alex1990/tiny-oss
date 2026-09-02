@@ -1,4 +1,4 @@
-import base64js from 'base64-js'
+import { fromUint8Array, toUint8Array } from 'js-base64'
 import { hmacSha256 } from '../utils/sha256'
 import { encodeUtf8 } from '../utils'
 
@@ -108,8 +108,8 @@ export function getSharedKeyAuthorization(options: {
     getCanonicalizedAzureHeaders(headers) +
     getCanonicalizedAzureResource(account, pathname, query)
   const hmac = hmacSha256()
-  hmac.setKey(base64js.toByteArray(accountKey))
+  hmac.setKey(toUint8Array(accountKey))
   hmac.update(encodeUtf8(stringToSign))
-  const signature = base64js.fromByteArray(new Uint8Array(hmac.finalize()))
+  const signature = fromUint8Array(new Uint8Array(hmac.finalize()))
   return `SharedKey ${account}:${signature}`
 }

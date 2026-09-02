@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import base64js from 'base64-js'
+import { fromUint8Array } from 'js-base64'
 import { resolveAzureHost } from '../src/azure/host'
 import { azureSignUrl } from '../src/azure/signatureUrl'
 import {
@@ -12,7 +12,7 @@ import { setTransport, getTransport } from '../src/transport'
 import { put, multipartUpload } from '../src/azure/index'
 
 const ACCOUNT = 'myaccount'
-const ACCOUNT_KEY = base64js.fromByteArray(new Uint8Array(32).fill(7))
+const ACCOUNT_KEY = fromUint8Array(new Uint8Array(32).fill(7))
 const OPTIONS = {
   accessKeyId: ACCOUNT,
   accessKeySecret: ACCOUNT_KEY,

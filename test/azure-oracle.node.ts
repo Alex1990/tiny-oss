@@ -11,7 +11,7 @@
  * test/azure.spec.ts are computed from this script's oracle outputs.
  */
 import { strict as assert } from 'node:assert'
-import base64js from 'base64-js'
+import { fromUint8Array } from 'js-base64'
 import {
   StorageSharedKeyCredential,
   StorageSharedKeyCredentialPolicy,
@@ -25,7 +25,7 @@ import {
 import { azureSignUrl } from '../src/azure/signatureUrl'
 
 const ACCOUNT = 'myaccount'
-const ACCOUNT_KEY = base64js.fromByteArray(new Uint8Array(32).fill(7))
+const ACCOUNT_KEY = fromUint8Array(new Uint8Array(32).fill(7))
 const OPTIONS = {
   accessKeyId: ACCOUNT,
   accessKeySecret: ACCOUNT_KEY,

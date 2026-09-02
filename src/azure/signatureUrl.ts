@@ -1,4 +1,4 @@
-import base64js from 'base64-js'
+import { fromUint8Array, toUint8Array } from 'js-base64'
 import { hmacSha256 } from '../utils/sha256'
 import { encodeUtf8 } from '../utils'
 import { normalizeOptions } from '../ops/request'
@@ -81,9 +81,9 @@ export function azureSignUrl(
     rsct,
   ].join('\n')
   const hmac = hmacSha256()
-  hmac.setKey(base64js.toByteArray(accessKeySecret as string))
+  hmac.setKey(toUint8Array(accessKeySecret as string))
   hmac.update(encodeUtf8(stringToSign))
-  const sig = base64js.fromByteArray(new Uint8Array(hmac.finalize()))
+  const sig = fromUint8Array(new Uint8Array(hmac.finalize()))
   const queries: Array<[string, string]> = []
   const push = (name: string, value: string) => {
     if (value) queries.push([name, value])

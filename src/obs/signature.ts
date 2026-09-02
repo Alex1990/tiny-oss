@@ -1,6 +1,6 @@
 import { Digest } from '../digest'
 import { encodeUtf8 } from '../utils/utf8'
-import base64js from 'base64-js'
+import { fromUint8Array } from 'js-base64'
 
 /**
  * Huawei Cloud OBS request signature (the OBS / "obs" scheme), mirroring
@@ -209,5 +209,5 @@ export function getObsSignature(opt: ObsSignatureOptions): string {
   const hmac = Digest.HMAC_SHA1()
   hmac.setKey(encodeUtf8(opt.accessKeySecret))
   hmac.update(encodeUtf8(text))
-  return base64js.fromByteArray(new Uint8Array(hmac.finalize()))
+  return fromUint8Array(new Uint8Array(hmac.finalize()))
 }

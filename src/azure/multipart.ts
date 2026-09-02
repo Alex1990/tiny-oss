@@ -1,4 +1,4 @@
-import base64js from 'base64-js'
+import { fromUint8Array } from 'js-base64'
 import { blobToBuffer, getContentMd5, encodeUtf8, sliceUploadData } from '../utils'
 import { request as azureRequest } from './request'
 import type {
@@ -24,7 +24,7 @@ import type {
 /** Fixed-width decimal part label, base64-encoded as the block id. */
 function blockIdFor(partNo: number): string {
   const label = String(partNo).padStart(5, '0')
-  return base64js.fromByteArray(encodeUtf8(label))
+  return fromUint8Array(encodeUtf8(label))
 }
 
 /** A local upload id, meaningful only for checkpointing. */

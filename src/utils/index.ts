@@ -1,5 +1,5 @@
 import md5 from 'md5'
-import base64js from 'base64-js'
+import { fromUint8Array } from 'js-base64'
 import { Digest } from '../digest'
 import { encodeUtf8 } from './utf8'
 
@@ -99,7 +99,7 @@ function hexToBuffer(hex: string): Uint8Array {
 function getContentMd5(buf: Uint8Array): string {
   const bytes = Array.prototype.slice.call(buf, 0)
   const md5Buf = hexToBuffer(md5(bytes))
-  return base64js.fromByteArray(md5Buf)
+  return fromUint8Array(md5Buf)
 }
 
 function getCanonicalizedOSSHeaders(headers: Record<string, any>): string {
@@ -181,7 +181,7 @@ function getSignature(options: SignatureOptions): string {
   hmac.setKey(accessKeySecret)
   hmac.update(text)
   const hashBuf = new Uint8Array(hmac.finalize())
-  const signature = base64js.fromByteArray(hashBuf)
+  const signature = fromUint8Array(hashBuf)
   return signature
 }
 
