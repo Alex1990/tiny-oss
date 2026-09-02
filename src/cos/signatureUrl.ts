@@ -1,5 +1,5 @@
 import { normalizeOptions } from '../ops/request'
-import { getCosAuth } from './signature'
+import { camSafeUrlEncode, getCosAuth } from './signature'
 import { resolveCosHost } from './host'
 import type { Options, ResponseHeaderType, SignatureUrlOptions } from '../types'
 
@@ -54,7 +54,12 @@ export function cosSignUrl(
     }
   })
   const securityToken = urlOptions['security-token'] || stsToken
+  // Sign the raw path but emit each '/' -separated segment percent-encoded,
+  // mirroring the official SDK's getUrl (camSafeUrlEncode(key) with %2F
+  // restored): COS decodes the request path before verifying the signature,
+  // so a non-ASCII object name yields a self-contained, usable link.
   const pathname = objectName === '' ? '/' : `/${objectName}`
+  const encodedPath = pathname.split('/').map(camSafeUrlEncode).join('/')
   const authorization = getCosAuth({
     method: method || 'GET',
     pathname,
@@ -66,7 +71,7 @@ export function cosSignUrl(
     host,
   })
   const protocol = secure ? 'https' : 'http'
-  let url = `${protocol}://${host}${pathname}?`
+  let url = `${protocol}://${host}${encodedPath}?`
   // The Authorization value embeds ';' inside q-sign-time/q-key-time;
   // URL-encode every parameter value so the link stays parseable.
   url += authorization

@@ -85,6 +85,21 @@ describe('cosSignUrl', () => {
     )
     expect(url.startsWith('https://')).toBe(true)
   })
+
+  it('percent-encodes non-ASCII object names per segment while signing the raw path', () => {
+    const url = cosSignUrl(COS_OPTIONS, 'dir/中文 文件.txt', { expires: 100 })
+    // Assert the raw URL string BEFORE any URL parser runs: WHATWG parsers
+    // silently re-encode bare non-ASCII paths, so post-parse checks would
+    // stay green if the encoding were removed.
+    expect(url.startsWith('https://examplebucket-1250000000.cos.ap-guangzhou.myqcloud.com/')).toBe(
+      true,
+    )
+    expect(url).not.toContain('中文')
+    expect(url).toContain('/dir/%E4%B8%AD%E6%96%87%20%E6%96%87%E4%BB%B6.txt?')
+    // The signature still covers the raw name (q-header-list=host only).
+    expect(url).toContain('q-signature=')
+    expect(url).toContain('q-header-list=host')
+  })
 })
 
 describe('COS request', () => {
