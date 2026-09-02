@@ -136,6 +136,14 @@ Each entry exports its own `setTransport`, `getTransport`, `bindOptions` and its
 
 `pathStyle?: boolean` — S3-style path addressing (bucket in the URL path), required for S3-compatible endpoints such as MinIO and Cloudflare R2. Ignored by OSS.
 
+### 8. `secure` now defaults to `true`
+
+0.x defaulted to `http://`; every 1.0 entry — OSS, COS, OBS, AWS, Azure — now defaults to HTTPS for requests and signed URLs. Pass `secure: false` explicitly when you connect to an HTTP-only endpoint (e.g. a local MinIO server).
+
+### 9. `region` no longer has a default
+
+0.x defaulted to `oss-cn-hangzhou`, and early 1.0 builds carried per-provider region defaults (`cn-north-4` for OBS, `us-east-1` for AWS). tiny-oss now ships no region default at all: every provider requires either `region` or `endpoint`, and omitting both throws `options.region is required (or set options.endpoint)`. If you relied on a default region, add `region` (or `endpoint`) to your options.
+
 ## New capabilities (no migration needed)
 
 1.0 adds operations 0.x never had:
@@ -148,4 +156,4 @@ and two helpers: `bindOptions` (bind credentials to an operation once) and `setT
 ## Notes
 
 - `put` still resolves to the parsed response body.
-- All 0.x option fields (`accessKeyId`, `accessKeySecret`, `stsToken`, `bucket`, `endpoint`, `region`, `internal`, `secure`, `timeout`, `cname`) are unchanged and keep their meaning.
+- All 0.x option fields (`accessKeyId`, `accessKeySecret`, `stsToken`, `bucket`, `endpoint`, `region`, `internal`, `secure`, `timeout`, `cname`) keep their meaning; the `secure` and `region` defaults did change — see items 8 and 9 above.
