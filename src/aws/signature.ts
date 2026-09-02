@@ -1,4 +1,4 @@
-import { sha256, hmacSha256 } from './sha256'
+import { sha256, hmacSha256 } from '../utils/sha256'
 import { encodeUtf8 } from '../utils/utf8'
 
 /**

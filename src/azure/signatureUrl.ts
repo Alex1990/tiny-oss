@@ -1,5 +1,5 @@
 import base64js from 'base64-js'
-import { hmacSha256 } from '../aws/sha256'
+import { hmacSha256 } from '../utils/sha256'
 import { encodeUtf8 } from '../utils'
 import { normalizeOptions } from '../ops/request'
 import { resolveAzureHost, azureEscapePath } from './host'
