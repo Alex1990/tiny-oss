@@ -24,7 +24,7 @@ export default defineConfig({
     'tiny-oss.protocol.es': 'src/provider.ts',
   },
   format: ['esm'],
-  target: 'es2015',
+  target: 'es2020',
   outDir: 'dist',
   clean: true,
   splitting: false,
