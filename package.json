@@ -4,30 +4,30 @@
   "description": "A tiny object storage sdk for browsers, Node.js and mini programs, focused on uploading",
   "type": "module",
   "main": "dist/tiny-oss.es.js",
-  "types": "dist/index.d.ts",
+  "types": "dist/tiny-oss.es.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/tiny-oss.es.d.ts",
       "import": "./dist/tiny-oss.es.js"
     },
     "./cos": {
-      "types": "./dist/cos.d.ts",
+      "types": "./dist/tiny-oss.cos.es.d.ts",
       "import": "./dist/tiny-oss.cos.es.js"
     },
     "./obs": {
-      "types": "./dist/obs.d.ts",
+      "types": "./dist/tiny-oss.obs.es.d.ts",
       "import": "./dist/tiny-oss.obs.es.js"
     },
     "./aws": {
-      "types": "./dist/aws.d.ts",
+      "types": "./dist/tiny-oss.aws.es.d.ts",
       "import": "./dist/tiny-oss.aws.es.js"
     },
     "./azure": {
-      "types": "./dist/azure.d.ts",
+      "types": "./dist/tiny-oss.azure.es.d.ts",
       "import": "./dist/tiny-oss.azure.es.js"
     },
     "./protocol": {
-      "types": "./dist/protocol.d.ts",
+      "types": "./dist/tiny-oss.protocol.es.d.ts",
       "import": "./dist/tiny-oss.protocol.es.js"
     }
   },
@@ -43,13 +43,13 @@
     "lint": "oxlint src test",
     "fmt": "oxfmt src test",
     "fmt:check": "oxfmt --check src test",
-    "build": "vite build && vite build --mode cos && vite build --mode obs && vite build --mode aws && vite build --mode azure && vite build --mode protocol && npm run build:types && npm run build:types:cos && npm run build:types:obs && npm run build:types:aws && npm run build:types:azure && npm run build:types:protocol",
-    "build:types": "dts-bundle-generator src/index.ts -o dist/index.d.ts --project tsconfig.json --sort",
-    "build:types:cos": "dts-bundle-generator src/cos/index.ts -o dist/cos.d.ts --project tsconfig.json --sort",
-    "build:types:obs": "dts-bundle-generator src/obs/index.ts -o dist/obs.d.ts --project tsconfig.json --sort",
-    "build:types:aws": "dts-bundle-generator src/aws/index.ts -o dist/aws.d.ts --project tsconfig.json --sort",
-    "build:types:azure": "dts-bundle-generator src/azure/index.ts -o dist/azure.d.ts --project tsconfig.json --sort",
-    "build:types:protocol": "dts-bundle-generator src/provider.ts -o dist/protocol.d.ts --project tsconfig.json --sort",
+    "build": "tsup && npm run build:types:default && npm run build:types:cos && npm run build:types:obs && npm run build:types:aws && npm run build:types:azure && npm run build:types:protocol",
+    "build:types:default": "dts-bundle-generator src/index.ts -o dist/tiny-oss.es.d.ts --project tsconfig.json --sort",
+    "build:types:cos": "dts-bundle-generator src/cos/index.ts -o dist/tiny-oss.cos.es.d.ts --project tsconfig.json --sort",
+    "build:types:obs": "dts-bundle-generator src/obs/index.ts -o dist/tiny-oss.obs.es.d.ts --project tsconfig.json --sort",
+    "build:types:aws": "dts-bundle-generator src/aws/index.ts -o dist/tiny-oss.aws.es.d.ts --project tsconfig.json --sort",
+    "build:types:azure": "dts-bundle-generator src/azure/index.ts -o dist/tiny-oss.azure.es.d.ts --project tsconfig.json --sort",
+    "build:types:protocol": "dts-bundle-generator src/provider.ts -o dist/tiny-oss.protocol.es.d.ts --project tsconfig.json --sort",
     "check:types": "tsc --noEmit --skipLibCheck test/test-types.ts && tsc --noEmit --skipLibCheck test/test-types-cos.ts && tsc --noEmit --skipLibCheck test/test-types-obs.ts && tsc --noEmit --skipLibCheck test/test-types-aws.ts && tsc --noEmit --skipLibCheck test/test-types-azure.ts && tsc --noEmit --skipLibCheck test/test-types-protocol.ts",
     "dev": "vite",
     "serve": "tsx test/server.ts",
@@ -109,6 +109,7 @@
     "oxlint": "^1.41.0",
     "playwright": "^1.57.0",
     "rimraf": "^6.1.3",
+    "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.5",

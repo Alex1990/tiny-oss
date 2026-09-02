@@ -1,4 +1,4 @@
-// Type testing file for the OBS entry point — validates dist/obs.d.ts.
+// Type testing file for the OBS entry point — validates dist/tiny-oss.obs.es.d.ts.
 // Run: npx tsc --noEmit --skipLibCheck test-types-obs.ts
 
 import {
@@ -20,7 +20,7 @@ import {
   type Options,
   type UploadPartCopyResult,
   type UploadPartResult,
-} from '../dist/obs'
+} from '../dist/tiny-oss.obs.es'
 
 const options: Options = {
   accessKeyId: 'AKIDxxxxxxxxxxxxxxxx',
@@ -72,7 +72,7 @@ const boundPromise: Promise<any> = upload('bound.txt', blob)
 
 // putSymlink is intentionally absent from the OBS entry.
 // @ts-expect-error - putSymlink must not exist on the OBS entry
-import { putSymlink } from '../dist/obs'
+import { putSymlink } from '../dist/tiny-oss.obs.es'
 
 console.log(
   'All OBS type tests passed!',

@@ -1,4 +1,4 @@
-// Type testing file for the COS entry point — validates dist/cos.d.ts.
+// Type testing file for the COS entry point — validates dist/tiny-oss.cos.es.d.ts.
 // Run: npx tsc --noEmit --skipLibCheck test-types-cos.ts
 
 import {
@@ -20,7 +20,7 @@ import {
   type Options,
   type UploadPartCopyResult,
   type UploadPartResult,
-} from '../dist/cos'
+} from '../dist/tiny-oss.cos.es'
 
 const options: Options = {
   accessKeyId: 'AKIDxxxxxxxxxxxxxxxx',
@@ -72,7 +72,7 @@ const boundPromise: Promise<any> = upload('bound.txt', blob)
 
 // putSymlink is intentionally absent from the COS entry.
 // @ts-expect-error - putSymlink must not exist on the COS entry
-import { putSymlink } from '../dist/cos'
+import { putSymlink } from '../dist/tiny-oss.cos.es'
 
 console.log(
   'All COS type tests passed!',

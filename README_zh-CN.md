@@ -429,7 +429,7 @@ export { put, multipartUpload, signatureUrl: myProtocol.signUrl };
 
 ### 向仓库贡献 provider
 
-参照 `src/aws/` 布局：`src/<provider>/{signature,host,request,signatureUrl,index}.ts`，然后加 Vite 构建（`vite.<provider>.config.ts`）、`package.json` 的 `exports` 条目与 `build:types:<provider>`。签名必须与官方 SDK 对齐——`test/cos-signature.spec.ts`、`test/obs-signature.spec.ts`、`test/aws-signature.spec.ts` 用各自官方 SDK 作 oracle 钉死签名器。
+参照 `src/aws/` 布局：`src/<provider>/{signature,host,request,signatureUrl,index}.ts`，然后在 `tsup.config.ts` 加一个入口（一次构建同时产出 `.es.js` 产物与配套的 `.es.d.ts`），并补 `package.json` 的 `exports` 条目。签名必须与官方 SDK 对齐——`test/cos-signature.spec.ts`、`test/obs-signature.spec.ts`、`test/aws-signature.spec.ts` 用各自官方 SDK 作 oracle 钉死签名器。
 
 如果目标存储的分片接口不是 S3 形态（如 Azure 的 Block Blob），不要强行套 `createInitMultipartUpload`/`createUploadPart`/`createCompleteMultipartUpload`：写同签名的 provider 专用原语，经 `createMultipartUpload` 注入（见 `src/azure/multipart.ts`）。没有对应 API 的操作（如 Azure 的 `listUploads`）直接从入口省略。
 

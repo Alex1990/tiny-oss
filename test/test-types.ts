@@ -25,7 +25,7 @@ import {
   type SourceData,
   type UploadPartCopyResult,
   type UploadPartResult,
-} from '../dist/index'
+} from '../dist/tiny-oss.es'
 
 const options: Options = {
   accessKeyId: 'test-key-id',

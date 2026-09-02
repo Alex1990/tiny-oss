@@ -1,4 +1,4 @@
-// Type testing file for the AWS S3 entry point — validates dist/aws.d.ts.
+// Type testing file for the AWS S3 entry point — validates dist/tiny-oss.aws.es.d.ts.
 // Run: npx tsc --noEmit --skipLibCheck test-types-aws.ts
 
 import {
@@ -20,7 +20,7 @@ import {
   type Options,
   type UploadPartCopyResult,
   type UploadPartResult,
-} from '../dist/aws'
+} from '../dist/tiny-oss.aws.es'
 
 const options: Options = {
   accessKeyId: 'AKIDxxxxxxxxxxxxxxxx',
@@ -72,7 +72,7 @@ const boundPromise: Promise<any> = upload('bound.txt', blob)
 
 // putSymlink is intentionally absent from the AWS entry.
 // @ts-expect-error - putSymlink must not exist on the AWS entry
-import { putSymlink } from '../dist/aws'
+import { putSymlink } from '../dist/tiny-oss.aws.es'
 
 console.log(
   'All AWS type tests passed!',

@@ -442,7 +442,7 @@ export { put, multipartUpload, signatureUrl: myProtocol.signUrl };
 
 ### Contributing a provider to the repo
 
-Follow the `src/aws/` layout: `src/<provider>/{signature,host,request,signatureUrl,index}.ts`, then add the Vite build (`vite.<provider>.config.ts`), the `package.json` `exports` entry and `build:types:<provider>`. Signing must match the official SDK — the tests in `test/cos-signature.spec.ts`, `test/obs-signature.spec.ts` and `test/aws-signature.spec.ts` pin each signer against its official SDK as an oracle.
+Follow the `src/aws/` layout: `src/<provider>/{signature,host,request,signatureUrl,index}.ts`, then add an entry to `tsup.config.ts` (the one build emits both the `.es.js` bundle and the matching `.es.d.ts`) and a `package.json` `exports` entry. Signing must match the official SDK — the tests in `test/cos-signature.spec.ts`, `test/obs-signature.spec.ts` and `test/aws-signature.spec.ts` pin each signer against its official SDK as an oracle.
 
 If the target storage's multipart API is not S3-shaped (e.g. Azure's block blobs), don't force it through `createInitMultipartUpload`/`createUploadPart`/`createCompleteMultipartUpload`: write provider-specific primitives with the same signatures and inject them via `createMultipartUpload` (see `src/azure/multipart.ts`). Operations that have no counterpart — like `listUploads` for Azure — are simply omitted from the entry.
 

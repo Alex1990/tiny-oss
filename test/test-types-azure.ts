@@ -1,5 +1,5 @@
 // Type testing file for the Azure Blob Storage entry point — validates
-// dist/azure.d.ts.
+// dist/tiny-oss.azure.es.d.ts.
 // Run: npx tsc --noEmit --skipLibCheck test-types-azure.ts
 
 import {
@@ -14,7 +14,7 @@ import {
   type InitMultipartUploadResult,
   type Options,
   type UploadPartResult,
-} from '../dist/azure'
+} from '../dist/tiny-oss.azure.es'
 
 const options: Options = {
   accessKeyId: 'myaccount',
@@ -55,15 +55,15 @@ const boundPromise: Promise<any> = upload('bound.txt', blob)
 // Azure has no S3-style multipart sessions: these must not exist on the
 // azure entry.
 // @ts-expect-error - putSymlink must not exist on the azure entry
-import { putSymlink } from '../dist/azure'
+import { putSymlink } from '../dist/tiny-oss.azure.es'
 // @ts-expect-error - abortMultipartUpload must not exist on the azure entry
-import { abortMultipartUpload } from '../dist/azure'
+import { abortMultipartUpload } from '../dist/tiny-oss.azure.es'
 // @ts-expect-error - listParts must not exist on the azure entry
-import { listParts } from '../dist/azure'
+import { listParts } from '../dist/tiny-oss.azure.es'
 // @ts-expect-error - listUploads must not exist on the azure entry
-import { listUploads } from '../dist/azure'
+import { listUploads } from '../dist/tiny-oss.azure.es'
 // @ts-expect-error - uploadPartCopy must not exist on the azure entry
-import { uploadPartCopy } from '../dist/azure'
+import { uploadPartCopy } from '../dist/tiny-oss.azure.es'
 
 console.log(
   'All Azure type tests passed!',

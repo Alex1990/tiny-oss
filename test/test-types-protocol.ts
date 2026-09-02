@@ -1,4 +1,4 @@
-// Type testing file for the protocol layer — validates dist/protocol.d.ts.
+// Type testing file for the protocol layer — validates dist/tiny-oss.protocol.es.d.ts.
 // Run: npx tsc --noEmit --skipLibCheck test-types-protocol.ts
 
 import {
@@ -22,7 +22,7 @@ import {
   type MultipartUploadDeps,
   type Options,
   type SignatureUrlOptions,
-} from '../dist/protocol'
+} from '../dist/tiny-oss.protocol.es'
 
 // A Protocol can be implemented outside the library: request signs and
 // sends, signUrl builds a signed URL.
