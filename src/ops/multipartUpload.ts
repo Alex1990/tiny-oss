@@ -180,11 +180,17 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
       uploadTasks.push(task)
       executing.push(task)
       // Remove the task from the in-flight pool once it settles, so the
-      // next Promise.race never sees an already-resolved promise.
-      task.finally(() => {
+      // next Promise.race never sees an already-resolved promise. Use
+      // then(onFulfilled, onRejected) rather than finally: finally's derived
+      // promise rejects whenever the task does, and nothing observes it —
+      // a part failing for good (or a throwing progress callback) would
+      // surface as an unhandled rejection. then's rejection branch consumes
+      // the failure while the task itself still rejects through race/all.
+      const removeFromPool = () => {
         const index = executing.indexOf(task)
         if (index > -1) executing.splice(index, 1)
-      })
+      }
+      task.then(removeFromPool, removeFromPool)
       if (executing.length >= parallel) {
         await Promise.race(executing)
       }

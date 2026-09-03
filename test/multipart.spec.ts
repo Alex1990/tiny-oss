@@ -110,6 +110,19 @@ describe('multipartUpload', () => {
     expect(mockedInit).not.toHaveBeenCalled()
   })
 
+  it('should reject once when a part keeps failing', async () => {
+    mockedUploadPart.mockRejectedValue(new Error('network error'))
+
+    const file = new Blob([new Uint8Array(1024 * 1024)])
+    await expect(multipartUpload(options, 'obj', file, { partSize: 1024 * 1024 })).rejects.toThrow(
+      'network error',
+    )
+
+    // Initial attempt plus one retry, then the upload gives up.
+    expect(mockedUploadPart).toHaveBeenCalledTimes(2)
+    expect(mockedComplete).not.toHaveBeenCalled()
+  })
+
   it('should retry a failed part once', async () => {
     let callCount = 0
     mockedUploadPart.mockImplementation(async (_o, _n, _u, partNo) => {
