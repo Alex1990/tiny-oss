@@ -11,8 +11,14 @@ import { defineConfig } from 'bumpp'
  *
  * `changelogen -r` must receive the exact new version: without it the heading
  * would read `<oldTag>...<branch>` instead of `v<newVersion>`.
+ *
+ * `all: true` matters: without it bumpp commits with `git commit <files>`
+ * (only the bumped files), which ignores other staged paths — a staged
+ * CHANGELOG.md would never land in the release commit. `git commit -a`
+ * commits the whole index.
  */
 export default defineConfig({
+  all: true,
   commit: {
     message: 'chore(release): {version}',
   },
@@ -20,7 +26,7 @@ export default defineConfig({
     execSync(`changelogen --output CHANGELOG.md -r ${operation.state.newVersion}`, {
       stdio: 'inherit',
     })
-    // A brand-new CHANGELOG.md is untracked; `git commit` (even with -a) skips
+    // A brand-new CHANGELOG.md is untracked, and `git commit -a` skips
     // untracked files, so stage it explicitly.
     execSync('git add CHANGELOG.md', { stdio: 'inherit' })
   },
