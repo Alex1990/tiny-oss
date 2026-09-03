@@ -1,6 +1,6 @@
 {
   "name": "tiny-oss",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "A tiny object storage sdk for browsers, Node.js and mini programs, focused on uploading",
   "type": "module",
   "main": "dist/tiny-oss.es.js",
