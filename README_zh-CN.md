@@ -103,6 +103,35 @@ put(
 
 更多配置参数或方法参考 [API](#api)。
 
+### 上传回调
+
+部分存储服务在对象落库后会回调你的服务器，并把回调响应透传给客户端——文件字节不经过你的服务器（直传省带宽），但每次上传仍能被后端校验、留痕并触发业务处理。
+
+| Provider | put / multipartUpload | 传输方式 |
+|---|---|---|
+| 阿里云 OSS | ✅ 结构化 `callback`（在 complete 阶段触发） | `x-oss-callback` / `x-oss-callback-var` 请求头，base64 JSON，与 ali-oss 一致 |
+| 华为云 OBS | ✅ 结构化 `callback`（在 complete 阶段触发） | `x-obs-callback` 请求头，base64 JSON，与 esdk-obs-browserjs 一致；不支持 `customValue` |
+| 腾讯云 COS | 仅通过 `headers` | 官方 SDK 将回调头原样透传，请自行传 `headers`，如 `{ 'x-cos-callback': '…' }`；值格式由 COS 服务端 API 定义 |
+| AWS S3 / Azure Blob | ❌ | 无回调能力 |
+
+```js
+import { put } from 'tiny-oss';
+
+put(options, 'avatar.jpg', blob, {
+  callback: {
+    url: 'https://api.example.com/oss-callback', // 由你的服务器签发
+    body: 'bucket=$(bucket)&object=$(object)&etag=$(etag)&uid=$(x:uid)',
+    customValue: { uid: currentUser.id }, // 仅 OSS：body 中可用 $(x:uid)
+  },
+});
+```
+
+注意：
+
+- 回调地址是你**服务器**的端点——直传场景下 callback 通常由后端随签名凭证一起下发，客户端不应自行指定。
+- 带回调时，上传响应体是回调服务器的返回内容（`res.data`），而非通常的空 body/XML。`multipartUpload` 带回调时 complete 响应不再是 `CompleteMultipartUpload` XML，返回的 `etag` 为空。
+- 对无回调能力的 provider 传入 `callback` 会在运行时抛错而非静默失效。签名 URL（`signatureUrl`）不携带回调。
+
 ### 协议
 
 `Protocol` 接口（`tiny-oss/protocol`）：

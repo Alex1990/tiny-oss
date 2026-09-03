@@ -1,5 +1,6 @@
 import { getContentMd5, encodeUtf8 } from '../utils'
 import { getXmlTag } from '../utils/xml'
+import { resolveCallbackHeaders } from './request'
 import type { CompleteMultipartUploadResult, MultipartOptions, Options, PartInfo } from '../types'
 import type { Protocol } from '../protocol'
 
@@ -29,6 +30,11 @@ export function createCompleteMultipartUpload(protocol: Protocol) {
     const headers: Record<string, any> = {
       'Content-Md5': contentMd5,
       'Content-Type': 'application/xml',
+      // User headers win over the serialized callback headers. When a
+      // callback is set the provider replies with the callback response
+      // instead of the CompleteMultipartUpload XML, so ETag below is
+      // expected to be empty.
+      ...resolveCallbackHeaders(protocol, multipartOptions.callback, multipartOptions.headers),
       ...multipartOptions.headers,
     }
     return protocol

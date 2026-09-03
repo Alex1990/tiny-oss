@@ -42,7 +42,9 @@ export function ossSignUrl(
       lowerKey !== 'process' &&
       lowerKey !== 'method'
     ) {
-      subResource[lowerKey] = value
+      // callback is only supported on put/multipartUpload; ignore it on
+      // signed URLs instead of emitting a bogus query parameter.
+      if (lowerKey !== 'callback') subResource[lowerKey] = value
     }
   })
   const securityToken = urlOptions['security-token'] || stsToken

@@ -49,18 +49,21 @@ const putWithProgress = put(options, 'test.txt', blob, {
   },
 })
 
+// put with a server-side upload callback and extra request headers
+const putWithCallback = put(options, 'test.txt', blob, {
+  headers: { 'x-cos-callback': 'raw-header-value' },
+  callback: {
+    url: 'https://example.com/callback',
+    body: 'key=$(key)',
+  },
+})
+
 // putSymlink
 const symlinkPromise: Promise<any> = putSymlink(options, 'link.txt', 'target.txt')
 
 // signatureUrl
 const basicUrl: string = signatureUrl(options, 'test.txt')
 const urlWithOptions: string = signatureUrl(options, 'test.txt', { expires: 600, method: 'GET' })
-const urlWithCallback: string = signatureUrl(options, 'test.txt', {
-  callback: {
-    url: 'https://example.com/callback',
-    body: 'key=$(key)',
-  },
-})
 
 // multipart upload workflow
 const initResult: Promise<InitMultipartUploadResult> = initMultipartUpload(options, 'test.txt', {

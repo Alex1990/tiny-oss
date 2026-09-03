@@ -50,7 +50,9 @@ export function cosSignUrl(
       lowerKey !== 'method' &&
       lowerKey !== 'security-token'
     ) {
-      query[lowerKey] = String(urlOptions[key])
+      // callback is only supported on put/multipartUpload; ignore it on
+      // signed URLs instead of emitting a bogus query parameter.
+      if (lowerKey !== 'callback') query[lowerKey] = String(urlOptions[key])
     }
   })
   const securityToken = urlOptions['security-token'] || stsToken

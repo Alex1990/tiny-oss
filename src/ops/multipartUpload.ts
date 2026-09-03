@@ -1,4 +1,5 @@
 import { encodeUtf8, isBlob } from '../utils'
+import { resolveCallbackHeaders } from './request'
 import type {
   BlobLike,
   Checkpoint,
@@ -66,6 +67,13 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
       mime,
       headers = {},
     } = multipartOptions
+
+    // The callback fires on the complete request; reject early (before any
+    // part is uploaded) on providers without a callback API. User headers
+    // win over serialized callback headers, matching put and the standalone
+    // completeMultipartUpload — on COS they are the only way to attach
+    // x-cos-callback to the request the server fires the callback on.
+    const callbackHeaders = resolveCallbackHeaders(protocol, multipartOptions.callback, headers)
 
     let uploadId: string
     let doneParts: PartInfo[] = []
@@ -203,6 +211,14 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
       (p, index, self) => self.findIndex((sp) => sp.number === p.number) === index,
     )
 
+    // User multipart headers apply to the complete request as well, with
+    // user values winning over the serialized callback headers.
+    const completeHeaders = { ...callbackHeaders, ...headers }
+    if (Object.keys(completeHeaders).length > 0) {
+      return deps.completeMultipartUpload(options, objectName, uploadId, completeParts, {
+        headers: completeHeaders,
+      })
+    }
     return deps.completeMultipartUpload(options, objectName, uploadId, completeParts)
   }
 }

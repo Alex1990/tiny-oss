@@ -108,6 +108,35 @@ semantics in the [multipartUpload](#multipartuploadoptions-objectname-blob-multi
 
 More options or methods see [API](#api).
 
+### Upload callback
+
+Some providers can call back your server after an object is stored, then relay the callback response back to the client. A direct upload (bytes never pass through your server) can still be validated, recorded and acted upon by your backend.
+
+| Provider | put / multipartUpload | Transport |
+|---|---|---|
+| Aliyun OSS | ✅ `callback` (fired on complete) | `x-oss-callback` / `x-oss-callback-var` headers, base64 JSON — ali-oss compatible |
+| Huawei OBS | ✅ `callback` (fired on complete) | `x-obs-callback` header, base64 JSON — esdk-obs-browserjs compatible; `customValue` is not supported |
+| Tencent COS | via `headers` only | official SDK passes the callback header value through verbatim, so pass `headers` such as `{ 'x-cos-callback': '…' }` yourself; the value format is defined by the COS server API |
+| AWS S3 / Azure Blob | ❌ | no callback API |
+
+```js
+import { put } from 'tiny-oss';
+
+put(options, 'avatar.jpg', blob, {
+  callback: {
+    url: 'https://api.example.com/oss-callback', // issued by your server
+    body: 'bucket=$(bucket)&object=$(object)&etag=$(etag)&uid=$(x:uid)',
+    customValue: { uid: currentUser.id }, // OSS only: $(x:uid) in the body
+  },
+});
+```
+
+Notes:
+
+- The callback URL is your *server's* endpoint — in direct-upload setups the callback is normally issued by your backend together with the signed credentials, so clients never choose it.
+- With a callback, the upload response body is the callback server's reply (`res.data`), not the usual empty body/XML. On `multipartUpload` the complete response is then not the `CompleteMultipartUpload` XML, so the returned `etag` is empty.
+- Passing `callback` to a provider without a callback API rejects at runtime instead of silently doing nothing. Signed URLs (`signatureUrl`) do not carry callbacks.
+
 ### Protocol
 
 The `Protocol` interface (`tiny-oss/protocol`):

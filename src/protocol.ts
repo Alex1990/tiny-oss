@@ -1,4 +1,4 @@
-import type { Options, Progress, SignatureUrlOptions } from './types'
+import type { ObjectCallback, Options, Progress, SignatureUrlOptions } from './types'
 
 /** Per-request parameters, shared by every provider's request implementation. */
 export interface RequestParams {
@@ -31,6 +31,14 @@ export interface Protocol {
   listUploadsMarkerKey: string
   /** Whether the provider has a symlink API (only OSS does). */
   supportsSymlink: boolean
+  /**
+   * Serialize a structured upload callback into provider request
+   * headers (OSS: x-oss-callback / x-oss-callback-var; OBS:
+   * x-obs-callback). Absent on providers without a callback API (COS,
+   * AWS S3, Azure Blob) — passing `callback` to an operation on such a
+   * provider rejects at runtime.
+   */
+  callbackHeaders?: (callback: ObjectCallback) => Record<string, string>
   /** Build a signed URL for download (or upload). */
   signUrl: (options: Options, objectName: string, urlOptions?: SignatureUrlOptions) => string
 }

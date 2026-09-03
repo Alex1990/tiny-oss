@@ -1,6 +1,7 @@
 import type { Protocol } from './protocol'
 import { request as ossRequest } from './ops/request'
 import { ossSignUrl } from './ops/signatureUrl'
+import { ossCallbackHeaders } from './ossCallback'
 import { createPut } from './ops/put'
 import { createInitMultipartUpload } from './ops/initMultipartUpload'
 import { createUploadPart } from './ops/uploadPart'
@@ -23,6 +24,7 @@ const OSS_PROTOCOL: Protocol = {
   copySourceRangeHeader: 'x-oss-copy-source-range',
   listUploadsMarkerKey: 'marker',
   supportsSymlink: true,
+  callbackHeaders: ossCallbackHeaders,
   signUrl: ossSignUrl,
 }
 

@@ -1,7 +1,7 @@
 import { getTransport } from '../transport'
 import { assertOptions, getSignature, encodeUtf8, isArrayBuffer, isBlob } from '../utils'
-import type { Options } from '../types'
-import type { RequestParams } from '../protocol'
+import type { ObjectCallback, Options } from '../types'
+import type { Protocol, RequestParams } from '../protocol'
 
 const DEFAULT_OPTIONS = {
   internal: false,
@@ -48,6 +48,40 @@ export function resolveHost(options: Options): string {
 export function resolveTimeout(options: Options, fallback?: number): number | undefined {
   const value = fallback || options.timeout
   return typeof value === 'string' ? parseInt(value, 10) : value
+}
+
+/**
+ * Serialize a structured upload callback into request headers through
+ * the provider's protocol hook. Returns undefined when no callback is
+ * given; rejects on providers without a callback API (COS, AWS S3,
+ * Azure) instead of silently dropping the option.
+ *
+ * When `userHeaders` already contains one of the serialized callback
+ * headers, the whole serialization is skipped (the custom-value/var
+ * header included): an explicit header wins, mirroring ali-oss
+ * encodeCallback, which skips everything once x-oss-callback is set.
+ */
+export function resolveCallbackHeaders(
+  protocol: Protocol,
+  callback?: ObjectCallback,
+  userHeaders?: Record<string, string>,
+): Record<string, string> | undefined {
+  if (!callback) return undefined
+  if (!protocol.callbackHeaders) {
+    throw new Error(
+      'upload callback is not supported by this provider (Aliyun OSS and Huawei OBS support it; COS: pass x-cos-callback headers manually)',
+    )
+  }
+  const headers = protocol.callbackHeaders(callback)
+  if (
+    userHeaders &&
+    Object.keys(userHeaders).some((key) =>
+      Object.keys(headers).some((callbackKey) => callbackKey.toLowerCase() === key.toLowerCase()),
+    )
+  ) {
+    return undefined
+  }
+  return headers
 }
 
 /** Total payload size in bytes, for transports that need it. Shared by every provider. */

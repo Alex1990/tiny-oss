@@ -1,4 +1,5 @@
 import { blobToBuffer, getContentMd5, isBlob } from '../utils'
+import { resolveCallbackHeaders } from './request'
 import type { BlobLike, Options, PutOptions } from '../types'
 import type { Protocol } from '../protocol'
 
@@ -25,6 +26,11 @@ export function createPut(protocol: Protocol) {
       const headers: Record<string, any> = {
         'Content-Md5': contentMd5,
         'Content-Type': contentType,
+        // User headers win over the serialized callback headers; when the
+        // user sets a callback header themselves, resolveCallbackHeaders
+        // skips serialization wholesale (mirroring ali-oss encodeCallback).
+        ...resolveCallbackHeaders(protocol, putOptions.callback, putOptions.headers),
+        ...putOptions.headers,
       }
       return protocol.request(options, {
         verb: 'PUT',

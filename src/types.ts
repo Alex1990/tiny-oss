@@ -22,6 +22,8 @@ export type BlobLike = Blob | ArrayBuffer | Uint8Array
 
 export interface PutOptions {
   onprogress?: (e: Progress) => any
+  headers?: Record<string, string> // extra request headers, e.g. x-cos-callback on COS
+  callback?: ObjectCallback // server-side upload callback; OSS and OBS only
 }
 
 export type HTTPMethods = 'GET' | 'POST' | 'DELETE' | 'PUT'
@@ -34,6 +36,15 @@ export interface ResponseHeaderType {
   'content-language'?: string
 }
 
+/**
+ * Server-side upload callback: once the object is stored the provider
+ * calls back the configured URL and relays that response to the client.
+ * Serialized by Aliyun OSS (x-oss-callback / x-oss-callback-var) and
+ * Huawei OBS (x-obs-callback) on put and multipartUpload. COS exposes
+ * the same feature but its official SDK passes the header value through
+ * verbatim, so COS users must set headers (x-cos-callback) themselves.
+ * AWS S3 and Azure Blob have no callback API.
+ */
 export interface ObjectCallback {
   url: string // After a file is uploaded successfully, the OSS sends a callback request to this URL.
   host?: string // The host header value for initiating callback requests.
@@ -49,7 +60,6 @@ export interface SignatureUrlOptions {
   'Content-Type'?: string // set the request content type
   process?: string
   response?: ResponseHeaderType // set the response headers for download
-  callback?: ObjectCallback
   [key: string]: any
 }
 
@@ -57,6 +67,7 @@ export interface SignatureUrlOptions {
 export interface MultipartOptions {
   timeout?: number
   headers?: Record<string, any>
+  callback?: ObjectCallback // fired on complete (multipartUpload / completeMultipartUpload); OSS and OBS only
 }
 
 export interface PartInfo {

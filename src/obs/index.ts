@@ -1,4 +1,5 @@
 import type { Protocol } from '../protocol'
+import { obsCallbackHeaders } from './callback'
 import { request as obsRequest } from './request'
 import { obsSignUrl } from './signatureUrl'
 import { createPut } from '../ops/put'
@@ -23,6 +24,7 @@ const OBS_PROTOCOL: Protocol = {
   copySourceRangeHeader: 'x-obs-copy-source-range',
   listUploadsMarkerKey: 'key-marker',
   supportsSymlink: false,
+  callbackHeaders: obsCallbackHeaders,
   signUrl: obsSignUrl,
 }
 
