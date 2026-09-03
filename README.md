@@ -101,6 +101,11 @@ put(
 );
 ```
 
+`multipartUpload` reports progress in fractions of parts, not bytes: its
+`progress` option fires after each part finishes with
+`percentage = parts done ÷ total parts`. Full option list and callback
+semantics in the [multipartUpload](#multipartuploadoptions-objectname-blob-multipartoptions) API section below.
+
 More options or methods see [API](#api).
 
 ### Protocol
@@ -492,6 +497,46 @@ put(
 #### Return
 
 * `Promise<any>`
+
+### multipartUpload(options, objectName, blob, multipartOptions)
+
+Upload a large blob in parts with bounded parallelism, retries and optional
+resume support. It splits the blob into parts of `partSize` bytes, uploads them
+through the provider's multipart primitives and completes the upload server-side.
+
+```ts
+multipartUpload(
+  options: Options,
+  objectName: string,
+  blob: BlobLike | string, // BlobLike = Blob | ArrayBuffer | Uint8Array
+  multipartOptions?: MultipartUploadOptions
+): Promise<CompleteMultipartUploadResult>
+```
+
+#### Arguments
+
+* **options**: `Options` — the client options, see above.
+* **objectName**: `string` — the object name.
+* **blob**: `BlobLike | string` — the data to upload. Must be non-empty: an empty input throws. Mini programs pass an `ArrayBuffer` (no `Blob` there).
+* **multipartOptions**: `MultipartUploadOptions` — optional upload options:
+  + **parallel?**: `number` — how many parts upload concurrently, default `5`.
+  + **partSize?**: `number` — part size in bytes, default `1MB` (`1024 * 1024`). Values below `100KB` are raised to the enforced `100KB` minimum.
+  + **checkpoint?**: `Checkpoint` — resume state from an interrupted upload (`{ file, name, uploadId, partSize, parts, doneParts }`). It is honored only when the checkpoint's file size matches the current input; on resume, `partSize` is taken from the checkpoint so part ranges and the final part list stay consistent. Resuming skips the init call, so `meta`/`mime`/`headers` are not applied then (the server keeps the values from the original init).
+  + **progress?**: `(percentage: number, checkpoint: Checkpoint, res?: any) => void` — called after each part finishes; see semantics below.
+  + **meta?**: `Record<string, any>` — object metadata, attached as per-provider metadata headers on the init request (the Azure block-blob entry holds them and applies them on the final Put Block List — see the [Azure notes](#azure-blob-storage)).
+  + **mime?**: `string` — `Content-Type` for the object, set on the init request.
+  + **headers?**: `Record<string, any>` — extra headers for the init request.
+
+#### progress semantics
+
+* Granularity is parts, not bytes: `percentage` is `parts done ÷ total parts`, so each callback advances by `1 / numParts`. There is no byte-level progress inside a single part.
+* A failing part is retried once; `progress` fires only after the retry succeeds, once per part.
+* With a `checkpoint`, parts already listed in `doneParts` are skipped (not re-uploaded) but still count as done — the first callback already reflects the resumed portion.
+* The last callback reports `1` right before the upload is completed.
+
+#### Return
+
+* `Promise<CompleteMultipartUploadResult>` — `{ name, etag, bucket?, res? }`, the result of the completing call.
 
 ### putSymlink(options, objectName, targetObjectName)
 

@@ -97,6 +97,10 @@ put(
 );
 ```
 
+`multipartUpload` 的进度按片计算而非字节：它的 `progress` 选项在每一片
+上传完成后触发，`percentage = 已完成片数 ÷ 总片数`。完整选项列表与回调
+语义见下方 [multipartUpload](#multipartuploadoptions-objectname-blob-multipartoptions) API 章节。
+
 更多配置参数或方法参考 [API](#api)。
 
 ### 协议
@@ -479,6 +483,44 @@ put(
 #### 返回值
 
 * `Promise<any>`
+
+### multipartUpload(options, objectName, blob, multipartOptions)
+
+以受限并发上传大文件，支持单片失败重试与可选断点续传。它会按 `partSize` 将数据切成若干片，经 provider 的分片原语逐片上传，最后由服务端完成合并。
+
+```ts
+multipartUpload(
+  options: Options,
+  objectName: string,
+  blob: BlobLike | string, // BlobLike = Blob | ArrayBuffer | Uint8Array
+  multipartOptions?: MultipartUploadOptions
+): Promise<CompleteMultipartUploadResult>
+```
+
+#### 参数
+
+* **options**: `Options` — 客户端配置，见上。
+* **objectName**: `string` — 对象名称。
+* **blob**: `BlobLike | string` — 要上传的数据，不能为空：空输入会抛异常。小程序环境没有 `Blob`，请传 `ArrayBuffer`。
+* **multipartOptions**: `MultipartUploadOptions` — 可选的上传选项：
+  + **parallel?**: `number` — 并发上传的分片数，默认 `5`。
+  + **partSize?**: `number` — 分片大小（字节），默认 `1MB`（`1024 * 1024`）。低于 `100KB` 的值会被提升到强制下限 `100KB`。
+  + **checkpoint?**: `Checkpoint` — 中断上传的恢复状态（`{ file, name, uploadId, partSize, parts, doneParts }`）。仅当 checkpoint 的文件大小与当前输入一致时才生效；恢复时沿用 checkpoint 的 `partSize`，分片区间与最终分片列表才能保持一致。恢复会跳过 init 请求，因此 `meta`/`mime`/`headers` 此时不再应用（服务端保留首次 init 时的值）。
+  + **progress?**: `(percentage: number, checkpoint: Checkpoint, res?: any) => void` — 每片上传完成后调用，语义见下。
+  + **meta?**: `Record<string, any>` — 对象元数据，作为 provider 专属的元数据请求头附加在 init 请求上（Azure Block Blob 入口会暂存这些头并在最终 Put Block List 上应用——见 [Azure 说明](#azure-blob-storage)）。
+  + **mime?**: `string` — 对象的 `Content-Type`，设置在 init 请求上。
+  + **headers?**: `Record<string, any>` — init 请求的额外请求头。
+
+#### progress 语义
+
+* 粒度是片而非字节：`percentage` 为 `已完成片数 ÷ 总片数`，每次回调推进 `1 / numParts`，单片内部没有字节级进度。
+* 失败的分片会重试一次；`progress` 只在重试成功后触发，每片恰好一次。
+* 带 `checkpoint` 时，已在 `doneParts` 中的分片会跳过（不重新上传）但仍计入已完成——第一次回调就已体现恢复的部分。
+* 最后一次回调报告 `1`（全部完成），紧接着执行 complete。
+
+#### 返回值
+
+* `Promise<CompleteMultipartUploadResult>` — `{ name, etag, bucket?, res? }`，完成请求的结果。
 
 ### putSymlink(options, objectName, targetObjectName)
 
