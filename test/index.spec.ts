@@ -9,6 +9,7 @@ import {
   getTransport,
   fetchTransport,
 } from '../src/index'
+import type { Checkpoint } from '../src/index'
 // @ts-ignore: ali-oss only for test server
 import OSS from 'ali-oss'
 
@@ -267,6 +268,65 @@ describe('integration', () => {
       for (let i = 0; i < size; i += 64 * 1024) {
         const end = Math.min(i + 64 * 1024, size)
         expect(Array.from(downloaded.subarray(i, end))).toEqual(Array.from(bytes.subarray(i, end)))
+      }
+    } finally {
+      await oss.delete(objectName)
+    }
+  })
+
+  it('multipartUpload resumes from a checkpoint after an interruption', async () => {
+    const objectName = getObjectName()
+    const res = await fetch('http://localhost:8080/api/oss-config')
+    const data = (await res.json()) as OssConfig
+    const { accessKeyId, accessKeySecret, region, bucket } = data
+    const options = { accessKeyId, accessKeySecret, region, bucket }
+    const oss = new OSS({ accessKeyId, accessKeySecret, region, bucket })
+
+    // 3MB patterned data -> three 1MB parts. parallel: 1 makes the
+    // interruption deterministic: fail right after part 2 completes.
+    const size = 3 * 1024 * 1024
+    const bytes = new Uint8Array(size)
+    for (let i = 0; i < size; i++) bytes[i] = i % 251
+    const blob = new Blob([bytes], { type: 'application/octet-stream' })
+
+    let checkpoint: Checkpoint | null = null
+    await expect(
+      multipartUpload(options, objectName, blob, {
+        partSize: 1024 * 1024,
+        parallel: 1,
+        progress(_percentage, cp) {
+          if (cp.doneParts.length >= 2) {
+            checkpoint = cp
+            throw new Error('simulated interruption')
+          }
+        },
+      }),
+    ).rejects.toThrow('simulated interruption')
+    expect(checkpoint).not.toBeNull()
+
+    // Resume with the interrupted upload's checkpoint: the server-side
+    // session is reused, parts 1-2 are already done, so only part 3 is
+    // uploaded and a single 100% progress event fires.
+    const resumedPercentages: number[] = []
+    const result = await multipartUpload(options, objectName, blob, {
+      checkpoint,
+      progress: (percentage) => {
+        resumedPercentages.push(percentage)
+      },
+    })
+    expect(resumedPercentages).toEqual([1])
+    expect(result.etag).toBeTruthy()
+
+    try {
+      const url = oss.signatureUrl(objectName)
+      const getRes = await fetch(url)
+      expect(getRes.status).toBe(200)
+      const downloaded = new Uint8Array(await getRes.arrayBuffer())
+      expect(downloaded.length).toBe(size)
+      for (let i = 0; i < size; i += 64 * 1024) {
+        expect(Array.from(downloaded.subarray(i, i + 64 * 1024))).toEqual(
+          Array.from(bytes.subarray(i, i + 64 * 1024)),
+        )
       }
     } finally {
       await oss.delete(objectName)
