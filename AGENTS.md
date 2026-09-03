@@ -34,6 +34,6 @@ Issues and specs for this repo live as GitHub issues, accessed via the `gh` CLI.
 
 Five canonical roles with default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
 
-### Domain docs
+### Release
 
-Single-context layout: one `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Cutting a release: `pnpm release` (bumpp + changelogen). See `docs/agents/release.md`; read `bump.config.ts` before touching the flow.
