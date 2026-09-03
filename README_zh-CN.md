@@ -505,7 +505,7 @@ multipartUpload(
 * **multipartOptions**: `MultipartUploadOptions` — 可选的上传选项：
   + **parallel?**: `number` — 并发上传的分片数，默认 `5`。
   + **partSize?**: `number` — 分片大小（字节），默认 `1MB`（`1024 * 1024`）。低于 `100KB` 的值会被提升到强制下限 `100KB`。
-  + **checkpoint?**: `Checkpoint` — 中断上传的恢复状态（`{ file, name, uploadId, partSize, parts, doneParts }`）。仅当 checkpoint 的文件大小与当前输入一致时才生效；恢复时沿用 checkpoint 的 `partSize`，分片区间与最终分片列表才能保持一致。恢复会跳过 init 请求，因此 `meta`/`mime`/`headers` 此时不再应用（服务端保留首次 init 时的值）。
+  + **checkpoint?**: `Checkpoint` — 中断上传的恢复状态（`{ file, name, uploadId, partSize, parts, doneParts }`）。仅当 checkpoint 的文件大小与当前输入一致时才生效；恢复时沿用 checkpoint 的 `partSize`，分片区间与最终分片列表才能保持一致。恢复会跳过 init 请求，因此 `meta`/`mime`/`headers` 此时不再应用（服务端保留首次 init 时的值——Azure 除外：它的 init 只是本地标签、没有请求，元数据仅存于内存，页面重载后恢复会丢失元数据）。
   + **progress?**: `(percentage: number, checkpoint: Checkpoint, res?: any) => void` — 每片上传完成后调用，语义见下。
   + **meta?**: `Record<string, any>` — 对象元数据，作为 provider 专属的元数据请求头附加在 init 请求上（Azure Block Blob 入口会暂存这些头并在最终 Put Block List 上应用——见 [Azure 说明](#azure-blob-storage)）。
   + **mime?**: `string` — 对象的 `Content-Type`，设置在 init 请求上。
@@ -521,6 +521,47 @@ multipartUpload(
 #### 返回值
 
 * `Promise<CompleteMultipartUploadResult>` — `{ name, etag, bucket?, res? }`，完成请求的结果。
+
+#### 断点续传（checkpoint）
+
+分片上传支持断点续传，但 `multipartUpload` 只提供"引擎"——它从不持久化状态。重试时把同一个 `checkpoint` 传回，SDK 会复用服务端会话（`uploadId`）、跳过 `doneParts` 中已上传的分片、只补传缺口，然后照常完成合并。持久化 checkpoint（或在文件变化时丢弃它）是应用的责任：`progress` 回调会在每一片完成后把最新的 checkpoint 交给你。
+
+```js
+// 每片完成后保存 checkpoint；file 不要写入存储（Blob 无法序列化），
+// 恢复时重新挂上当前文件即可。
+function uploadWithResume(options, objectName, file) {
+  const key = 'upload:' + objectName;
+  const saved = JSON.parse(localStorage.getItem(key) || 'null');
+  const checkpoint = saved && {
+    file, // 大小必须与中断时的文件一致
+    name: objectName,
+    uploadId: saved.uploadId,
+    partSize: saved.partSize,
+    parts: [],
+    doneParts: saved.doneParts,
+  };
+  return multipartUpload(options, objectName, file, {
+    checkpoint,
+    progress(percentage, cp) {
+      localStorage.setItem(key, JSON.stringify({
+        uploadId: cp.uploadId,
+        partSize: cp.partSize,
+        doneParts: cp.doneParts,
+      }));
+    },
+  }).then((result) => {
+    localStorage.removeItem(key);
+    return result;
+  });
+}
+```
+
+恢复注意事项：
+
+- 恢复只校验文件**大小**（按 `checkpoint.file` 的大小比较）。大小相同但内容不同的文件无法察觉——只要用户换了文件，就应清除已保存的 checkpoint。
+- 恢复时 `partSize` 沿用 checkpoint 的值；换用不同的值会导致分片区间错位、最终分片列表出错。
+- 服务端会话不会永久保留：provider 会按各自的策略清理未完成的上传，过期后已保存的 `uploadId` 失效，上传将从零开始。
+- Azure 例外：见上方 `checkpoint` 参数说明——它的元数据只存在内存中，页面重载后恢复会丢失元数据。
 
 ### putSymlink(options, objectName, targetObjectName)
 

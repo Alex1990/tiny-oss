@@ -521,7 +521,7 @@ multipartUpload(
 * **multipartOptions**: `MultipartUploadOptions` — optional upload options:
   + **parallel?**: `number` — how many parts upload concurrently, default `5`.
   + **partSize?**: `number` — part size in bytes, default `1MB` (`1024 * 1024`). Values below `100KB` are raised to the enforced `100KB` minimum.
-  + **checkpoint?**: `Checkpoint` — resume state from an interrupted upload (`{ file, name, uploadId, partSize, parts, doneParts }`). It is honored only when the checkpoint's file size matches the current input; on resume, `partSize` is taken from the checkpoint so part ranges and the final part list stay consistent. Resuming skips the init call, so `meta`/`mime`/`headers` are not applied then (the server keeps the values from the original init).
+  + **checkpoint?**: `Checkpoint` — resume state from an interrupted upload (`{ file, name, uploadId, partSize, parts, doneParts }`). It is honored only when the checkpoint's file size matches the current input; on resume, `partSize` is taken from the checkpoint so part ranges and the final part list stay consistent. Resuming skips the init call, so `meta`/`mime`/`headers` are not applied then (the server keeps the values from the original init — except Azure: its init is a local label with no request, so metadata is held only in memory and a resumed upload loses it once the page reloads).
   + **progress?**: `(percentage: number, checkpoint: Checkpoint, res?: any) => void` — called after each part finishes; see semantics below.
   + **meta?**: `Record<string, any>` — object metadata, attached as per-provider metadata headers on the init request (the Azure block-blob entry holds them and applies them on the final Put Block List — see the [Azure notes](#azure-blob-storage)).
   + **mime?**: `string` — `Content-Type` for the object, set on the init request.
@@ -537,6 +537,47 @@ multipartUpload(
 #### Return
 
 * `Promise<CompleteMultipartUploadResult>` — `{ name, etag, bucket?, res? }`, the result of the completing call.
+
+#### Resumable uploads (checkpoint)
+
+Multipart uploads are resumable, but `multipartUpload` provides only the engine — it never persists state. Pass the same `checkpoint` back on a retry and it reuses the server-side session (`uploadId`), skips the parts already listed in `doneParts`, uploads only the gaps and completes as usual. Persisting the checkpoint, or dropping it when the file changes, is up to you: the `progress` callback hands you the up-to-date checkpoint after every part.
+
+```js
+// Save the checkpoint as parts finish; keep `file` out of storage (a Blob
+// cannot be serialized) and re-attach the current file when resuming.
+function uploadWithResume(options, objectName, file) {
+  const key = 'upload:' + objectName;
+  const saved = JSON.parse(localStorage.getItem(key) || 'null');
+  const checkpoint = saved && {
+    file, // size must match the interrupted upload's file
+    name: objectName,
+    uploadId: saved.uploadId,
+    partSize: saved.partSize,
+    parts: [],
+    doneParts: saved.doneParts,
+  };
+  return multipartUpload(options, objectName, file, {
+    checkpoint,
+    progress(percentage, cp) {
+      localStorage.setItem(key, JSON.stringify({
+        uploadId: cp.uploadId,
+        partSize: cp.partSize,
+        doneParts: cp.doneParts,
+      }));
+    },
+  }).then((result) => {
+    localStorage.removeItem(key);
+    return result;
+  });
+}
+```
+
+Resume notes:
+
+- Resuming checks the file **size** only (`checkpoint.file` is compared by size). A different file with the same size is undetected — clear the saved checkpoint whenever the user picks another file.
+- `partSize` is taken from the checkpoint on resume; uploading with a different one would misalign part ranges and corrupt the final part list.
+- The server-side session is not kept forever: providers expire incomplete uploads on their own schedule, after which the saved `uploadId` is stale and the upload restarts from scratch.
+- Azure caveat: see the `checkpoint` argument above — its metadata lives in memory only, so a resumed upload loses it once the page reloads.
 
 ### putSymlink(options, objectName, targetObjectName)
 
