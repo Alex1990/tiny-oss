@@ -23,17 +23,28 @@ tiny-oss is a tiny object storage SDK focused on uploading, with a functional AP
 ## References
 
 - Usage and per-provider options: `README.md`; building a custom provider: README "Extension" section and `src/provider.ts`.
+- Domain docs: `docs/agents/domain.md` (CONTEXT/ADR consumption, glossary usage).
 
-## Agent skills
+## Operations (loop)
 
-### Issue tracker
+This repo is operated by an autonomous loop system. If you are a loop run
+(launched by `.github/workflows/loop.yml`), follow `docs/agents/ops.md` first.
 
-Issues and specs for this repo live as GitHub issues, accessed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Five canonical roles with default label strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
-
-### Release
-
-Cutting a release: `pnpm release` (bumpp + changelogen). See `docs/agents/release.md`; read `bump.config.ts` before touching the flow.
+- Issue tracker: GitHub, via the `gh` CLI. Issues and PRs share one tracker and
+  one label system — PRs ARE a triage surface. See `docs/agents/issue-tracker.md`.
+- Triage labels: five canonical roles — `needs-triage`, `needs-info`,
+  `ready-for-agent`, `ready-for-human`, `wontfix`. Exact semantics:
+  `docs/agents/triage-labels.md`.
+- Release: the loop prepares and verifies; a human cuts the release with
+  `pnpm release` and publishes with `pnpm build && pnpm publish`. See
+  `docs/agents/release.md`.
+- Skills: `skills/*/SKILL.md` (triage, research, verify, review, sweep, retro)
+  fix how each stage is done. Invoke them per `ops.md`, never skip the
+  opening/closing rituals.
+- State layer: task state, locks and metrics live in the loop's R2 state bucket
+  (synced into this checkout's `state/` dir for the duration of your run —
+  authoritative JSON + `SUMMARY.md`). Never keep cross-run state in your
+  context or in comments only.
+- Norms layer changes (this file, `docs/agents/*`, `skills/*`) are proposals:
+  open a PR, never merge your own change.
+- You are the maker or the checker, never both for the same change.

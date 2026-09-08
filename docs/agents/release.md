@@ -2,6 +2,13 @@
 
 How to cut a release of tiny-oss. Tooling: `bumpp` drives the version bump / commit / tag / push; `changelogen` maintains `CHANGELOG.md`. Orchestration lives in `package.json` scripts and `bump.config.ts` — read `bump.config.ts` before changing anything here.
 
+## Loop preflight (recommended)
+
+The loop runs stage=release before you cut a release: all gates green, a
+version suggestion (feature → minor, fix/docs → patch, breaking → human),
+and a preview changelog. Read its report comment, then follow the Flow below
+yourself — `pnpm release` and `pnpm publish` stay human-only.
+
 ## Flow
 
 1. **Working tree must be clean.** `bump.config.ts` sets `all: true`, so the release commit runs `git commit -a` and sweeps up every tracked modification and staged file. Uncommitted work would land in the release commit.

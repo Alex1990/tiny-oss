@@ -1,15 +1,21 @@
 # Triage Labels
 
-The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
+Issues and PRs share one label system (PRs are a triage surface in this repo).
+Five canonical roles drive the loop:
 
-| Label in mattpocock/skills | Label in our tracker | Meaning                                  |
-| -------------------------- | -------------------- | ---------------------------------------- |
-| `needs-triage`             | `needs-triage`       | Maintainer needs to evaluate this issue  |
-| `needs-info`               | `needs-info`         | Waiting on reporter for more information |
-| `ready-for-agent`          | `ready-for-agent`    | Fully specified, ready for an AFK agent  |
-| `ready-for-human`          | `ready-for-human`    | Requires human implementation            |
-| `wontfix`                  | `wontfix`            | Will not be actioned                     |
+| Label | Meaning | Who acts next |
+| --- | --- | --- |
+| `needs-triage` | Needs a maintainer to evaluate (loop couldn't decide; too risky; external PR) | Maintainer |
+| `needs-info` | Waiting on the reporter: exact questions are in the comments | Reporter; loop closes after 7 days unanswered |
+| `ready-for-agent` | Fully specified, an AFK agent may handle it unattended | Loop workflow (claims & processes) |
+| `ready-for-human` | Requires a human: implementation, merge of a loop PR, or a release call | Maintainer |
+| `wontfix` | Will not be actioned (duplicate / off-scope / pure question already answered) | — (issue closed with a reason) |
 
-When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
+Conventions
 
-Edit the right-hand column to match whatever vocabulary you actually use.
+- The loop labels/unlabels on GitHub and mirrors into `state/tasks/<id>.json`.
+  GitHub is the source of truth; `sweep` reconciles drift.
+- Never stack contradictory roles on one item (e.g. `needs-triage` +
+  `ready-for-agent`).
+- Apply to PRs with the `gh pr` equivalents.
+- When in doubt, use `needs-triage` — the loop prefers a human over a wrong guess.

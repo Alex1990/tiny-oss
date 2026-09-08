@@ -15,7 +15,14 @@ Infer the repo from `git remote -v`; `gh` does this automatically when run insid
 
 ## Pull requests as a triage surface
 
-**PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
+**PRs as a request surface: yes.
+> PRs run through the same labels and states as issues (see
+> `triage-labels.md`). Loop-produced PRs use head branch `loop/<issueNo>-*`
+> and carry `loop-task: #<n>` in the body; label them via `gh pr edit`.
+> External PRs (authorAssociation NOT in OWNER/MEMBER/COLLABORATOR) get
+> read-only analysis on the no-secrets `pull_request` context; write actions
+> happen in default-branch contexts (`pull_request_target` runs this repo's
+> own scripts only), never on fork-triggered runners.
 
 When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr` equivalents:
 
@@ -43,3 +50,9 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
 - **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
 - **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+## Loop integration
+
+The loop workflow serializes runs (concurrency group) and mirrors GitHub
+state into the loop's R2 state layer (synced to a local `state/` dir
+during your run), writing acceptance metrics from PR close/merge and
+release events. Don't hand-edit `state/`; report drift to sweep.
