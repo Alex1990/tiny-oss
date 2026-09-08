@@ -54,6 +54,7 @@
     "changelog": "changelogen",
     "release": "bumpp",
     "dev": "vite",
+    "loop": "node scripts/loop/run.mjs",
     "serve": "tsx test/server.ts",
     "test": "vitest",
     "test:azure-oracle": "tsx test/azure-oracle.node.ts",
