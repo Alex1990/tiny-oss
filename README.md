@@ -8,13 +8,32 @@ A tiny object storage SDK focused on uploading: Aliyun OSS, Tencent Cloud COS, H
 
 **Upgrading from 0.x? See the [upgrade guide](UPGRADING.md).**
 
-## Supported providers
+## Table of Contents
 
-- [Aliyun OSS (`tiny-oss`)](#usage) — the default entry
-- [AWS S3 (`tiny-oss/aws`)](#aws-s3) — SigV4 signing; also drives S3-compatible stores such as [MinIO, Cloudflare R2 and Google Cloud Storage](#s3-compatible-stores-minio-cloudflare-r2-google-cloud-storage-)
-- [Azure Blob Storage (`tiny-oss/azure`)](#azure-blob-storage)
-- [Huawei Cloud OBS (`tiny-oss/obs`)](#huawei-cloud-obs)
-- [Tencent Cloud COS (`tiny-oss/cos`)](#tencent-cloud-cos)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Basic](#basic)
+  - [Binding options once](#binding-options-once)
+  - [Upload progress](#upload-progress)
+  - [Upload callback](#upload-callback)
+  - [Protocol](#protocol)
+  - [Compatibility](#compatibility)
+  - [Non-browser environments](#non-browser-environments)
+- [Providers](#providers)
+  - [AWS S3](#aws-s3)
+  - [Tencent Cloud COS](#tencent-cloud-cos)
+  - [Huawei Cloud OBS](#huawei-cloud-obs)
+  - [Azure Blob Storage](#azure-blob-storage)
+- [Extension](#extension)
+  - [Composing a custom provider](#composing-a-custom-provider)
+  - [Contributing a provider to the repo](#contributing-a-provider-to-the-repo)
+- [API](#api)
+  - [options](#options)
+  - [put](#putoptions-objectname-blob-putoptions)
+  - [multipartUpload](#multipartuploadoptions-objectname-blob-multipartoptions)
+  - [putSymlink](#putsymlinkoptions-objectname-targetobjectname)
+  - [signatureUrl](#signatureurloptions-objectname-urloptions)
+- [LICENSE](#license)
 
 ## Installation
 
