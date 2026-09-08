@@ -6,7 +6,7 @@ Five canonical roles drive the loop:
 | Label | Meaning | Who acts next |
 | --- | --- | --- |
 | `needs-triage` | Needs a maintainer to evaluate (loop couldn't decide; too risky; external PR) | Maintainer |
-| `needs-info` | Waiting on the reporter: exact questions are in the comments | Reporter; loop closes after 7 days unanswered |
+| `needs-info` | Waiting on the reporter: exact questions are in the comments | Reporter; loop closes after 30 days unanswered |
 | `ready-for-agent` | Fully specified, an AFK agent may handle it unattended | Loop workflow (claims & processes) |
 | `ready-for-human` | Requires a human: implementation, merge of a loop PR, or a release call | Maintainer |
 | `wontfix` | Will not be actioned (duplicate / off-scope / pure question already answered) | — (issue closed with a reason) |

@@ -16,7 +16,7 @@ description: Scheduled consistency pass over the loop system itself — reconcil
    - `waiting-merge` PR merged/closed since last run → record acceptance
      event if the dispatcher missed it (label it `sweep-corrected`).
 2. Expiry rules:
-   - `needs-info` unanswered > 7 days → close with comment, `status: closed`.
+   - `needs-info` unanswered > 30 days → close with comment, `status: closed`.
    - `waiting-merge` untouched > 14 days → comment nudge once; if the human
      then closes without merging → `rejected` (counted).
 3. Dependency/security notifications (Dependabot alert, security advisory
