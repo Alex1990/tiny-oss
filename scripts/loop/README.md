@@ -48,8 +48,11 @@ pnpm loop summary | view                    # 摘要 / 任务列表
 写边界（2026-09-08 升级）：**放开到 commit/push/开 PR + 打标/评论**；
 合并 PR / npm 发布仍人工（认知守卫不变）。
 
-- [x] D1 `--issue` 导入未校验 `state == OPEN`：closed issue / PR 也会建新任务。
-      真实流程只对 open issue 触发 triage → 脚本应拒导并提示。
+- [x] D9 GitHub 重开的终态任务无法领取：本地 status=closed/rejected 时
+      `start --task` 直接拒领，而 ops.md 触发映射要求 reopened → triage →
+      `start --issue` 又会被 D3 防重拦下。现于领取时自动 `gh issue view` 校验：
+      GitHub 侧 OPEN → 重置 ready + 清 decision + timeline 记 reopened 后放行；
+      GitHub 侧仍关闭 → 维持拒领（回归：closed+gh=CLOSED 拒 / closed+gh=OPEN 放行）。
 - [x] D6 `start` 输出指引偏弱：开场仪式要求读 AGENTS.md + ops.md + 对应 skill，
       但脚本没把这些路径打出来 → 应把三件套路径与 runId 一起打印。
 - [x] D3 issue 补全后重跑：`start --issue` 遇已存在任务直接拒绝（正确防重），

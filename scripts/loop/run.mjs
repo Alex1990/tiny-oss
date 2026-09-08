@@ -20,10 +20,9 @@
  *   needs-info   → waiting-info   + needs-info
  *   needs-triage → waiting-human  + needs-triage       （cannot-handle/低置信/failed）
  *   pr-opened    → waiting-merge  + ready-for-human
- *   closed       → closed                                （question/wontfix 直接关）
- *   rejected     → rejected
- *   accepted     → accepted
- *
+ * D9（GitHub 重开转移）：start 领取时若本地任务为终态（closed/rejected）而 GitHub
+ * issue 已重开为 OPEN，自动重置 ready + 清 decision + timeline 记 reopened 再领取，
+ * 使 reopened 事件按 ops.md 触发映射回到 triage。
  * 远程写链路：真实 issue（有 url）收尾自动打标/评论/关闭（syncGithub）；
  * 本地合成任务自动跳过，--no-github 强制跳过。引擎(headless)自动跑是 A1+ 的事，
  * 本脚本只负责仪式（开场领取/过程记录/收尾回写）。
@@ -169,15 +168,29 @@ async function cmdStart(args) {
     t = await loadTask(task ?? fail('--task <n> 或 --new/--issue 必填'));
   }
 
-  // 领取检查：new/ready/waiting-info 可领；processing 活锁拒领、死锁(TTL>1h)可覆盖
+  // 领取检查：new/ready/waiting-info 可领；processing 活锁拒领、死锁(TTL>1h)可覆盖；
+  // 终态（closed/rejected）任务若 GitHub issue 已重开（OPEN）→ 自动重置为 ready 再领取（D9）
   const claimable = ['new', 'ready', 'waiting-info'];
   if (t.status === 'processing') {
     const lk = t.lockedBy;
     const dead = lk && Date.now() - Date.parse(lk.since) > (lk.ttl || 3600) * 1000;
     if (!dead) fail(`任务 #${t.id} 被 ${lk?.runId ?? '?'} 持有（status=processing），请先结束或等 TTL 过期`);
     console.warn(`[loop] warn: 任务 #${t.id} 的锁已过期（${lk?.runId}），本次接管续跑`);
-  } else if (!claimable.includes(t.status)) {
-    fail(`任务 #${t.id} status=${t.status} 不可领取（可领: ${claimable.join('/')}）`);
+  } else if (!claimable.includes(t.status) && t.url) {
+    const repo = ghRepoOf(t.url);
+    const ghState = repo
+      ? spawnSync('gh', ['issue', 'view', String(t.id), '-R', repo, '--json', 'state', '-q', '.state'], { encoding: 'utf8' })
+      : null;
+    const ghOpen = ghState && ghState.status === 0 && ghState.stdout.trim() === 'OPEN';
+    if (ghOpen) {
+      console.warn(`[loop] warn: 任务 #${t.id} 本地 status=${t.status}，GitHub issue 已重开（OPEN）→ 重置为 ready 后领取（D9）`);
+      t.status = 'ready';
+      t.decision = null;
+      t.timeline.push({ at: nowIso(), event: 'reopened', by: 'github', detail: 'GitHub issue 重开 → 终态重置为 ready（D9）' });
+    }
+  }
+  if (!claimable.includes(t.status)) {
+    fail(`任务 #${t.id} status=${t.status} 不可领取（可领: ${claimable.join('/')}；GitHub 已重开的终态任务会自动放行）`);
   }
 
   const rid = runId();
