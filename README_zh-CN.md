@@ -4,13 +4,32 @@
 
 **[English](README.md) | 简体中文**
 
-## 支持的存储服务
+## 目录
 
-- [阿里云 OSS（`tiny-oss`）](#使用) — 默认入口
-- [AWS S3（`tiny-oss/aws`）](#aws-s3) — SigV4 签名；同样适用于 S3 兼容存储，如 [MinIO、Cloudflare R2、Google Cloud Storage](#s3-compatible-stores-minio-cloudflare-r2-google-cloud-storage-)
-- [Azure Blob Storage（`tiny-oss/azure`）](#azure-blob-storage)
-- [华为云 OBS（`tiny-oss/obs`）](#华为云-obs)
-- [腾讯云 COS（`tiny-oss/cos`）](#腾讯云-cos)
+- [安装](#安装)
+- [使用](#使用)
+  - [基础使用](#基础使用)
+  - [绑定选项参数](#绑定选项参数)
+  - [上传进度](#上传进度)
+  - [上传回调](#上传回调)
+  - [协议](#协议)
+  - [兼容性](#兼容性)
+  - [非浏览器环境](#非浏览器环境)
+- [供应商](#供应商)
+  - [AWS S3](#aws-s3)
+  - [腾讯云 COS](#腾讯云-cos)
+  - [华为云 OBS](#华为云-obs)
+  - [Azure Blob Storage](#azure-blob-storage)
+- [扩展](#扩展)
+  - [组装自定义 provider](#组装自定义-provider)
+  - [向仓库贡献 provider](#向仓库贡献-provider)
+- [API](#api)
+  - [options](#options)
+  - [put](#putoptions-objectname-blob-putoptions)
+  - [multipartUpload](#multipartuploadoptions-objectname-blob-multipartoptions)
+  - [putSymlink](#putsymlinkoptions-objectname-targetobjectname)
+  - [signatureUrl](#signatureurloptions-objectname-urloptions)
+- [许可证协议](#许可证协议)
 
 ## 安装
 
