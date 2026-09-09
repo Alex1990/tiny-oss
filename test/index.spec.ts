@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
 import {
   put,
   putSymlink,
@@ -37,11 +37,20 @@ function getObjectName() {
 }
 
 describe('integration', () => {
+  let configured = false
+
+  beforeAll(async () => {
+    const res = await fetch('http://localhost:8080/api/oss-config')
+    const data = (await res.json()) as OssConfig
+    configured = !!(data.accessKeyId && data.accessKeySecret && data.bucket && data.region)
+  })
+
   it('should throw if options are missing', async () => {
     await expect(put({} as any, 'obj', new Blob(['x']))).rejects.toThrow(/need accessKeyId/)
   })
 
-  it('put', async () => {
+  it('put', async ({ skip }) => {
+    if (!configured) return skip()
     const content = 'put: hello 你好'
     const objectName = getObjectName()
     const res = await fetch('http://localhost:8080/api/oss-config')
@@ -61,7 +70,8 @@ describe('integration', () => {
     }
   })
 
-  it('putSymlink', async () => {
+  it('putSymlink', async ({ skip }) => {
+    if (!configured) return skip()
     const content = 'putSymlink: hello 你好'
     const objectName = getObjectName()
     const targetObjectName = getObjectName()
@@ -85,7 +95,8 @@ describe('integration', () => {
     }
   })
 
-  it('signatureUrl', async () => {
+  it('signatureUrl', async ({ skip }) => {
+    if (!configured) return skip()
     const content = 'signatureUrl: hello 你好'
     const objectName = getObjectName()
     const res = await fetch('http://localhost:8080/api/oss-config')
@@ -108,7 +119,8 @@ describe('integration', () => {
     }
   })
 
-  it('signatureUrl with non-ASCII object name', async () => {
+  it('signatureUrl with non-ASCII object name', async ({ skip }) => {
+    if (!configured) return skip()
     const content = 'signatureUrl 中文: hello 你好'
     const objectName = `中文文件-${Date.now()}.txt`
     const res = await fetch('http://localhost:8080/api/oss-config')
@@ -129,7 +141,8 @@ describe('integration', () => {
     }
   })
 
-  it('multipartUpload', async () => {
+  it('multipartUpload', async ({ skip }) => {
+    if (!configured) return skip()
     const objectName = getObjectName()
     const res = await fetch('http://localhost:8080/api/oss-config')
     const data = (await res.json()) as OssConfig
@@ -168,7 +181,8 @@ describe('integration', () => {
     }
   })
 
-  it('put stsToken', async () => {
+  it('put stsToken', async ({ skip }) => {
+    if (!configured) return skip()
     const content = 'put stsToken: hello 你好'
     const objectName = getObjectName()
     const res = await fetch('http://localhost:8080/api/sts')
@@ -194,7 +208,8 @@ describe('integration', () => {
     }
   })
 
-  it('signatureUrl stsToken', async () => {
+  it('signatureUrl stsToken', async ({ skip }) => {
+    if (!configured) return skip()
     const content = 'signatureUrl: hello 你好'
     const objectName = getObjectName()
     const res = await fetch('http://localhost:8080/api/sts')
@@ -220,7 +235,8 @@ describe('integration', () => {
     }
   })
 
-  it('put ArrayBuffer input', async () => {
+  it('put ArrayBuffer input', async ({ skip }) => {
+    if (!configured) return skip()
     const size = 2 * 1024 * 1024
     const bytes = new Uint8Array(size)
     for (let i = 0; i < size; i++) bytes[i] = i % 251
@@ -246,7 +262,8 @@ describe('integration', () => {
     }
   })
 
-  it('multipartUpload ArrayBuffer input', async () => {
+  it('multipartUpload ArrayBuffer input', async ({ skip }) => {
+    if (!configured) return skip()
     const size = 3 * 1024 * 1024
     const bytes = new Uint8Array(size)
     for (let i = 0; i < size; i++) bytes[i] = i % 251
@@ -274,7 +291,8 @@ describe('integration', () => {
     }
   })
 
-  it('multipartUpload resumes from a checkpoint after an interruption', async () => {
+  it('multipartUpload resumes from a checkpoint after an interruption', async ({ skip }) => {
+    if (!configured) return skip()
     const objectName = getObjectName()
     const res = await fetch('http://localhost:8080/api/oss-config')
     const data = (await res.json()) as OssConfig
@@ -333,7 +351,8 @@ describe('integration', () => {
     }
   })
 
-  it('fetch transport put and multipartUpload', async () => {
+  it('fetch transport put and multipartUpload', async ({ skip }) => {
+    if (!configured) return skip()
     const res = await fetch('http://localhost:8080/api/oss-config')
     const data = (await res.json()) as OssConfig
     const { accessKeyId, accessKeySecret, region, bucket } = data
@@ -379,7 +398,8 @@ describe('integration', () => {
     }
   })
 
-  it('bindOptions put', async () => {
+  it('bindOptions put', async ({ skip }) => {
+    if (!configured) return skip()
     const content = 'bindOptions put: hello 你好'
     const objectName = getObjectName()
     const res = await fetch('http://localhost:8080/api/oss-config')
