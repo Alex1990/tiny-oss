@@ -8,12 +8,11 @@ export default defineConfig({
       enabled: true,
       provider: playwright(),
       // https://vitest.dev/config/browser/playwright
-      instances: [
-        { browser: 'chromium' },
-      ],
+      instances: [{ browser: 'chromium' }],
     },
     coverage: {
-      provider: 'v8' // or 'istanbul'
+      provider: 'v8', // or 'istanbul'
+      reporter: ['text', 'html', 'json-summary'],
     },
   },
 })

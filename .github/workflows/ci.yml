@@ -66,4 +66,10 @@ jobs:
           curl -sf -o /dev/null http://localhost:8080/api/oss-config || {
             echo "test server did not start:"; cat /tmp/serve.log; exit 1
           }
-          pnpm test:ci
+          pnpm test:ci:coverage
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/coverage-comment.mjs "${{ github.event.pull_request.number }}"
