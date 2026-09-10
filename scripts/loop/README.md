@@ -86,8 +86,7 @@ GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single w
 | `issues` opened/reopened | run(triage) |
 | `issues` edited, `issue_comment` created | inbox first (never silently dropped), then run per task status |
 | loop PR (`loop/<n>-*` **and** `loop-task: #<n>`) opened/synchronize | run(pr-review) |
-| dependabot PR (author `dependabot[bot]` or head `dependabot/*`) | run(deps) |
-| external PR (author_association ∉ OWNER/MEMBER/COLLABORATOR) | run(triage, readonly) |
+| same-repo PR, other branches | run(triage) — PRs are a triage surface |
 | `pull_request_review` on a loop PR | run(pr-review) |
 | `pull_request_target` closed (loop PR) | metrics: merged / closed-unmerged |
 | `release` published | metrics: released |
@@ -95,6 +94,24 @@ GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single w
 | `workflow_dispatch` | run per inputs (`task`/`stage`); `execute_writes=true` = L2 rehearsal |
 
 Anything else is a no-op that still exits 0 — event storms cost nothing.
+
+**Credential guard on `pull_request` (job-level `if`).** This is the only event
+we listen to where secrets can be absent: GitHub treats a Dependabot-triggered
+run like a fork run (read-only token, **no secrets at all**), and a fork PR
+never has them. Unguarded, such a run dies at `Pull state from R2` and looks
+exactly like a real defect. So a `pull_request` run is skipped unless the head
+repository is this one **and** the actor is not `dependabot[bot]`.
+
+The routing table above still describes what the *router* decides; the guard
+means two of those rows cannot actually run today:
+
+| Row | Status under A1 |
+| --- | --- |
+| external PR → run(triage, readonly) | **never runs** — even read-only analysis needs the LLM key. See D28. |
+| dependabot PR → run(deps) | **never runs** — no secrets. See D28. |
+
+`pull_request_target` (loop PR closed), `issues`, `schedule`, `release` and
+`workflow_dispatch` all keep their secrets and are unaffected.
 
 ### Outcomes: two vocabularies
 
@@ -275,9 +292,14 @@ was *correct*, and whether new events produce proposals that match reality.
       PR #36 has no labels and no label timeline events, and no item in the
       repository carries a loop label written by this run (the single
       `ready-for-human` hit is issue #30, closed on 09-08 during A0).
-- [ ] Every route has one real execution on Actions: issue triage / bugfix-feature
-      / deps / external-PR readonly / release preflight (deps and external-PR
-      were exercised locally during A0; `sweep` ran for real — run `34511392550`)
+- [ ] Every route that can run has one real execution on Actions: issue triage /
+      bugfix-feature / pr-review / sweep / release preflight. (`deps` and
+      external-PR are unrunnable under A1 — see D28 — and were exercised
+      locally during A0; `sweep` ran for real, run `34511392550`.)
+- [ ] **The guard holds**: a Dependabot PR and a fork PR both show the loop job
+      as *skipped* (not failed), while a same-repo PR and a loop PR still run.
+      Verify by pushing to a same-repo branch, and by observing the next
+      Dependabot PR arrive.
 - [ ] Serial lock: two consecutive dispatches queue, never run concurrently
       (run timestamps prove it)
 - [ ] Crash path: cancel a job mid-run → task stays `processing` → next sweep
@@ -373,12 +395,24 @@ was *correct*, and whether new events produce proposals that match reality.
 - [x] D20 (A1) Three comments still pointed at `scripts/loop/lib/` after the D10
       rename to `shared/`, and `run.mjs` named a `run-stage.mjs` that never
       existed (the orchestrator is `entry.mjs`). Spotted by a real run.
-- [ ] D21 (proposed by a real run, not yet implemented) The dependabot CI
-      failure is a *reporting* step, not a test failure: `Comment coverage on
-      PR` gets `gh: Resource not accessible by integration (HTTP 403)` because
-      GitHub forces the token read-only for Dependabot-triggered workflows.
-      `permissions:` cannot lift that. Needs a maintainer decision (guard the
-      step, `continue-on-error`, or move it to a `pull_request_target` job).
+- [x] D21 (A1) The dependabot CI failure was a *reporting* step, not a test
+      failure: `Comment coverage on PR` got `gh: Resource not accessible by
+      integration (HTTP 403)` because GitHub issues a read-only `GITHUB_TOKEN`
+      to Dependabot-triggered runs. An earlier note here claimed `permissions:`
+      could not lift that — wrong: that is the **fork** rule. Dependabot runs
+      *can* be widened, and the official docs name `permissions` as the fix.
+      The `test` job now declares `contents: read` + `pull-requests: write`, so
+      a Dependabot PR no longer shows a red CI whose tests all passed.
+- [ ] D28 (A1, open) Both `pull_request` rows that need no write access are
+      nevertheless unrunnable, because the platform withholds **all** secrets
+      (not just write permission) from Dependabot-triggered runs and from fork
+      PRs: even read-only analysis needs the LLM key, and `deps` needs the R2
+      credentials. The job-level guard skips them (see the trigger section) so
+      they fail visibly *before* wasting a runner rather than after pulling
+      state. Options when A1's week is over: a `pull_request_target` two-step
+      where only this repository's scripts run (§6's design), or Dependabot
+      secrets for `deps`. Chosen for A1: neither — the week is for validating
+      the run contract, and the guard keeps the red/green signal honest.
 - [x] D22 (A1) `renderSummary` had no section for `status: new`, so a task the
       sweep had just created was invisible in the human summary — the one item
       most in need of attention. Reported by a real sweep run; a `Unprocessed (new)`
