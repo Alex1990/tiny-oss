@@ -488,6 +488,17 @@ was *correct*, and whether new events produce proposals that match reality.
       had also been written out inline in more than one place, are now the single
       exported `TERMINAL_STATUSES` — duplicated lists are this codebase's
       recurring failure mode.
+- [ ] D32 (A1, open — not yet reachable) The acceptance dedup key is
+      `taskId|event|pr`, but sweep's mandate (docs + `skills/sweep/SKILL.md`) is
+      to rewrite a *missed* event "labelled `sweep-corrected`". Read literally
+      that means writing `event: "sweep-corrected"`, which changes the key and
+      therefore appends a **second** row for the same closure — double-counting
+      the PR in the auto-acceptance rate, which is the one number retro exists
+      to produce. Not yet triggerable: no sweep implementation writes it today.
+      The fix when sweep lands is to keep the original `event` value and mark
+      the row through the existing `writer` field (`writer: "sweep-corrected"`),
+      so dedup still matches. Recorded now because the ambiguity is in the norms
+      layer, and whoever implements the backfill will read that sentence first.
 
 ## Environment facts
 
