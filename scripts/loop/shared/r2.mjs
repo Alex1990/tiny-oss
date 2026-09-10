@@ -101,17 +101,41 @@ export function r2Env() {
     AWS_DEFAULT_REGION: 'auto',
     AWS_REQUEST_CHECKSUM_CALCULATION: 'when_required',
     AWS_EC2_METADATA_DISABLED: 'true',
+    // AWS CLI v2 会把结果交给 pager（`less`）。脚本化调用下这表现为"命令挂起"——
+    // 光标停住、毫无输出、其实是在等按键。程序化调用永远不要 pager。
+    AWS_PAGER: '',
+    // 跨境访问 R2 的握手约 0.4s，但慢链路下会退化。给出明确的边界，
+    // 让失败快速暴露成错误，而不是长时间静默重试。
+    AWS_MAX_ATTEMPTS: process.env.AWS_MAX_ATTEMPTS ?? '3',
   };
 }
+
+/** 全局 CLI 边界：连接/读取超时，避免"看起来挂起"。 */
+const CLI_LIMITS = ['--cli-connect-timeout', '15', '--cli-read-timeout', '60'];
 
 const endpoint = () => `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
 const s3url = (prefix) => `s3://${bucket()}/${prefix}`;
 
-function aws(args, { label }) {
-  const r = spawnSync('aws', args, { env: r2Env(), encoding: 'utf8' });
+/**
+ * 调用 aws CLI。
+ *
+ * `stream: true` 让子进程直接写终端 —— sync 类操作在跨境链路上可能需要数秒到
+ * 数十秒，spawnSync 的缓冲会让这段时间毫无输出（"看起来挂起"）。只有在需要
+ * 解析输出的场合（check 数行数）才捕获。
+ */
+function aws(args, { label, stream = false }) {
+  const r = spawnSync('aws', [...args, ...CLI_LIMITS], {
+    env: r2Env(),
+    encoding: stream ? undefined : 'utf8',
+    stdio: stream ? ['ignore', 'inherit', 'inherit'] : ['ignore', 'pipe', 'pipe'],
+  });
+  if (r.error) throw new Error(`[r2:${label}] 无法执行 aws cli：${r.error.message}`);
+  if (stream) {
+    if (r.status !== 0) throw new Error(`[r2:${label}] aws cli 退出码 ${r.status}`);
+    return '';
+  }
   const out = (r.stdout ?? '').trim();
   const err = (r.stderr ?? '').trim();
-  if (r.error) throw new Error(`[r2:${label}] 无法执行 aws cli：${r.error.message}`);
   if (r.status !== 0) throw new Error(`[r2:${label}] aws cli 退出码 ${r.status}\n${err || out}`);
   if (out) console.log(out);
   if (err) console.error(err);
@@ -120,7 +144,7 @@ function aws(args, { label }) {
 
 /** 远端 → 本地。不做 --delete：runner 上 state/ 全新，陈旧文件问题不存在。 */
 export function pull(dir, { prefix = R2_PREFIX } = {}) {
-  return aws(['s3', 'sync', s3url(prefix), dir, '--endpoint-url', endpoint()], { label: 'pull' });
+  return aws(['s3', 'sync', s3url(prefix), dir, '--endpoint-url', endpoint()], { label: 'pull', stream: true });
 }
 
 /**
@@ -129,7 +153,7 @@ export function pull(dir, { prefix = R2_PREFIX } = {}) {
  * 代价是 run 期间删掉的过期锁文件会残留在远端，由 TTL 语义消化（lockExpired）。
  */
 export function push(dir, { prefix = R2_PREFIX } = {}) {
-  return aws(['s3', 'sync', dir, s3url(prefix), '--endpoint-url', endpoint()], { label: 'push' });
+  return aws(['s3', 'sync', dir, s3url(prefix), '--endpoint-url', endpoint()], { label: 'push', stream: true });
 }
 
 /**
@@ -137,7 +161,7 @@ export function push(dir, { prefix = R2_PREFIX } = {}) {
  * 远端已有对象时宁可保守，不冒清空风险。
  */
 export function seed(dir, { prefix = R2_PREFIX } = {}) {
-  return aws(['s3', 'sync', dir, s3url(prefix), '--endpoint-url', endpoint()], { label: 'seed' });
+  return aws(['s3', 'sync', dir, s3url(prefix), '--endpoint-url', endpoint()], { label: 'seed', stream: true });
 }
 
 /** 连通性与凭据自检：列出前缀下对象数（空桶同样算通过）。 */

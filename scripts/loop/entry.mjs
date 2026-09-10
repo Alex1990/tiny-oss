@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 import {
-  makeState, ensureDirs, readJson, writeJson, saveTask, listTasks,
+  makeState, ensureDirs, readJson, readJsonl, writeJson, saveTask, listTasks,
   appendAcceptance, beginRun, finishRun, lockExpired,
   nowIso, outcomeAllowed, allowedOutcomes, describeActions,
 } from './shared/state.mjs';
@@ -271,9 +271,32 @@ async function main() {
 
   // 冒烟模式：只验证基础设施（checkout / 工具链 / pi 安装 / R2 pull+push），
   // 不启动 agent。A1 的手动冒烟入口要能在不消耗 token、不等 LLM 的情况下
-  // 回答"管道通不通"——加新仓库、怀疑凭据失效时首先用它。
+  // 回答两件事：管道通不通，以及刚拉下来的状态层对不对。
   if (process.env.LOOP_SMOKE === 'true') {
     log('smoke 模式：跳过 agent，仅验证基础设施');
+    const tasks = await listTasks(S);
+    const byStatus = {};
+    for (const t of tasks) byStatus[t.status] = (byStatus[t.status] ?? 0) + 1;
+    const acc = await readJsonl(S.acceptanceFile);
+    const runFiles = (await fs.readdir(S.runsDir).catch(() => [])).filter((f) => f.endsWith('.jsonl'));
+    const reports = (await fs.readdir(S.reportsDir).catch(() => [])).filter((f) => f.endsWith('.md'));
+    const summaryExists = await fs.access(S.summaryFile).then(() => true, () => false);
+
+    const overview = [
+      `- tasks: ${tasks.length}${tasks.length ? ` (${Object.entries(byStatus).map(([k, v]) => `${k}=${v}`).join(', ')})` : ''}`,
+      `- runs: ${runFiles.length}`,
+      `- reports: ${reports.length}`,
+      `- acceptance rows: ${acc.length}`,
+      `- SUMMARY.md: ${summaryExists ? 'present' : 'MISSING'}`,
+    ];
+    for (const l of overview) log(l.replace(/^- /, '  '));
+
+    const expectsState = process.env.LOOP_EXPECT_TASKS;
+    if (expectsState && String(tasks.length) !== String(expectsState)) {
+      await writeStepSummary(`## Loop — smoke FAILED\n\nExpected ${expectsState} tasks in the state layer, found ${tasks.length}. The R2 pull is not returning what was seeded.\n`);
+      throw new Error(`状态层任务数为 ${tasks.length}，期望 ${expectsState}`);
+    }
+
     await writeStepSummary([
       '## Loop — smoke (infrastructure only)', '',
       `- event: \`${eventName}.${action || '(none)'}\``,
@@ -281,6 +304,10 @@ async function main() {
       `- write level: \`${writeLevel}\``,
       '- R2: pulled and pushed by the surrounding workflow steps',
       '- agent: **skipped** (no tokens spent)',
+      '',
+      '### State layer as pulled',
+      '',
+      ...overview,
     ].join('\n'));
     return 0;
   }
