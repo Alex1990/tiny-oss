@@ -1,4 +1,4 @@
-# scripts/loop — local manual host (A0 trial period)
+# scripts/loop — loop host (A1: Actions + R2)
 
 ## Overall purpose (owner directive, 2026-09-08)
 
@@ -11,55 +11,180 @@ Accordingly, at the end of every trial run, ask yourself: what Loop defect or
 improvement did this round expose? → record it in the list below or fix it
 directly in this directory's files.
 
-## Daily commands
+## Layout
+
+```
+.github/workflows/loop.yml   # scheduler + sandbox (05 §1/§5.1); one workflow, one serial domain
+scripts/loop/
+  entry.mjs                  # runner orchestrator: route event → inbox/metrics/run
+  run.mjs                    # local CLI host (manual A0-style runs, `pnpm loop`)
+  r2-sync.mjs                # state-layer pull/push/seed/check against R2
+  shared/state.mjs           # STATE-LAYER PRIMITIVES — single writer for state/
+  shared/route.mjs           # event → decision (pure functions, offline-testable)
+  shared/agent.mjs           # pi driver: prompt, spawn, usage, failure classification
+  shared/r2.mjs              # R2 sync via the runner's preinstalled AWS CLI
+state/                       # ignored; on the runner it is a per-job snapshot of R2
+```
+
+**Single-writer rule:** both `run.mjs` and `entry.mjs` mutate the state layer
+only through `shared/state.mjs`. Two implementations of the same rule is how
+drift starts — the missing `#33` acceptance row was a human-drift instance of
+exactly this.
+
+## Local commands (unchanged; `pnpm loop` = `run.mjs`)
+
 ```bash
 pnpm loop start --issue <n>                 # import a real issue + claim (stage defaults to triage)
-pnpm loop start --task <n> [--stage <s>]    # claim an existing task (use this to re-run after waiting-info is answered)
+pnpm loop start --task <n> [--stage <s>]    # claim an existing task (re-run after waiting-info is answered)
 pnpm loop start --new --title "..."         # local synthetic task
-pnpm loop checkpoint --run <r-xxx> --note "..."   # process checkpoint
-pnpm loop end --run <r-xxx> --outcome <o> [--comment ".."] [--label <name>] [--no-github]
+pnpm loop checkpoint --run <r-xxx> --note "..."
+pnpm loop end --run <r-xxx> --outcome <o> [--comment ".."] [--label <n>] [--no-github]
 pnpm loop summary | view                    # summary / task list
 ```
 
-## Real remote flow (owner expectation, finalized and implemented 2026-09-08)
+### Write boundary (`--write-level` | `LOOP_WRITE_LEVEL`, default `report`)
 
-When handling a real issue, `end` writes back to GitHub automatically
-(`run.mjs` `syncGithub`):
+| Level | Effect |
+| --- | --- |
+| `report` | State layer + report only. GitHub write actions are **listed, never executed** (A1 semantics). |
+| `auto` | Executes labels/comments/close (the A0 closed-loop boundary; L2 default, and the rehearsal mode). |
 
-- **Labels are applied automatically**: outcome → one of the five role labels
-  (`triaged`→`ready-for-agent`, `needs-info`→`needs-info`,
-  `needs-triage`/`failed`→`needs-triage`, `pr-opened`→`ready-for-human`;
-  `closed` may take `--label wontfix` etc.).
-- **Info needing human confirmation is commented straight into the issue**:
-  `end --comment "…body…"` posts a comment; with `outcome=closed` that text is
-  used as the closing reason (`gh issue close --comment`).
-- Local synthetic tasks (no url) skip GitHub writes automatically;
-  `--no-github` forces a skip; gh write failures only warn and never roll back
-  local state.
+In `report` mode the pending actions are appended to `state/reports/<runId>.md`
+as a checklist and surfaced in the Actions Step Summary, so a human can execute
+them by hand.
 
-## Full closed-loop flow (owner finalization, 2026-09-08)
+## A1 architecture (Actions + R2)
 
-> After the agent changes code it **reviews its own work**, then commits, pushes
-> and opens a PR; human review feedback lands as PR comments; changes requested
-> → the agent keeps amending; approved → the human merges.
+```
+GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single writer)
+                 ├─ setup node/pnpm ▸ install pi ▸ print `pi --list-models deepseek`
+                 ├─ r2-sync pull        (state layer → job-local state/)
+                 ├─ entry.mjs           (route → inbox | metrics | run)
+                 ├─ r2-sync push        (if: always())
+                 └─ upload pi sessions  (artifact, 90d)
+```
 
-Steps inside a feature/bugfix run (maker=agent):
+- **Engine `{{engine}}` = pi** (`@earendil-works/pi-coding-agent@0.85.1`).
+  Verified before adoption: headless `--mode json` JSONL event stream, DeepSeek
+  built in (`DEEPSEEK_API_KEY`), ~21 MB with no install scripts, Node >= 22.19.
+  `--approve` is **mandatory**: without it non-interactive runs silently ignore
+  project-local resources.
+- **pi has no built-in permission gating** (verified). The job's `permissions:`
+  block and the absence of secrets in fork contexts are the whole boundary —
+  do not add write credentials to a job that touches untrusted input.
+- **One writer for closing:** the agent writes `state/reports/<runId>.result.json`;
+  `entry.mjs` performs the transition via `finishRun`. Agents never run
+  `pnpm loop end` themselves.
+- **Sessions:** only the aggregate lands in the state layer (run `end` row:
+  `tokens`/`durationMs`/`model`/`outcome`); full transcripts go to the
+  artifact store (90 days).
 
-1. Make the change → `verify` skill until all five gates are green → `review`
-   skill (dual review; when no second agent is available, self-review + human
-   final call)
-2. `git checkout -b loop/<issueNo>-<slug>` → commit (body contains `Closes #<n>`) → push
-3. `gh pr create` (body contains `Closes #<n>` + `loop-task: #<n>` +
-   requirement/changes/verification)
-4. `end --outcome pr-opened --pr <prNo>` → auto-labels `ready-for-human` +
-   records task.prs
-5. Human comments on the PR; request-changes → claim `--task <n>` to keep
-   amending → commit/push (the PR auto-updates) → loop; approve → human merges
-   → the evaluation chain records accepted
+### Trigger → action (workflow)
 
-Write boundary (upgraded 2026-09-08): **opened up to commit/push/open-PR +
-labeling/commenting**; merging PRs / npm publishing stay human (the cognitive
-guard is unchanged).
+| Event | Action |
+| --- | --- |
+| `issues` opened/reopened | run(triage) |
+| `issues` edited, `issue_comment` created | inbox first (never silently dropped), then run per task status |
+| loop PR (`loop/<n>-*` **and** `loop-task: #<n>`) opened/synchronize | run(pr-review) |
+| dependabot PR (author `dependabot[bot]` or head `dependabot/*`) | run(deps) |
+| external PR (author_association ∉ OWNER/MEMBER/COLLABORATOR) | run(triage, readonly) |
+| `pull_request_review` on a loop PR | run(pr-review) |
+| `pull_request_target` closed (loop PR) | metrics: merged / closed-unmerged |
+| `release` published | metrics: released |
+| `schedule` daily / weekly | system run: sweep / retro-scheduled |
+| `workflow_dispatch` | run per inputs (`task`/`stage`); `execute_writes=true` = L2 rehearsal |
+
+Anything else is a no-op that still exits 0 — event storms cost nothing.
+
+### Failure classification (exit codes)
+
+The run contract wants 0/1/2/3/137; pi only reports 0/1/143/129. Machine faults
+must not reach the human inbox, or the human-intervention metric becomes
+noise:
+
+| Situation | Outcome | Effect on task |
+| --- | --- | --- |
+| agent produced a valid result | agent's outcome | per `OUTCOME_MAP` |
+| provider/network flake, spawn failure, unclassifiable exit | `retry` | back to `ready` (claimable) |
+| pi aborted / timeout | `retry` (abort recorded) | back to `ready` |
+| agent concluded it cannot complete | `failed` | `needs-triage` (human inbox) |
+
+`retry` is a host-level outcome (documented in `shared/state.mjs`), not part of
+the ops.md outcome table.
+
+## R2 state layer
+
+- Bucket `loop-state-alex1990`, prefix `state/tiny-oss/`; keys mirror `state/`.
+- **No object versioning.** Cloudflare R2 has no object-versioning feature
+  (verified against the R2 docs and release notes); the nearest capability is
+  bucket locks (retention, not history). Consequence: **deletes are not
+  revertible**, so `push` deliberately omits `--delete`. Stale lock files on
+  the remote are harmless (TTL semantics).
+- Sync uses the runner's **preinstalled AWS CLI v2** — no repo dependency, no
+  install step. R2 region is `auto`; `AWS_REQUEST_CHECKSUM_CALCULATION=when_required`
+  keeps the CLI's default checksum behaviour out of the way.
+- **`pull` failure must abort the job** — an empty local `state/` pushed back
+  would otherwise destroy the remote state layer.
+
+### One-time setup
+
+R2 (Cloudflare dashboard):
+
+1. R2 → **Create bucket** → `loop-state-alex1990`.
+2. R2 → **API → Manage R2 API Tokens → Create API Token** → permission
+   *Object Read & Write* → **specify bucket `loop-state-alex1990` only**.
+3. Note **Access Key ID**, **Secret Access Key**, and the **Account ID**.
+
+GitHub → Settings → Secrets and variables → Actions:
+
+| Secret | Value |
+| --- | --- |
+| `R2_ACCOUNT_ID` | Cloudflare account ID |
+| `R2_ACCESS_KEY_ID` | token access key id |
+| `R2_SECRET_ACCESS_KEY` | token secret |
+| `R2_BUCKET` | `loop-state-alex1990` |
+| `DEEPSEEK_API_KEY` | LLM key (DeepSeek platform) |
+| `LOOP_GH_TOKEN` | fine-grained PAT (contents/issues/PRs write, this repo only); optional while report-only |
+
+Seeding the existing A0 state layer (13 files: 3 tasks, 8 runs, metrics,
+SUMMARY) — needs an AWS CLI on the seeding machine, because the bucket is
+private and `state/` is gitignored (so the runner cannot seed it from a checkout):
+
+```bash
+# once, locally
+winget install Amazon.AWSCLI        # or the macOS/Linux equivalent
+
+R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... R2_BUCKET=loop-state-alex1990 \
+  node scripts/loop/r2-sync.mjs seed   # then `check`
+```
+
+`seed` (like `push`) omits `--delete`, so it can only add or overwrite.
+
+## A1 acceptance (one week; report boundary ⇒ GitHub stays untouched)
+
+Successor to 05 §8's checklist, rewritten because the drift criterion is
+vacuous when nothing is written to GitHub. Source: this file, plus
+`state/SUMMARY.md` and the Actions run pages.
+
+- [ ] `workflow_dispatch` smoke: real issue → triage run → task file + state
+      transition correct, **GitHub unchanged**
+- [ ] Every route has one real execution: issue triage / bugfix-feature / deps /
+      external-PR readonly / sweep / release preflight
+- [ ] Serial lock: two consecutive dispatches queue, never run concurrently
+      (run timestamps prove it)
+- [ ] Crash path: cancel a job mid-run → task stays `processing` → next sweep
+      reclaims it by TTL
+- [ ] Metrics: a human merge writes one `acceptance` row, no duplicates;
+      `released` backfills to the intended task
+- [ ] Engine stability: N consecutive headless pi runs without hanging; exit-code
+      mapping matches the failure-classification table
+- [ ] Cost readable: every run's `tokens`/`durationMs` land in the end row; the
+      `pi --list-models deepseek` line confirms the real model id
+- [ ] Reports human-readable: the Step Summary alone tells you what happened,
+      without downloading anything
+- [ ] State layer and GitHub show no drift after a week → human decides on L2
+
+## Defect log
 
 - [x] D9 Terminal tasks reopened on GitHub could not be claimed: with local
       `status=closed/rejected`, `start --task` refused outright even though the
@@ -84,25 +209,34 @@ guard is unchanged).
       `closed` was semantically dubious) → optional guard.
 - [x] D4 Help/guidance text still wrote the long `node scripts/loop/run.mjs`
       command and never mentioned `pnpm loop`.
+- [x] D8 `syncGithub` stacked contradictory role labels (needs-info +
+      ready-for-agent) → strip the other five roles before labelling.
+- [x] D10 (A1) `lib/` was gitignored repo-wide (`.gitignore:4`), so a shared
+      library under `scripts/loop/lib/` would never have been committed — the
+      runner checkout would have crashed on a missing import. Renamed to
+      `scripts/loop/shared/` (existing ignore rule left untouched).
+- [x] D11 (A1) System-level stages (sweep / retro-scheduled / release preflight)
+      have no task file, but the orchestrator demanded a `taskId` → the daily
+      sweep crashed every day. `beginRun`/`finishRun`/`buildPrompt` now support
+      task-less runs (end row with `taskId: null`, no state transition).
+- [x] D12 (A1) `pi` missing on PATH produced a silent EPIPE crash before
+      classification; now spawn errors are caught and classified as `retry`.
+- [x] D13 (A1) The orchestrator logged nothing about the run outcome, so an
+      Actions log gave no answer without opening the Step Summary. Outcome,
+      exit code, token count and task transition are now logged.
 
-All fixed and regression-tested on 2026-09-08 (synthetic tasks + read-only
-trials on #27/#28). Also fixed: D8 (syncGithub strips stale role labels before
-labeling, preventing needs-info+ready-for-agent stacking). Added: a
-stage→outcome whitelist (`STAGE_OUTCOMES`; unknown stages pass everything).
+## Environment facts
 
-## Environment facts (A0 related)
-- Phase (2026-09-08): **manual execution period** — no automatic triggers; a
-  human launches every run; after receiving instructions the agent executes per
-  ops.md + the relevant skill (this session = the engine). Check
-  `state/SUMMARY.md` and `state/runs/` daily; run one sweep/retro exercise
-  weekly to distill rules.
-
-- Engine = this session (opencode omp); gh is authenticated (Alex1990,
-  repo+workflow scope).
-- Direct GitHub connections are unstable (timeouts happened); the proxy
-  127.0.0.1:10809 is not running.
-- Open issue is now #28 (PR #29 under review); triage/feature wrap-ups write to
-  GitHub automatically.
-- Write boundary (closed-loop version, 2026-09-08): real issues get automatic
-  labeling + commenting + commit/push/open-PR; merging PRs and npm publishing
-  stay human.
+- Phase (2026-09-10): **A1 implementation landed; A0 remains the running host
+  until the 2026-09-15 switchover.** Write boundary in A1 = `report`.
+- Engine: pi (verified) for A1; A0 runs were driven by an interactive opencode
+  session (`omp`). `LOOP_ENGINE_CMD` overrides the engine command.
+- `gh` works from this machine (list/view in seconds); the older note about
+  direct GitHub timeouts and a stopped proxy is stale.
+- No `rclone` and no `aws` CLI on this Windows box — R2 sync is runner-side only;
+  local seeding needs an AWS CLI installed first.
+- Model id: `LOOP_MODEL=deepseek/deepseek-flash` is **unconfirmed** against pi's
+  built-in DeepSeek catalogue; the workflow prints `pi --list-models deepseek`
+  on every run so the first dispatch settles it. If the id does not appear,
+  declare it explicitly in `~/.pi/agent/models.json` or switch to the official
+  DeepSeek model id.
