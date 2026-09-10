@@ -88,7 +88,7 @@ GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single w
 | loop PR (`loop/<n>-*` **and** `loop-task: #<n>`) opened/synchronize | run(pr-review) |
 | same-repo PR, other branches | run(triage) — PRs are a triage surface |
 | `pull_request_review` on a loop PR | run(pr-review) |
-| `pull_request_target` closed (loop PR) | metrics: merged / closed-unmerged |
+| `pull_request_target` closed (loop PR) | metrics: merged / closed-unmerged **and** the task moves to `accepted` / `rejected` |
 | `release` published | metrics: released |
 | `schedule` daily / weekly | system run: sweep / retro-scheduled |
 | `workflow_dispatch` | run per inputs (`task`/`stage`); `execute_writes=true` = L2 rehearsal |
@@ -462,6 +462,32 @@ was *correct*, and whether new events produce proposals that match reality.
       awaiting merge). Verified across five scenarios: inbox and awaiting-merge
       are refused without touching the decision, `closed` + a genuinely reopened
       GitHub item is still let through, and `closed` + a closed item is not.
+- [x] D30 (A1) Gate events recorded the acceptance row but never moved the task:
+      `handleMetrics` appended to `metrics/acceptance.jsonl` and returned, so a
+      loop PR that merged was counted for the auto-acceptance rate while its task
+      stayed in `waiting-merge`. That contradicts the state machine ops.md
+      defines (`waiting-merge → accepted | rejected`), and sweep cannot repair it
+      — sweep reconciles by listing *open* GitHub items, which by construction
+      cannot see a closure. Any loop PR merged unattended would have stranded its
+      task under "Awaiting human merge" permanently. `handleMetrics` now also
+      applies the transition via `markTaskTerminal` (merged → `accepted`,
+      closed-unmerged → `rejected`) and refreshes `SUMMARY.md`. The two effects
+      are idempotent independently — the row on `taskId+event+pr`, the task on
+      its own status — so a crash between them is repaired by a repeated event
+      rather than leaving a permanent inconsistency. Verified: both directions,
+      duplicate events, a non-`waiting-merge` originating state (recorded as
+      `(was …)` so an unexpected route is visible), `released` leaving the status
+      alone, and a missing task not throwing.
+- [x] D31 (A1) `renderSummary` named two different things: the shared library's
+      exporter writes `state/SUMMARY.md`, while `entry.mjs`'s local function
+      renders the Actions Step Summary. Importing the former alongside the latter
+      was a `SyntaxError` at module load — the orchestrator would not start. The
+      real problem is the name, not the collision, so they are now
+      `renderStateSummary` (state layer) and `renderStepSummary` (Actions UI,
+      paired with the existing `writeStepSummary`). Terminal-state lists, which
+      had also been written out inline in more than one place, are now the single
+      exported `TERMINAL_STATUSES` — duplicated lists are this codebase's
+      recurring failure mode.
 
 ## Environment facts
 

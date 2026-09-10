@@ -17,6 +17,13 @@ import { spawnSync } from 'node:child_process';
 /** Five canonical role labels (triage-labels.md): mutually exclusive, never stacked. */
 export const ROLE_LABELS = ['needs-triage', 'needs-info', 'ready-for-agent', 'ready-for-human', 'wontfix'];
 
+/**
+ * Terminal task states (ops.md state machine). Single definition on purpose:
+ * this list used to be written out inline in several places, and duplicated
+ * lists are how this codebase drifts.
+ */
+export const TERMINAL_STATUSES = ['accepted', 'rejected', 'closed'];
+
 /** outcome → task terminal status + label to apply (ops.md "Labels → task state"). */
 export const OUTCOME_MAP = {
   'triaged':      { status: 'ready',         label: 'ready-for-agent' },
@@ -212,9 +219,54 @@ export async function appendAcceptance(s, row) {
   return true;
 }
 
+/**
+ * Move a task to a terminal state in response to a GitHub gate event.
+ *
+ * ops.md defines `waiting-merge → accepted (merged) / rejected (closed-unmerged)`,
+ * and GitHub is the source of truth for "a human accepted or rejected this".
+ * Nothing else in the host performed that transition: the router recorded the
+ * acceptance row and left the task sitting in `waiting-merge` forever, where it
+ * kept showing up under "Awaiting human merge" and no sweep could correct it
+ * (sweep reconciles by listing *open* GitHub items, which cannot see this
+ * direction). A loop PR merged with nobody watching would strand its task.
+ *
+ * Idempotent on the task's own state rather than on the acceptance row: if the
+ * process dies between writing the row and the transition, a repeated event
+ * still repairs the task.
+ *
+ * @returns {{task: object|null, changed: boolean, from?: string, reason?: string}}
+ */
+export async function markTaskTerminal(s, taskId, to, { event, detail, by = 'workflow' } = {}) {
+  if (!TERMINAL_STATUSES.includes(to)) {
+    throw new Error(`markTaskTerminal: ${to} is not terminal (expected one of ${TERMINAL_STATUSES.join(', ')})`);
+  }
+  const t = await readJson(s.taskFile(taskId));
+  if (!t) return { task: null, changed: false, reason: `task #${taskId} does not exist` };
+  if (TERMINAL_STATUSES.includes(t.status)) {
+    return { task: t, changed: false, reason: `already ${t.status}` };
+  }
+  const from = t.status;
+  t.status = to;
+  t.labels = []; // terminal states carry no role label
+  t.timeline.push({
+    at: nowIso(),
+    event,
+    by,
+    detail: `${detail}${from === 'waiting-merge' ? '' : ` (was ${from})`}`,
+  });
+  await saveTask(s, t);
+  return { task: t, changed: true, from };
+}
+
+/** The router's gate events → the terminal state they imply. */
+export const GATE_TRANSITIONS = {
+  merged: 'accepted',
+  'closed-unmerged': 'rejected',
+};
+
 /* -------------------------------------------------------------- SUMMARY */
 
-export async function renderSummary(s) {
+export async function renderStateSummary(s) {
   const tasks = await listTasks(s);
   const L = [];
   L.push(`# Loop state summary (updated ${nowIso()})`);
@@ -257,7 +309,7 @@ export async function renderSummary(s) {
     return `#${t.id} (${kind}) — ${t.title} (${when(t)})`;
   }));
 
-  const terminal = tasks.filter((t) => ['closed', 'accepted', 'rejected'].includes(t.status));
+  const terminal = tasks.filter((t) => TERMINAL_STATUSES.includes(t.status));
   if (terminal.length) {
     const c = (st) => terminal.filter((t) => t.status === st).length;
     L.push('## Terminal counts', '');
@@ -451,7 +503,7 @@ export async function finishRun(s, {
   });
 
   if (!t) {
-    await renderSummary(s);
+    await renderStateSummary(s);
     return { task: null, actions: [], applied: [] };
   }
 
@@ -477,7 +529,7 @@ export async function finishRun(s, {
     else await appendActionBlock(s, runId, actions);
   }
 
-  await renderSummary(s);
+  await renderStateSummary(s);
   return { task: t, actions, applied };
 }
 

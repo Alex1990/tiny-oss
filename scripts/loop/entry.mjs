@@ -29,7 +29,8 @@ import { spawnSync } from 'node:child_process';
 
 import {
   makeState, ensureDirs, readJson, readJsonl, writeJson, saveTask, listTasks,
-  appendAcceptance, beginRun, finishRun, lockExpired,
+  appendAcceptance, markTaskTerminal, GATE_TRANSITIONS, renderStateSummary,
+  beginRun, finishRun, lockExpired,
   nowIso, outcomeAllowed, allowedOutcomes, describeActions,
 } from './shared/state.mjs';
 import { route, eventKey } from './shared/route.mjs';
@@ -137,6 +138,15 @@ async function handleInbox({ ctx, repo }) {
 
 /* ---------------------------------------------------------------- metrics */
 
+/**
+ * GitHub gate events (a loop PR merged / closed unmerged, a release) are the only
+ * place a task reaches a terminal state without a run. Two effects, each
+ * idempotent on its own footing:
+ *   1. append the acceptance row (deduplicated by taskId+event+pr);
+ *   2. move the task to its terminal state.
+ * They are deliberately not gated on each other — if the process dies between
+ * them, a repeated event still repairs the task instead of leaving it stranded.
+ */
 async function handleMetrics({ decision }) {
   const row = { at: nowIso(), ...decision.metrics };
   if (row.event === 'released' && !row.taskId) {
@@ -149,7 +159,22 @@ async function handleMetrics({ decision }) {
     }
   }
   const wrote = await appendAcceptance(S, row);
-  return { state: 'metrics', wrote, row };
+
+  let transition = null;
+  const to = GATE_TRANSITIONS[row.event];
+  if (to && row.taskId) {
+    transition = await markTaskTerminal(S, row.taskId, to, {
+      event: row.event,
+      detail: `${row.pr ? `PR #${row.pr} ` : ''}${row.event}`,
+    });
+    if (transition.changed) {
+      log(`task #${row.taskId}: ${transition.from} → ${to} (${row.event})`);
+      await renderStateSummary(S);
+    } else {
+      log(`task #${row.taskId}: no transition needed (${transition.reason})`);
+    }
+  }
+  return { state: 'metrics', wrote, row, transition };
 }
 
 /* ------------------------------------------------------------------ run */
@@ -258,7 +283,7 @@ async function readTextSafe(file) {
   try { return await fs.readFile(file, 'utf8'); } catch { return ''; }
 }
 
-function renderSummary({ decision, result, writeLevel }) {
+function renderStepSummary({ decision, result, writeLevel }) {
   const L = [`## Loop — ${decision.action}`, ''];
   L.push(`- event: \`${decision.reason}\``);
   if (result?.runId) {
@@ -272,6 +297,12 @@ function renderSummary({ decision, result, writeLevel }) {
     }
   } else if (result?.note) {
     L.push(`- ${result.state}: ${result.note}`);
+  }
+  if (result?.transition) {
+    const tr = result.transition;
+    L.push(tr.changed
+      ? `- task #${tr.task.id}: **${tr.from} → ${tr.task.status}**`
+      : `- task: no transition needed (${tr.reason})`);
   }
   if (result?.actions?.length) {
     const head = writeLevel === 'auto' ? '### GitHub actions executed' : '### Proposed GitHub actions (report boundary — NOT executed)';
@@ -365,7 +396,7 @@ async function main() {
       : 'metrics already present, skipped (idempotent)');
   }
 
-  await writeStepSummary(renderSummary({ decision, result, writeLevel }));
+  await writeStepSummary(renderStepSummary({ decision, result, writeLevel }));
   return 0; // noop / inbox-only / metrics / a completed run all exit successfully
 }
 
