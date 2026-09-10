@@ -258,7 +258,8 @@ async function main() {
        [--label <name>] [--no-github] [--task <n>]
        [--write-level report|auto]   # 默认 report：GitHub 写动作仅列出
   pnpm loop summary | view [--run <id>|--task <n>]
-outcome: ${Object.keys(OUTCOME_MAP).join(' | ')}
+outcome（任务）: ${Object.keys(OUTCOME_MAP).join(' | ')}
+outcome（系统级 run）: completed | failed | retry | aborted
 state 根: ${S.root}（env STATE_DIR 可覆盖）
 写边界: LOOP_WRITE_LEVEL=report|auto（默认 report）`);
     return;

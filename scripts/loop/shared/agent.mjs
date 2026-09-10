@@ -77,8 +77,9 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
     L.push(`   Allowed outcomes for stage \`${stage}\` are declared in \`scripts/loop/shared/state.mjs\``);
     L.push('   (STAGE_OUTCOMES). Never invent one.');
   } else {
-    L.push(`   This is a system-level run: \`outcome\` is recorded on the end row only (no task`);
-    L.push('   transition). Use the outcome the skill prescribes for the sweep/retro it performed.');
+    L.push(`   This is a **system-level run** (no single task): the outcome only records how the`);
+    L.push('   run went and never moves a task. Use exactly one of `completed` (stage finished),');
+    L.push('   `failed` (it could not be completed) or `retry` (transient/environmental problem).');
   }
   L.push('3. Record checkpoints while working so a crash can resume meaningfully.');
   return L.join('\n');

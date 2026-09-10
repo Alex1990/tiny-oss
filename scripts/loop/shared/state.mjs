@@ -34,6 +34,17 @@ export const OUTCOME_MAP = {
 
 /** stage → 允许的成功 outcome 白名单（D5 防呆）；未列出的 stage 全放行。 */
 const COMMON_OUTCOMES = ['failed', 'rejected', 'accepted', 'retry'];
+
+/**
+ * 系统级 run（sweep / retro / release 预检）的 outcome —— 只记录"这一轮跑得怎样"，
+ * 不映射任何任务状态。
+ *
+ * 为什么不能复用任务的 outcome：`closed` 在任务语义里意为"直接关闭、不进接受率
+ * 分母"。系统级 run 若记 `closed`，retro 读 end 行做统计时会把 sweep/retro 的运行
+ * 次数算成被关闭的任务，污染双口径。
+ */
+export const SYSTEM_OUTCOMES = ['completed', 'failed', 'retry', 'aborted'];
+
 export const STAGE_OUTCOMES = {
   triage: ['triaged', 'needs-info', 'needs-triage', 'closed'],
   bugfix: ['pr-opened'],
@@ -235,6 +246,13 @@ export async function renderSummary(s) {
     return `#${t.id} — ${t.title}${d} (${when(t)})`;
   }));
 
+  // `new` = 事件已入库但还没 triage。最容易被人漏看，所以必须出现在摘要里
+  // （sweep 刚建档的任务就是这一类）。
+  sec('未处理 (new)', tasks.filter((t) => t.status === 'new').map((t) => {
+    const kind = t.kind === 'pr' ? 'PR' : 'issue';
+    return `#${t.id} (${kind}) — ${t.title} (${when(t)})`;
+  }));
+
   const terminal = tasks.filter((t) => ['closed', 'accepted', 'rejected'].includes(t.status));
   if (terminal.length) {
     const c = (st) => terminal.filter((t) => t.status === st).length;
@@ -385,17 +403,26 @@ export async function finishRun(s, {
   runId, outcome, note = null, comment = null, label = null, decision = null, pr = null,
   tokens = null, writeLevel = 'report', noGithub = false, log = () => {}, warn = () => {},
 }) {
-  if (!outcome || !OUTCOME_MAP[outcome]) {
-    throw new Error(`outcome 必填且 ∈ {${Object.keys(OUTCOME_MAP).join(', ')}}`);
-  }
+  if (!outcome) throw new Error('outcome 必填');
   const rows = await readRunLines(s, runId);
   if (!rows.length) throw new Error(`run ${runId} 不存在（${s.runFile(runId)}）`);
   if (rows.some((r) => r.event === 'end')) throw new Error(`run ${runId} 已有 end 行，重复收尾被拒绝（幂等）`);
   const start = rows[0];
-  // 系统级 run（sweep/retro/release 预检）无任务文件：只记 run 行，不做状态转移。
+  // 系统级 run（sweep/retro/release 预检）无任务文件：只记 run 行，不做状态转移，
+  // 且用另一套 outcome 词表（`closed` 等任务语义不该出现在这里）。
   const t = start.taskId ? await loadTask(s, start.taskId) : null;
-  if (t && !outcomeAllowed(start.stage, outcome)) {
-    throw new Error(`stage=${start.stage} 不允许 outcome=${outcome}（D5；允许: ${allowedOutcomes(start.stage).join(', ')}）`);
+  if (!t) {
+    if (!SYSTEM_OUTCOMES.includes(outcome)) {
+      throw new Error(`系统级 run（无任务）的 outcome ∈ {${SYSTEM_OUTCOMES.join(', ')}}，收到 ${outcome}；`
+        + '任务的 outcome 语义（如 closed）不应出现在系统级 run 里（会污染双口径统计）');
+    }
+  } else {
+    if (!OUTCOME_MAP[outcome]) {
+      throw new Error(`outcome 必填且 ∈ {${Object.keys(OUTCOME_MAP).join(', ')}}，收到 ${outcome}`);
+    }
+    if (!outcomeAllowed(start.stage, outcome)) {
+      throw new Error(`stage=${start.stage} 不允许 outcome=${outcome}（D5；允许: ${allowedOutcomes(start.stage).join(', ')}）`);
+    }
   }
   const at = nowIso();
 
