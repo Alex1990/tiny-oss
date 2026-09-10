@@ -46,14 +46,17 @@ jobs:
   loop:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # 注意：job 级 env 只能引用 github / secrets / vars 等上下文。
+    # `inputs` 在非 workflow_dispatch 事件下不可用，`runner` 上下文只存在于 step 内 ——
+    # 两者都不放在这里（曾经导致 workflow 解析失败，GitHub 只报 "workflow file issue"）。
     env:
       LOOP_EVENT_NAME: ${{ github.event_name }}
       LOOP_EVENT_ACTION: ${{ github.event.action }}
       LOOP_EVENT_JSON: ${{ toJSON(github.event) }}
       LOOP_REPO: ${{ github.repository }}
-      LOOP_WRITE_LEVEL: ${{ inputs.execute_writes == 'true' && 'auto' || 'report' }}
+      # 非 dispatch 事件下 github.event.inputs 为 null → 取默认 report（严格只报告）
+      LOOP_EXECUTE_WRITES: ${{ github.event.inputs.execute_writes || 'false' }}
       LOOP_MODEL: deepseek/deepseek-flash
-      LOOP_SESSION_DIR: ${{ runner.temp }}/pi-sessions
       LOOP_RUN_TIMEOUT_MS: '3300000' # 55min，留出 push 余量（job timeout 60min）
       GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN || github.token }}
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -92,6 +95,8 @@ jobs:
         run: node scripts/loop/r2-sync.mjs pull
 
       - name: Run stage
+        env:
+          LOOP_SESSION_DIR: ${{ runner.temp }}/pi-sessions
         run: node scripts/loop/entry.mjs
 
       # 崩溃/超时也要把状态层推回（任务留在 processing，由下次 sweep 按 TTL 回收）
