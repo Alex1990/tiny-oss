@@ -1,0 +1,109 @@
+name: Loop
+
+# 单一 workflow = 调度器 + 沙盒（05 §5.1）：所有事件并入同一串行域，
+# concurrency 组提供平台级单写者锁（R2 无并发写）。
+on:
+  issues:
+    types: [opened, reopened, edited]
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [opened, synchronize]
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_target:
+    types: [closed]
+  release:
+    types: [published]
+  schedule:
+    - cron: '17 3 * * *' # daily sweep（每周 retro 的 cron 见 scripts/loop/lib/route.mjs WEEKLY_CRON）
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task number (issue/PR). Empty = stage-only run.'
+        required: false
+      stage:
+        description: 'triage | bugfix | feature | pr-review | deps | security | sweep | release'
+        required: false
+        default: triage
+      execute_writes:
+        description: 'L2 rehearsal: set "true" to allow real GitHub writes (default report-only)'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: loop
+  cancel-in-progress: false
+
+# 最小权限：读 GitHub 用 GITHUB_TOKEN；写操作（仅 execute_writes=true 预演）走
+# LOOP_GH_TOKEN，且只在默认分支上下文存在 —— fork 事件无 secrets（平台保证）。
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  loop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      LOOP_EVENT_NAME: ${{ github.event_name }}
+      LOOP_EVENT_ACTION: ${{ github.event.action }}
+      LOOP_EVENT_JSON: ${{ toJSON(github.event) }}
+      LOOP_REPO: ${{ github.repository }}
+      LOOP_WRITE_LEVEL: ${{ inputs.execute_writes == 'true' && 'auto' || 'report' }}
+      LOOP_MODEL: deepseek/deepseek-flash
+      LOOP_SESSION_DIR: ${{ runner.temp }}/pi-sessions
+      LOOP_RUN_TIMEOUT_MS: '3300000' # 55min，留出 push 余量（job timeout 60min）
+      GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN || github.token }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+
+    steps:
+      # checkout 默认分支：loop 需要本仓的 skills/ 与 scripts/loop/，
+      # 且**绝不检出 fork 代码**（外部 PR 的 diff 用 gh 读取）。
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install engine (pi)
+        run: |
+          npm i -g @earendil-works/pi-coding-agent@0.85.1
+          pi --version
+          echo '--- available DeepSeek models ---'
+          pi --list-models deepseek || true
+
+      - name: Pull state from R2
+        run: node scripts/loop/r2-sync.mjs pull
+
+      - name: Run stage
+        run: node scripts/loop/entry.mjs
+
+      # 崩溃/超时也要把状态层推回（任务留在 processing，由下次 sweep 按 TTL 回收）
+      - name: Push state to R2
+        if: always()
+        run: node scripts/loop/r2-sync.mjs push
+
+      - name: Upload session transcripts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loop-sessions-${{ github.run_id }}
+          path: ${{ runner.temp }}/pi-sessions
+          retention-days: 90
+          if-no-files-found: ignore
