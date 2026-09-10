@@ -287,6 +287,7 @@ export function ghRepoOf(url) {
  */
 export function planActions(t, outcome, { label, comment, note } = {}) {
   if (!t.url) return []; // 本地合成任务无 GitHub 目标
+  if (outcome === 'retry') return []; // 未实际执行（故障/草稿），不该产生写动作建议
   const repo = ghRepoOf(t.url);
   if (!repo) return [];
   const acts = [];

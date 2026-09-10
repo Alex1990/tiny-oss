@@ -168,6 +168,11 @@ export function classify({ code, signal, stderr, timedOut, stopReason }) {
   }
   if (code === -1) return { exit: 3, kind: 'retry', reason: 'pi 无法启动（安装/路径问题）' };
   const s = String(stderr ?? '');
+  // 凭据/配置类故障（缺 key、key 无效、pi 未解析到模型）：属宿主配置问题，不是任务问题，
+  // 绝不能因此把任务推进人工收件箱 —— 实测 pi 在无 key 时输出 "No models available"。
+  if (/no models? available|no model resolved|use \/login|api key|unauthorized|forbidden|401|403|invalid.*(token|key)|not authenticated/i.test(s)) {
+    return { exit: 3, kind: 'retry', reason: '引擎凭据/配置未就绪 → 重试（需检查 secrets）' };
+  }
   if (/rate.?limit|429|timeout|timed out|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up|502|503|504|overloaded|capacity/i.test(s)) {
     return { exit: 3, kind: 'retry', reason: '疑似 provider/网络瞬时故障 → 重试' };
   }

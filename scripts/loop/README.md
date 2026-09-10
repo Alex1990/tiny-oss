@@ -224,6 +224,16 @@ vacuous when nothing is written to GitHub. Source: this file, plus
 - [x] D13 (A1) The orchestrator logged nothing about the run outcome, so an
       Actions log gave no answer without opening the Step Summary. Outcome,
       exit code, token count and task transition are now logged.
+- [x] D14 (A1) The workflow did not parse at all: job-level `env` referenced
+      `runner.temp`, but the `runner` context only exists inside steps. GitHub's
+      only signal was a zero-second failed run titled with the file path, so
+      `loop.yml` was never registered under its own name. Fixed by moving the
+      value to the step that needs it, and by replacing the `inputs.*`
+      expression with `github.event.inputs.*` (null on non-dispatch events).
+      Now pre-checked with actionlint, which pinpoints the line GitHub omits.
+- [x] D15 (A1) Credential/config failures (missing key → pi prints "No models
+      available") would have classified as an agent failure and pushed the task
+      into the human inbox. They now classify as `retry`.
 
 ## Environment facts
 
@@ -231,12 +241,19 @@ vacuous when nothing is written to GitHub. Source: this file, plus
   until the 2026-09-15 switchover.** Write boundary in A1 = `report`.
 - Engine: pi (verified) for A1; A0 runs were driven by an interactive opencode
   session (`omp`). `LOOP_ENGINE_CMD` overrides the engine command.
+- **Engine install measured on the runner (2026-09-10)**: `npm i -g
+  @earendil-works/pi-coding-agent@0.85.1` → `added 132 packages in 6s`,
+  `pi --version` → `0.85.1`. Well inside the job budget.
+- `pi --list-models deepseek` prints `No models available. Use /login ...` when
+  no key is configured — the model catalogue is credential-gated, so the
+  `LOOP_MODEL` question is settled by the first run that has
+  `DEEPSEEK_API_KEY` set. Credential/config failures classify as `retry`, not
+  as a task failure, so a missing key never fills the human inbox.
 - `gh` works from this machine (list/view in seconds); the older note about
   direct GitHub timeouts and a stopped proxy is stale.
 - No `rclone` and no `aws` CLI on this Windows box — R2 sync is runner-side only;
   local seeding needs an AWS CLI installed first.
-- Model id: `LOOP_MODEL=deepseek/deepseek-flash` is **unconfirmed** against pi's
-  built-in DeepSeek catalogue; the workflow prints `pi --list-models deepseek`
-  on every run so the first dispatch settles it. If the id does not appear,
-  declare it explicitly in `~/.pi/agent/models.json` or switch to the official
-  DeepSeek model id.
+- Workflow edits can be pre-checked locally with
+  [`actionlint`](https://github.com/rhysd/actionlint) (a bad `runner` context in
+  job-level `env` is a parse failure GitHub only reports as "workflow file
+  issue", with no line number).
