@@ -76,15 +76,27 @@ jobs:
       R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
 
     steps:
-      # checkout 什么：
-      #   - 生产路径（issues / schedule / release / pull_request_target）必须用**默认分支**
-      #     的可信宿主代码 —— 尤其是 fork PR，绝不执行或检出外部代码（diff 用 gh 读）。
-      #   - workflow_dispatch 例外：它是人来指定的冒烟入口，用 github.ref。
-      #     否则本 workflow 自己的 PR 无法被测试（默认分支上还没有这些脚本）。
-      #     dispatch 只能针对本仓的 ref 触发，fork 分支不在其中，因此仍然安全。
+      # checkout 什么 —— 按"这段代码可不可信"决定：
+      #
+      #   workflow_dispatch  → github.ref。人来指定的冒烟/演练入口；dispatch 只能针对
+      #                        本仓 ref，fork 分支不在其中，所以仍然安全。
+      #   同仓 PR            → PR 的 head 分支。loop 自己开的 PR（`loop/<n>-*`）就是这一类，
+      #                        而 pr-review 必须拿到 PR 的代码才能审 —— 只检 default 分支
+      #                        会让 pr-review 永远看不到被审内容。同仓分支只有
+      #                        OWNER/MEMBER/COLLABORATOR 能建，属可信代码。
+      #   其他一切           → 默认分支。**fork PR 落在这里**：绝不 checkout 外部代码，
+      #                        只用本仓默认分支的可信脚本，diff 用 `gh pr diff` 读。
+      #                        issues / schedule / release / pull_request_target 同理。
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.event.repository.default_branch }}
+          ref: >-
+            ${{
+              github.event_name == 'workflow_dispatch' && github.ref
+              || (github.event_name == 'pull_request'
+                  && github.event.pull_request.head.repo.full_name == github.repository
+                  && github.event.pull_request.head.ref)
+              || github.event.repository.default_branch
+            }}
 
       - uses: pnpm/action-setup@v4
         with:
