@@ -114,7 +114,26 @@ the ops.md outcome table.
 
 ## R2 state layer
 
-- Bucket `loop-state-alex1990`, prefix `state/tiny-oss/`; keys mirror `state/`.
+**One bucket per repository** (owner decision, 2026-09-10). Bucket name is
+`loop-state-<repo>`, derived at runtime (`shared/r2.mjs`): from
+`GITHUB_REPOSITORY` in CI, from `package.json`'s `name` locally. So tiny-oss
+writes to `loop-state-tiny-oss`, and a sibling repo gets its own bucket with no
+code change. `R2_BUCKET` overrides the derivation (migration, triage, pointing
+at a scratch bucket).
+
+Why not one bucket for all repos: **an R2 API token can only be scoped to a
+bucket, never to a key prefix.** The access-policy resource is
+`com.cloudflare.edge.r2.bucket.<ACCOUNT_ID>_<JURISDICTION>_<BUCKET_NAME>` — there
+is no prefix dimension. Sharing a bucket therefore makes "one token per repo"
+meaningless: every token can read and write the whole bucket, so the blast
+radius of one leaked credential (or one fork-context injection) is every
+repository using that bucket. Bucket count is not a constraint (limit: 1,000,000)
+and KB-scale state is inside the free tier either way, so per-repo buckets buy
+real isolation at no cost.
+
+Keys inside the bucket mirror the local layout (`state/tasks/…`), since the
+bucket name already carries the repository identity.
+
 - **No object versioning.** Cloudflare R2 has no object-versioning feature
   (verified against the R2 docs and release notes); the nearest capability is
   bucket locks (retention, not history). Consequence: **deletes are not
@@ -126,13 +145,18 @@ the ops.md outcome table.
 - **`pull` failure must abort the job** — an empty local `state/` pushed back
   would otherwise destroy the remote state layer.
 
-### One-time setup
+### One-time setup (per repository)
 
 R2 (Cloudflare dashboard):
 
-1. R2 → **Create bucket** → `loop-state-alex1990`.
+1. R2 → **Create bucket** → `loop-state-tiny-oss` (i.e. `loop-state-<repo>`).
 2. R2 → **API → Manage R2 API Tokens → Create API Token** → permission
-   *Object Read & Write* → **specify bucket `loop-state-alex1990` only**.
+   *Object Read & Write* → **Specify bucket → `loop-state-tiny-oss` only**.
+   Do not use "Apply to all buckets", and do not use the global
+   *My Profile → API Tokens* page (that is a different system with account-wide
+   scope). *Object Read & Write* cannot create, delete or configure buckets and
+   is **not accepted by the Cloudflare REST API at all** — it is purely an S3
+   credential.
 3. Note **Access Key ID**, **Secret Access Key**, and the **Account ID**.
 
 GitHub → Settings → Secrets and variables → Actions.
@@ -154,8 +178,8 @@ so the account ID is part of an address, and bucket names are not sensitive):
 
 Optional, with sane defaults: `LOOP_GH_TOKEN` (fine-grained PAT; unused while
 report-only, since `github.token` covers read access) and `R2_BUCKET` (defaults
-to `loop-state-alex1990` in `shared/r2.mjs`). Both the `R2_ACCOUNT_ID` and
-`R2_BUCKET` lookups fall back to the same-named secret, so either store works.
+to the derived `loop-state-<repo>`). Both the `R2_ACCOUNT_ID` and `R2_BUCKET`
+lookups fall back to the same-named secret, so either store works.
 
 ```bash
 gh secret   set R2_ACCESS_KEY_ID     -R Alex1990/tiny-oss
@@ -163,6 +187,20 @@ gh secret   set R2_SECRET_ACCESS_KEY -R Alex1990/tiny-oss
 gh secret   set DEEPSEEK_API_KEY     -R Alex1990/tiny-oss
 gh variable set R2_ACCOUNT_ID        -R Alex1990/tiny-oss
 ```
+
+### Adding another repository
+
+Per-repo isolation is structural, so onboarding a repo is copy-and-configure —
+no shared infrastructure to extend:
+
+1. Copy `scripts/loop/` and `.github/workflows/loop.yml` into the new repo
+   (the loop code lives with the repository it drives).
+2. Create bucket `loop-state-<that-repo>` and a token scoped to **that** bucket.
+3. Set the same four items in the new repo (its own token, its own bucket).
+   No cross-repo credential is shared.
+
+`R2_PREFIX` and the bucket derivation are already repo-relative, so nothing in
+the copied code needs editing.
 
 Seeding the existing A0 state layer (13 files: 3 tasks, 8 runs, metrics,
 SUMMARY) — needs an AWS CLI on the seeding machine, because the bucket is
@@ -176,7 +214,9 @@ R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... \
   node scripts/loop/r2-sync.mjs seed   # then `check`
 ```
 
-(`R2_BUCKET` may be omitted — it defaults to `loop-state-alex1990`.)
+(The bucket name comes from `package.json`, so `R2_BUCKET` is only needed to
+target a different bucket. A token scoped to one bucket also proves the scoping
+worked: `aws s3 ls <endpoint> --endpoint-url <endpoint>` should be refused.)
 
 `seed` (like `push`) omits `--delete`, so it can only add or overwrite.
 

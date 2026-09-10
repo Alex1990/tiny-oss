@@ -15,15 +15,47 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-export const R2_PREFIX = 'state/tiny-oss/';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 /**
- * 只有一个桶，所以桶名内置为默认值（非秘密，也可用 `R2_BUCKET` 覆盖）。
- * 真正必须外部注入的只有三项 —— 前两项是凭据，第三项是端点的一部分，
- * 三者都无法从彼此推导出来。
+ * 桶内路径前缀。**每仓一桶**（owner 定稿），桶名已承载仓库身份，
+ * 前缀不再重复 repo 段 —— 远端 key 与本地 `state/` 一一对应。
  */
-const DEFAULT_BUCKET = 'loop-state-alex1990';
+export const R2_PREFIX = 'state/';
+
+/**
+ * 每仓一桶。
+ *
+ * 为什么不用一个桶装所有仓库：R2 的 API token 权限只能限到**桶**，限不到前缀
+ * （Access Policy 的资源标识是 `...r2.bucket.<ACCOUNT_ID>_<JURISDICTION>_<BUCKET>`，
+ * 没有 key/prefix 维度）。共用桶时「每仓一把独立 token」形同虚设 —— 每把都能读写
+ * 整个桶，一次凭据泄漏或 fork 注入的影响面就是所有接入仓库。
+ *
+ * 桶名规则 `loop-state-<repo>`，`R2_BUCKET` 可覆盖（迁移、排查、临时指向别的桶）。
+ */
+let repoNameCache = null;
+
+function repoName() {
+  if (repoNameCache) return repoNameCache;
+  // CI：GITHUB_REPOSITORY = "owner/repo"
+  const fromCi = (process.env.GITHUB_REPOSITORY ?? '').split('/')[1];
+  if (fromCi) return (repoNameCache = fromCi);
+  // 本地（seed 等）：package.json 的 name，与仓库名约定一致
+  try {
+    repoNameCache = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).name;
+  } catch (e) {
+    throw new Error(`无法确定仓库名（GITHUB_REPOSITORY 未设，且读不到 ${path.join(ROOT, 'package.json')}）：${e.message}`);
+  }
+  return repoNameCache;
+}
+
+/** 本仓的 R2 桶名。 */
+export const bucket = () => process.env.R2_BUCKET || `loop-state-${repoName()}`;
+
 const REQUIRED = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'];
 
 export function r2Env() {
@@ -41,7 +73,6 @@ export function r2Env() {
   };
 }
 
-export const bucket = () => process.env.R2_BUCKET || DEFAULT_BUCKET;
 const endpoint = () => `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
 const s3url = (prefix) => `s3://${bucket()}/${prefix}`;
 
