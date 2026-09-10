@@ -59,11 +59,14 @@ jobs:
       LOOP_MODEL: deepseek/deepseek-flash
       LOOP_RUN_TIMEOUT_MS: '3300000' # 55min，留出 push 余量（job timeout 60min）
       GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN || github.token }}
+      # 凭据：只能是 secret
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      # 非敏感配置：优先读 repository variable，回落 secret（两种配法都支持）。
+      # ACCOUNT_ID 是 R2 端点的一部分（https://<id>.r2.cloudflarestorage.com），不是凭据。
+      R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
 
     steps:
       # checkout 默认分支：loop 需要本仓的 skills/ 与 scripts/loop/，
