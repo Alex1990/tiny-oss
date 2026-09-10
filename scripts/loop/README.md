@@ -376,8 +376,11 @@ vacuous when nothing is written to GitHub. Source: this file, plus
   workflow cost 102,860 tokens that way, which is why this switch exists.
 - `gh` works from this machine (list/view in seconds); the older note about
   direct GitHub timeouts and a stopped proxy is stale.
-- No `rclone` and no `aws` CLI on this Windows box — R2 sync is runner-side only;
-  local seeding needs an AWS CLI installed first.
+- AWS CLI **v2 is now installed locally** (`C:\Program Files\Amazon\AWSCLIV2`),
+  matching the runner. Note that a `pip install awscli` does **not** work for
+  this: it produces a `.cmd` shim, which Node refuses to spawn on Windows
+  (`spawnSync aws ENOENT`), whereas v2 ships a real `aws.exe`. Open a new
+  terminal after installing so PATH picks it up.
 - Workflow edits can be pre-checked locally with
   [`actionlint`](https://github.com/rhysd/actionlint) (a bad `runner` context in
   job-level `env` is a parse failure GitHub only reports as "workflow file

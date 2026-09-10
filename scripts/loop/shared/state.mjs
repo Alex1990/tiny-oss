@@ -262,7 +262,11 @@ export async function renderSummary(s) {
       const rows = (await readRunLines(s, rid)).filter((r) => ['start', 'end'].includes(r.event));
       const st = rows.find((r) => r.event === 'start');
       const en = rows.find((r) => r.event === 'end');
-      if (st) L.push(`- ${rid} task #${st.taskId} ${st.stage}${en ? ` → ${en.outcome}` : ' (未收尾)'}`);
+      // 系统级 run（sweep / retro / release 预检）没有 taskId
+      if (st) {
+        const what = st.taskId ? `task #${st.taskId}` : 'system';
+        L.push(`- ${rid} ${what} ${st.stage}${en ? ` → ${en.outcome}` : ' (未收尾)'}`);
+      }
     }
     L.push('');
   }
