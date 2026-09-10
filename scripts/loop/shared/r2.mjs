@@ -11,19 +11,25 @@
  *   - `AWS_EC2_METADATA_DISABLED=true`：避免在非 EC2 环境探测实例元数据拖慢/报错。
  *
  * 失败语义（重要）：pull 失败必须中止整条链 —— 否则本地 state/ 为空，
- * 随后的 push --delete 会把远端状态层清空。
+ * 随后 push 出去的就不是完整状态层。
  */
 
 import { spawnSync } from 'node:child_process';
 
 export const R2_PREFIX = 'state/tiny-oss/';
 
-const REQUIRED = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET'];
+/**
+ * 只有一个桶，所以桶名内置为默认值（非秘密，也可用 `R2_BUCKET` 覆盖）。
+ * 真正必须外部注入的只有三项 —— 前两项是凭据，第三项是端点的一部分，
+ * 三者都无法从彼此推导出来。
+ */
+const DEFAULT_BUCKET = 'loop-state-alex1990';
+const REQUIRED = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'];
 
 export function r2Env() {
   const missing = REQUIRED.filter((k) => !process.env[k]);
   if (missing.length) {
-    throw new Error(`缺少 R2 环境变量: ${missing.join(', ')}（应配为 Actions secrets，勿写进仓库文件）`);
+    throw new Error(`缺少 R2 环境变量: ${missing.join(', ')}（应配为 Actions secret/variable，勿写进仓库文件）`);
   }
   return {
     ...process.env,
@@ -35,8 +41,9 @@ export function r2Env() {
   };
 }
 
+export const bucket = () => process.env.R2_BUCKET || DEFAULT_BUCKET;
 const endpoint = () => `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-const s3url = (prefix) => `s3://${process.env.R2_BUCKET}/${prefix}`;
+const s3url = (prefix) => `s3://${bucket()}/${prefix}`;
 
 function aws(args, { label }) {
   const r = spawnSync('aws', args, { env: r2Env(), encoding: 'utf8' });

@@ -135,16 +135,34 @@ R2 (Cloudflare dashboard):
    *Object Read & Write* → **specify bucket `loop-state-alex1990` only**.
 3. Note **Access Key ID**, **Secret Access Key**, and the **Account ID**.
 
-GitHub → Settings → Secrets and variables → Actions:
+GitHub → Settings → Secrets and variables → Actions.
+
+**Three secrets** (actual credentials — they cannot be inferred from each other):
 
 | Secret | Value |
 | --- | --- |
-| `R2_ACCOUNT_ID` | Cloudflare account ID |
-| `R2_ACCESS_KEY_ID` | token access key id |
-| `R2_SECRET_ACCESS_KEY` | token secret |
-| `R2_BUCKET` | `loop-state-alex1990` |
+| `R2_ACCESS_KEY_ID` | R2 token access key id |
+| `R2_SECRET_ACCESS_KEY` | R2 token secret |
 | `DEEPSEEK_API_KEY` | LLM key (DeepSeek platform) |
-| `LOOP_GH_TOKEN` | fine-grained PAT (contents/issues/PRs write, this repo only); optional while report-only |
+
+**One variable** (not a secret — the R2 endpoint is `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`,
+so the account ID is part of an address, and bucket names are not sensitive):
+
+| Variable | Value |
+| --- | --- |
+| `R2_ACCOUNT_ID` | Cloudflare account ID |
+
+Optional, with sane defaults: `LOOP_GH_TOKEN` (fine-grained PAT; unused while
+report-only, since `github.token` covers read access) and `R2_BUCKET` (defaults
+to `loop-state-alex1990` in `shared/r2.mjs`). Both the `R2_ACCOUNT_ID` and
+`R2_BUCKET` lookups fall back to the same-named secret, so either store works.
+
+```bash
+gh secret   set R2_ACCESS_KEY_ID     -R Alex1990/tiny-oss
+gh secret   set R2_SECRET_ACCESS_KEY -R Alex1990/tiny-oss
+gh secret   set DEEPSEEK_API_KEY     -R Alex1990/tiny-oss
+gh variable set R2_ACCOUNT_ID        -R Alex1990/tiny-oss
+```
 
 Seeding the existing A0 state layer (13 files: 3 tasks, 8 runs, metrics,
 SUMMARY) — needs an AWS CLI on the seeding machine, because the bucket is
@@ -154,9 +172,11 @@ private and `state/` is gitignored (so the runner cannot seed it from a checkout
 # once, locally
 winget install Amazon.AWSCLI        # or the macOS/Linux equivalent
 
-R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... R2_BUCKET=loop-state-alex1990 \
+R2_ACCOUNT_ID=... R2_ACCESS_KEY_ID=... R2_SECRET_ACCESS_KEY=... \
   node scripts/loop/r2-sync.mjs seed   # then `check`
 ```
+
+(`R2_BUCKET` may be omitted — it defaults to `loop-state-alex1990`.)
 
 `seed` (like `push`) omits `--delete`, so it can only add or overwrite.
 
