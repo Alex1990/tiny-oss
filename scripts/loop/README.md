@@ -381,7 +381,7 @@ was *correct*, and whether new events produce proposals that match reality.
       step, `continue-on-error`, or move it to a `pull_request_target` job).
 - [x] D22 (A1) `renderSummary` had no section for `status: new`, so a task the
       sweep had just created was invisible in the human summary — the one item
-      most in need of attention. Reported by a real sweep run; a `未处理 (new)`
+      most in need of attention. Reported by a real sweep run; a `Unprocessed (new)`
       section now lists them.
 - [x] D23 (A1) System-level runs had no outcome vocabulary of their own. The
       first real sweep recorded `closed`, which in the task vocabulary means
@@ -409,6 +409,12 @@ was *correct*, and whether new events produce proposals that match reality.
       belongs in the `pr-review` route (reopen `waiting-merge` → `ready` on
       `synchronize` for loop PRs) rather than in claimability. Left open
       deliberately: A1's week should show how often it actually bites.
+- [x] D27 (A1) `run.mjs`'s subcommands did not catch errors thrown by the shared
+      library, so `pnpm loop start --task <missing>` printed a full Node stack
+      trace instead of a one-line reason — the library throws (correct for the
+      orchestrator, which needs the failure) while a CLI should not. `main` now
+      wraps dispatch, so every subcommand reports the same way. Found while
+      reviewing the translated error messages.
 
 ## Environment facts
 

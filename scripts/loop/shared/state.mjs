@@ -1,23 +1,23 @@
 /**
- * tiny-oss Loop 状态层原语 —— 本地宿主 `run.mjs` 与 Actions 编排 `run-stage.mjs` 共用。
+ * tiny-oss Loop state-layer primitives — shared by the local host `run.mjs` and
+ * the Actions orchestrator `run-stage.mjs`.
+ * Single-writer principle: both entry points touch `state/` only through this module,
+ * so the two implementations cannot drift (#33 during A0 was manual drift).
  *
- * 唯一写入者原则：两个入口都只经本模块读写 `state/`，避免两份实现漂移
- * （A0 期 #33 的 acceptance 漏行就是人手漂移的实例）。
- *
- * schema：任务文件 / run 行 / 锁 / SUMMARY 见 scripts/loop/README.md；
- * 状态机与双口径定义见 docs/agents/ops.md、docs/agents/triage-labels.md。
+ * schema: task files / run rows / locks / SUMMARY — see scripts/loop/README.md;
+ * state machine + dual metrics: docs/agents/ops.md, docs/agents/triage-labels.md.
  */
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-/* ------------------------------------------------------------ 领域常量 */
+/* ------------------------------------------------------------ domain constants */
 
-/** 五角色标签（triage-labels.md）：互斥，禁止叠加矛盾角色。 */
+/** Five canonical role labels (triage-labels.md): mutually exclusive, never stacked. */
 export const ROLE_LABELS = ['needs-triage', 'needs-info', 'ready-for-agent', 'ready-for-human', 'wontfix'];
 
-/** outcome → 任务终态 + 应打标签（ops.md "Labels → task state"）。 */
+/** outcome → task terminal status + label to apply (ops.md "Labels → task state"). */
 export const OUTCOME_MAP = {
   'triaged':      { status: 'ready',         label: 'ready-for-agent' },
   'needs-info':   { status: 'waiting-info',  label: 'needs-info' },
@@ -27,21 +27,21 @@ export const OUTCOME_MAP = {
   'rejected':     { status: 'rejected',      label: null },
   'accepted':     { status: 'accepted',      label: null },
   'failed':       { status: 'waiting-human', label: 'needs-triage' },
-  // 宿主扩展（不在 ops.md 的 outcome 表内）：provider/网络瞬时故障，
-  // 任务应回到可领取态而不是灌进收件箱 —— 收件箱是给人看的（run 契约退出码 3）。
+  // Host extension (not in the ops.md outcome table): transient provider/network
+  // failures return the task to claimable, not the inbox (the inbox is for humans; exit 3).
   'retry':        { status: 'ready',         label: 'ready-for-agent' },
 };
 
-/** stage → 允许的成功 outcome 白名单（D5 防呆）；未列出的 stage 全放行。 */
+/** stage → whitelist of allowed successful outcomes (D5 guard); others allow all. */
 const COMMON_OUTCOMES = ['failed', 'rejected', 'accepted', 'retry'];
 
 /**
- * 系统级 run（sweep / retro / release 预检）的 outcome —— 只记录"这一轮跑得怎样"，
- * 不映射任何任务状态。
+ * System-level run (sweep / retro / release precheck) outcomes — they only record
+ * "how this round went" and map to no task status.
  *
- * 为什么不能复用任务的 outcome：`closed` 在任务语义里意为"直接关闭、不进接受率
- * 分母"。系统级 run 若记 `closed`，retro 读 end 行做统计时会把 sweep/retro 的运行
- * 次数算成被关闭的任务，污染双口径。
+ * Why task outcomes cannot be reused: `closed` means "closed outright, not part
+ * of the acceptance denominator". A system-level run recording `closed` would
+ * make retro count sweep/retro runs as closed tasks, skewing the dual-metric.
  */
 export const SYSTEM_OUTCOMES = ['completed', 'failed', 'retry', 'aborted'];
 
@@ -63,7 +63,7 @@ export function allowedOutcomes(stage) {
   return [...COMMON_OUTCOMES, ...(STAGE_OUTCOMES[stage] ?? [])];
 }
 
-/* ---------------------------------------------------------------- 时钟 */
+/* ---------------------------------------------------------------- clock */
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -76,11 +76,11 @@ export const newRunId = () => {
     + `-${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}-${rand4()}`;
 };
 
-/* ------------------------------------------------------------ 状态层路径 */
+/* ------------------------------------------------------------ state-layer paths */
 
 /**
- * 构造状态层句柄。`stateRoot` 默认 `<repoRoot>/state`，`STATE_DIR` 环境变量可覆盖
- * （runner 上锚定到 job 工作目录，本地锚定到仓库根）。
+ * Build a state-layer handle. `stateRoot` defaults to `<repoRoot>/state`; override
+ * it with `STATE_DIR` (job workdir on the runner, repo root locally).
  */
 export function makeState(repoRoot) {
   const root = process.env.STATE_DIR ? path.resolve(process.env.STATE_DIR) : path.join(repoRoot, 'state');
@@ -107,7 +107,7 @@ export async function ensureDirs(s) {
   );
 }
 
-/* --------------------------------------------------------------- 文件 IO */
+/* --------------------------------------------------------------- file IO */
 
 export async function readJson(file) {
   try {
@@ -141,7 +141,7 @@ async function appendJsonl(file, row) {
 export const appendRunRow = (s, rid, row) => appendJsonl(s.runFile(rid), row);
 export const readRunLines = (s, rid) => readJsonl(s.runFile(rid));
 
-/* ------------------------------------------------------------ 任务操作 */
+/* ------------------------------------------------------------ task operations */
 
 export async function listTasks(s) {
   const files = (await fs.readdir(s.tasksDir).catch(() => [])).filter((f) => f.endsWith('.json'));
@@ -155,7 +155,7 @@ export async function listTasks(s) {
 
 export async function loadTask(s, id) {
   const t = await readJson(s.taskFile(id));
-  if (!t) throw new Error(`task #${id} 不存在（${s.taskFile(id)}）`);
+  if (!t) throw new Error(`task #${id} not found (${s.taskFile(id)})`);
   return t;
 }
 
@@ -164,16 +164,19 @@ export async function saveTask(s, t) {
   await writeJson(s.taskFile(t.id), t);
 }
 
-/** 下一本地任务 id：数字文件名最大 +1；空目录从 9000 起（避开 GitHub 编号段）。 */
+/** Next local task id: max numeric filename + 1; empty dir starts at 9000 (skips GH ids). */
 export async function nextTaskId(s) {
   const files = await fs.readdir(s.tasksDir).catch(() => []);
   const nums = files.map((f) => /^(\d+)\.json$/.exec(f)?.[1]).filter(Boolean).map(Number);
   return nums.length ? Math.max(...nums) + 1 : 9000;
 }
 
-/* ------------------------------------------------------------------ 锁 */
+/* ------------------------------------------------------------------ locks */
 
-/** 全托管形态下互斥由 workflow `concurrency` 承担；锁文件退化为记录与防呆。 */
+/**
+ * In the fully-hosted form, mutual exclusion comes from the workflow `concurrency`;
+ * the lock file degrades to a record and a guard.
+ */
 export const lockExpired = (lockedBy) =>
   !lockedBy || Date.now() - Date.parse(lockedBy.since) > (lockedBy.ttl || 3600) * 1000;
 
@@ -193,14 +196,14 @@ export async function releaseLock(s, t, stage) {
   await fs.rm(s.lockFile(t.id, stage), { force: true });
 }
 
-/* -------------------------------------------------------------- 评测写入 */
+/* -------------------------------------------------------------- acceptance writes */
 
 const acceptanceKey = (r) => `${r.taskId}|${r.event}|${r.pr ?? ''}`;
 
 /**
- * 追加一条评测事件；同 `taskId+event+pr` 已存在则跳过（幂等）。
- * 写入者 = workflow job（agent 不写）；sweep 补写带 `sweep-corrected`。
- * 返回 true 表示本次确实写入。
+ * Append an acceptance event; skipped when the same `taskId+event+pr` already
+ * exists (idempotent). Writer = the workflow job (agents never write); sweep
+ * corrections carry `sweep-corrected`. Returns true when a row was actually written.
  */
 export async function appendAcceptance(s, row) {
   const existing = await readJsonl(s.acceptanceFile);
@@ -214,7 +217,7 @@ export async function appendAcceptance(s, row) {
 export async function renderSummary(s) {
   const tasks = await listTasks(s);
   const L = [];
-  L.push(`# Loop 状态摘要 (updated ${nowIso()})`);
+  L.push(`# Loop state summary (updated ${nowIso()})`);
   L.push('');
   const sec = (title, rows) => {
     if (!rows.length) return;
@@ -225,30 +228,31 @@ export async function renderSummary(s) {
   const tag = (t) => (t.labels?.length ? ` [${t.labels.join(',')}]` : '');
   const when = (t) => (t.updatedAt ?? '').slice(0, 16).replace('T', ' ');
 
-  sec('运行中', tasks.filter((t) => t.status === 'processing').map((t) => {
+  sec('In progress', tasks.filter((t) => t.status === 'processing').map((t) => {
     const lk = t.lockedBy
       ? ` (locked ${t.lockedBy.runId}, TTL ${new Date(Date.parse(t.lockedBy.since) + t.lockedBy.ttl * 1000).toISOString().slice(11, 16)}Z)`
       : '';
     return `#${t.id} ${t.stage} — ${t.title}${lk}`;
   }));
 
-  sec('待人工放行 (waiting-merge)', tasks.filter((t) => t.status === 'waiting-merge').map((t) => {
+  sec('Awaiting human merge (waiting-merge)',
+    tasks.filter((t) => t.status === 'waiting-merge').map((t) => {
     const prs = t.prs?.length ? ` PR #${t.prs.join(', #')}` : '';
     return `#${t.id}${prs} — ${t.title}${tag(t)} (${when(t)})`;
   }));
 
-  sec('收件箱 (waiting-human / waiting-info)',
+  sec('Inbox (waiting-human / waiting-info)',
     tasks.filter((t) => ['waiting-human', 'waiting-info'].includes(t.status))
       .map((t) => `#${t.id} — ${t.title}${tag(t)} (${when(t)})`));
 
-  sec('待领取 (ready)', tasks.filter((t) => t.status === 'ready').map((t) => {
+  sec('Ready to claim (ready)', tasks.filter((t) => t.status === 'ready').map((t) => {
     const d = t.decision ? ` decision=${t.decision.verdict}/${t.decision.confidence}` : '';
     return `#${t.id} — ${t.title}${d} (${when(t)})`;
   }));
 
-  // `new` = 事件已入库但还没 triage。最容易被人漏看，所以必须出现在摘要里
-  // （sweep 刚建档的任务就是这一类）。
-  sec('未处理 (new)', tasks.filter((t) => t.status === 'new').map((t) => {
+  // `new` = the event is stored but not yet triaged. Easiest for humans to miss,
+  // so it must appear in the summary (tasks just filed by sweep are this kind).
+  sec('Unprocessed (new)', tasks.filter((t) => t.status === 'new').map((t) => {
     const kind = t.kind === 'pr' ? 'PR' : 'issue';
     return `#${t.id} (${kind}) — ${t.title} (${when(t)})`;
   }));
@@ -256,34 +260,34 @@ export async function renderSummary(s) {
   const terminal = tasks.filter((t) => ['closed', 'accepted', 'rejected'].includes(t.status));
   if (terminal.length) {
     const c = (st) => terminal.filter((t) => t.status === st).length;
-    L.push('## 终态计数', '');
+    L.push('## Terminal counts', '');
     L.push(`closed=${c('closed')} accepted=${c('accepted')} rejected=${c('rejected')}`, '');
   }
 
-  // 最近评测（metrics/acceptance.jsonl：workflow 写，agent 不写）
+  // Recent acceptance (metrics/acceptance.jsonl: written by the workflow, not agents)
   const acc = (await readJsonl(s.acceptanceFile)).slice(-5);
   if (acc.length) {
-    L.push('## 最近评测', '');
+    L.push('## Recent acceptance', '');
     for (const r of acc) {
       L.push(`- ${r.event} task #${r.taskId}${r.pr ? ` pr #${r.pr}` : ''} accepted=${r.accepted ?? '-'} (${r.writer ?? '?'})`);
     }
     L.push('');
   }
 
-  // 近期 run 尾部（≤5 条，防超长）
+  // Tail of recent runs (<= 5, to keep the file short)
   const runFiles = (await fs.readdir(s.runsDir).catch(() => []))
     .filter((f) => f.endsWith('.jsonl')).sort().slice(-5);
   if (runFiles.length) {
-    L.push('## 近期 run', '');
+    L.push('## Recent runs', '');
     for (const f of runFiles) {
       const rid = f.slice(0, -'.jsonl'.length);
       const rows = (await readRunLines(s, rid)).filter((r) => ['start', 'end'].includes(r.event));
       const st = rows.find((r) => r.event === 'start');
       const en = rows.find((r) => r.event === 'end');
-      // 系统级 run（sweep / retro / release 预检）没有 taskId
+      // System-level run (sweep / retro / release precheck) has no taskId
       if (st) {
         const what = st.taskId ? `task #${st.taskId}` : 'system';
-        L.push(`- ${rid} ${what} ${st.stage}${en ? ` → ${en.outcome}` : ' (未收尾)'}`);
+        L.push(`- ${rid} ${what} ${st.stage}${en ? ` → ${en.outcome}` : ' (unfinished)'}`);
       }
     }
     L.push('');
@@ -293,7 +297,7 @@ export async function renderSummary(s) {
   await fs.writeFile(s.summaryFile, summary.trimEnd() + '\n', 'utf8');
 }
 
-/* ------------------------------------------------------------ GitHub 动作 */
+/* ------------------------------------------------------------ GitHub actions */
 
 export function ghRepoOf(url) {
   const m = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:issues|pull)\/\d+/.exec(url ?? '');
@@ -301,18 +305,18 @@ export function ghRepoOf(url) {
 }
 
 /**
- * 由 outcome 推导 GitHub 写动作清单 —— **纯函数，不触网**。
- *
- * report 模式只调用本函数并把 `describeActions` 的输出写进报告；
- * auto 模式（L2+ / 预演）才交给 `applyActions` 执行。
- * 这是"严格只报告"的唯一开关点：不调 apply 即不写 GitHub。
+ * Derive the GitHub write-action list from the outcome — **pure function, never
+ * touches the network**.
+ * report mode only calls this function and writes `describeActions` output into the
+ * report; auto mode (L2+ / dry run) hands it to `applyActions` — the one "report
+ * only" switch: no apply, no GitHub writes.
  */
 export function planActions(t, outcome, { label, comment, note } = {}) {
-  if (!t.url) return []; // 本地合成任务无 GitHub 目标
-  if (outcome === 'retry') return []; // 未实际执行（故障/草稿），不该产生写动作建议
+  if (!t.url) return []; // a local synthetic task has no GitHub target
+  if (outcome === 'retry') return []; // nothing actually ran (failure/draft), so no write actions
   const repo = ghRepoOf(t.url);
   if (!repo) return [];
-  // PR 与 issue 是两个不同的 gh 子命令面：对 PR 编号调 `gh issue edit` 会失败。
+  // PR and issue are different gh subcommand surfaces: `gh issue edit` on a PR number fails.
   const gh = t.kind === 'pr' ? 'pr' : 'issue';
   const acts = [];
   const l = label ?? OUTCOME_MAP[outcome]?.label ?? null;
@@ -325,11 +329,11 @@ export function planActions(t, outcome, { label, comment, note } = {}) {
   return acts;
 }
 
-/** 人读描述，供 report 模式的报告与 Step Summary 使用。 */
+/** Human-readable description, used by report-mode reports and the Step Summary. */
 export function describeActions(actions) {
   return actions.map((a) => {
     if (a.kind === 'label') {
-      return `label #${a.number}: +${a.label}${a.stripRoles ? ' (先移除其它五角色标签)' : ''}`;
+      return `label #${a.number}: +${a.label}${a.stripRoles ? ' (remove other role labels)' : ''}`;
     }
     if (a.kind === 'close') return `close #${a.number} (comment: ${firstLine(a.body)})`;
     return `comment #${a.number}: ${firstLine(a.body)}`;
@@ -338,12 +342,15 @@ export function describeActions(actions) {
 
 const firstLine = (s) => String(s ?? '').split('\n')[0].slice(0, 120);
 
-/** 执行写动作（仅 auto / 预演路径调用）。失败只 warn，不回滚本地状态。 */
+/**
+ * Execute write actions (only called on the auto / dry-run path). Failures only
+ * warn; local state is never rolled back.
+ */
 export function applyActions(actions, { log = console.log, warn = console.warn } = {}) {
   const applied = [];
   for (const a of actions) {
     const gh = (args) => spawnSync('gh', args, { encoding: 'utf8' });
-    const sub = a.gh ?? 'issue'; // PR 走 gh pr，issue 走 gh issue
+    const sub = a.gh ?? 'issue'; // PRs go to gh pr, issues to gh issue
     if (a.kind === 'label') {
       let stale = [];
       if (a.stripRoles) {
@@ -355,24 +362,29 @@ export function applyActions(actions, { log = console.log, warn = console.warn }
       const args = [sub, 'edit', String(a.number), '-R', a.repo, '--add-label', a.label];
       for (const st of stale) args.push('--remove-label', st);
       const r = gh(args);
-      if (r.status !== 0) warn(`[loop] warn: 打标 ${a.label} 失败: ${(r.stderr || '').trim()}`);
+      if (r.status !== 0) warn(`[loop] warn: label ${a.label} failed: ${(r.stderr || '').trim()}`);
       else { log(`[loop] gh: #${a.number} +label ${a.label}${stale.length ? `, -label ${stale.join(', ')}` : ''}`); applied.push(a); }
     } else if (a.kind === 'close') {
       const r = gh([sub, 'close', String(a.number), '-R', a.repo, '--comment', a.body]);
-      if (r.status !== 0) warn(`[loop] warn: close #${a.number} 失败: ${(r.stderr || '').trim()}`);
+      if (r.status !== 0) warn(`[loop] warn: close #${a.number} failed: `
+        + `${(r.stderr || '').trim()}`);
       else { log(`[loop] gh: #${a.number} closed with comment`); applied.push(a); }
     } else if (a.kind === 'comment') {
       const r = gh([sub, 'comment', String(a.number), '-R', a.repo, '--body', a.body]);
-      if (r.status !== 0) warn(`[loop] warn: 评论 #${a.number} 失败: ${(r.stderr || '').trim()}`);
+      if (r.status !== 0) warn(`[loop] warn: comment #${a.number} failed: `
+        + `${(r.stderr || '').trim()}`);
       else { log(`[loop] gh: #${a.number} commented`); applied.push(a); }
     }
   }
   return applied;
 }
 
-/* ---------------------------------------------------------- run 生命周期 */
+/* ---------------------------------------------------------- run lifecycle */
 
-/** 领取任务并写 start 行，返回 runId。`task` 为 null 表示系统级 run（sweep/retro/release 预检）。 */
+/**
+ * Claim a task and write the start row, returning the runId. `task` = null means a
+ * system-level run (sweep / retro / release precheck).
+ */
 export async function beginRun(s, t, stage, { sandbox, trigger = 'manual', model = null } = {}) {
   const rid = newRunId();
   if (t) await acquireLock(s, t, stage, rid);
@@ -383,12 +395,12 @@ export async function beginRun(s, t, stage, { sandbox, trigger = 'manual', model
   return rid;
 }
 
-/** report 模式：把待人工执行的写动作追加到该 run 的报告文件。 */
+/** report mode: append pending human write actions to this run's report file. */
 export async function appendActionBlock(s, runId, actions) {
   const file = path.join(s.reportsDir, `${runId}.md`);
   await fs.mkdir(s.reportsDir, { recursive: true });
   const block = [
-    '', '## 待人工执行的 GitHub 动作（写边界=report）', '',
+    '', '## Pending GitHub actions (write level=report)', '',
     ...describeActions(actions).map((d) => `- [ ] ${d}`), '',
   ].join('\n');
   await fs.appendFile(file, block, 'utf8');
@@ -396,32 +408,38 @@ export async function appendActionBlock(s, runId, actions) {
 }
 
 /**
- * 收尾一个 run：写 end 行 → 更新任务 → 释放锁 → GitHub 动作（report 只列出，auto 才执行）
- * → 刷新 SUMMARY。本地 CLI 与 runner 编排共用，保证幂等与白名单只有一份实现。
+ * Finish a run: write the end row → update the task → release the lock → GitHub
+ * actions (report lists only, auto executes) → refresh SUMMARY. Shared by the local
+ * CLI and the runner orchestrator, so idempotency and the whitelist have one home.
  */
 export async function finishRun(s, {
   runId, outcome, note = null, comment = null, label = null, decision = null, pr = null,
   tokens = null, writeLevel = 'report', noGithub = false, log = () => {}, warn = () => {},
 }) {
-  if (!outcome) throw new Error('outcome 必填');
+  if (!outcome) throw new Error('outcome is required');
   const rows = await readRunLines(s, runId);
-  if (!rows.length) throw new Error(`run ${runId} 不存在（${s.runFile(runId)}）`);
-  if (rows.some((r) => r.event === 'end')) throw new Error(`run ${runId} 已有 end 行，重复收尾被拒绝（幂等）`);
+  if (!rows.length) throw new Error(`run ${runId} not found (${s.runFile(runId)})`);
+  if (rows.some((r) => r.event === 'end')) throw new Error(
+    `run ${runId} already has an end row; duplicate finish is rejected (idempotent)`,
+  );
   const start = rows[0];
-  // 系统级 run（sweep/retro/release 预检）无任务文件：只记 run 行，不做状态转移，
-  // 且用另一套 outcome 词表（`closed` 等任务语义不该出现在这里）。
+  // A system-level run (sweep/retro/release precheck) has no task file: it only
+  // records the run row, no status transition, and no task outcome semantics (e.g. closed).
   const t = start.taskId ? await loadTask(s, start.taskId) : null;
   if (!t) {
     if (!SYSTEM_OUTCOMES.includes(outcome)) {
-      throw new Error(`系统级 run（无任务）的 outcome ∈ {${SYSTEM_OUTCOMES.join(', ')}}，收到 ${outcome}；`
-        + '任务的 outcome 语义（如 closed）不应出现在系统级 run 里（会污染双口径统计）');
+      throw new Error(`system-level run (no task) outcome must be in `
+        + `{${SYSTEM_OUTCOMES.join(', ')}}, got ${outcome}; task outcome semantics `
+        + `(e.g. closed) must not appear on a system-level run (dual-metric pollution)`);
     }
   } else {
     if (!OUTCOME_MAP[outcome]) {
-      throw new Error(`outcome 必填且 ∈ {${Object.keys(OUTCOME_MAP).join(', ')}}，收到 ${outcome}`);
+      throw new Error(`outcome must be one of `
+        + `{${Object.keys(OUTCOME_MAP).join(', ')}}, got ${outcome}`);
     }
     if (!outcomeAllowed(start.stage, outcome)) {
-      throw new Error(`stage=${start.stage} 不允许 outcome=${outcome}（D5；允许: ${allowedOutcomes(start.stage).join(', ')}）`);
+      throw new Error(`stage=${start.stage} disallows outcome=${outcome} (D5; `
+        + `allowed: ${allowedOutcomes(start.stage).join(', ')})`);
     }
   }
   const at = nowIso();
@@ -442,7 +460,7 @@ export async function finishRun(s, {
   }
   if (pr) {
     const n = Number(pr);
-    if (!Number.isInteger(n) || n <= 0) throw new Error('pr 须为正整数');
+    if (!Number.isInteger(n) || n <= 0) throw new Error('pr must be a positive integer');
     if (!t.prs.includes(n)) t.prs.push(n);
   }
   const m = OUTCOME_MAP[outcome];

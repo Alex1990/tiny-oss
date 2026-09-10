@@ -1,22 +1,30 @@
 /**
- * 驱动 pi 无头执行一个 loop run。
+ * Drive pi headlessly to execute one loop run.
  *
- * 分工：开场/执行/收尾由 agent 按 prompt 完成（与 A0 的 skill 约定一致）；
- * 本模块只负责构造 prompt、spawn、采集用量与退出信号、分类失败。
- * 状态写入仍由 agent 调 `pnpm loop end` 触发（复用 run.mjs 的白名单与幂等），
- * 编排层只在该调用缺失时兜底。
+ * Division of labour: opening/execution/closing are done by the agent per the prompt
+ * (matching the skill convention in A0); this module only builds the prompt, spawns,
+ * collects usage and exit signals, and classifies failures.
+ * State writes are still triggered by the agent calling `pnpm loop end` (reusing
+ * run.mjs's whitelist and idempotency); the orchestration layer only falls back when
+ * that call is missing.
  *
- * pi 事实（2026-09 一手验证）：
- *   - `--mode json` → JSONL 事件流（session / agent_start / turn_* / message_* /
- *     tool_execution_* / agent_end）；末轮 message_end 带权威 usage 与 stopReason。
- *   - `--approve` 必需：非交互模式不弹 trust prompt，缺它就忽略项目本地资源。
- *   - 退出码：正常 0；末轮 stopReason=error|aborted → 1；SIGTERM 143 / SIGHUP 129。
- *   - print 模式合并管道 stdin 到初始 prompt（大 prompt 走 stdin，避开 argv 上限）。
+ * pi facts (verified first-hand 2026-09):
+ *   - `--mode json` → JSONL event stream (session / agent_start / turn_* / message_* /
+ *     tool_execution_* / agent_end); the last message_end carries the authoritative
+ *     usage and stopReason.
+ *   - `--approve` is required: non-interactive mode shows no trust prompt, and without
+ *     it project-local resources are ignored.
+ *   - exit codes: normal 0; last-turn stopReason=error|aborted → 1; SIGTERM 143 / SIGHUP 129.
+ *   - print mode merges piped stdin into the initial prompt (large prompts go over stdin
+ *     to avoid the argv limit).
  */
 
 import { spawn } from 'node:child_process';
 
-/** 提示词语言与 skills/AGENTS.md 保持一致（英文），避免 agent 在英文规范里读中文指令。 */
+/**
+ * Prompt language matches skills/AGENTS.md (English) so the agent does not read
+ * Chinese instructions inside English norms.
+ */
 export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead = [] }) {
   const L = [];
   L.push(`You are one automated run of the tiny-oss loop. Stage: ${stage}.`);
@@ -85,18 +93,21 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
   return L.join('\n');
 }
 
-/** JSONL → 事件数组；非 JSON 行（进度提示等）忽略。 */
+/** JSONL → event array; non-JSON lines (progress notices etc.) are ignored. */
 export function parseEvents(text) {
   const events = [];
   for (const line of String(text ?? '').split('\n')) {
     const s = line.trim();
     if (!s || s[0] !== '{') continue;
-    try { events.push(JSON.parse(s)); } catch { /* 忽略非事件行 */ }
+    try { events.push(JSON.parse(s)); } catch { /* ignore non-event lines */ }
   }
   return events;
 }
 
-/** 从事件流提取用量与末轮停止原因（usage 只在 message_end 权威）。 */
+/**
+ * Extract usage and the last-turn stop reason from the event stream
+ * (usage is authoritative only on message_end).
+ */
 export function summarize(events) {
   const ends = events.filter((e) => e.type === 'message_end' && e?.message?.role === 'assistant');
   const last = ends[ends.length - 1] ?? null;
@@ -108,7 +119,10 @@ export function summarize(events) {
   };
 }
 
-/** 采样 pi 的会话文件（artifact 用）：返回指定目录下最新的 .jsonl。 */
+/**
+ * Sample pi's session files (for the artifact): return the newest .jsonl in the
+ * given directory.
+ */
 export const SESSION_HINT = 'session files land under --session-dir (uploaded as an artifact)';
 
 export function runPi({ prompt, cwd, sessionDir, model, timeoutMs = 3600000, log = () => {} }) {
@@ -122,8 +136,9 @@ export function runPi({ prompt, cwd, sessionDir, model, timeoutMs = 3600000, log
     ];
     if (model) args.push('--model', model);
 
-    // 引擎是模板层的实例变量 {{engine}}（05 §4.2）：默认 pi，可用 LOOP_ENGINE_CMD 覆盖
-    // （如本地用别的 CLI/包装脚本跑同一契约）。
+    // The engine is the template layer's instance variable {{engine}} (05 §4.2): defaults
+    // to pi, overridable with LOOP_ENGINE_CMD (e.g. run the same contract locally through
+    // another CLI or wrapper script).
     const engine = (process.env.LOOP_ENGINE_CMD || 'pi').split(/\s+/).filter(Boolean);
     const child = spawn(engine[0], [...engine.slice(1), ...args], {
       cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'],
@@ -134,7 +149,7 @@ export function runPi({ prompt, cwd, sessionDir, model, timeoutMs = 3600000, log
 
     const timer = setTimeout(() => {
       timedOut = true;
-      log(`[loop] run 超时（${Math.round(timeoutMs / 60000)}min），发送 SIGTERM`);
+      log(`[loop] run timed out (${Math.round(timeoutMs / 60000)}min), sending SIGTERM`);
       child.kill('SIGTERM');
       setTimeout(() => child.kill('SIGKILL'), 30000).unref?.();
     }, timeoutMs);
@@ -150,35 +165,47 @@ export function runPi({ prompt, cwd, sessionDir, model, timeoutMs = 3600000, log
       resolve({ code: code ?? (signal ? 1 : 0), signal, stdout, stderr, timedOut });
     });
 
-    child.stdin.on('error', () => { /* spawn 失败或提前退出时的 EPIPE 不应炸掉流程 */ });
+    // EPIPE when spawn fails or the process exits early must not crash the flow.
+    child.stdin.on('error', () => {});
     child.stdin.write(prompt);
     child.stdin.end();
   });
 }
 
 /**
- * 失败分类（Q6 决策）：机器故障 → 重试；agent 判定失败 → 收件箱；分不清 → 保守重试。
- * 收件箱是给人看的，不该被 provider 抖动灌满（否则人工介入率失去意义）。
- * 退出码沿用 run 契约：0 完成 / 1 失败→收件箱 / 2 卡死中止 / 3 建议重试。
+ * Failure classification (Q6 decision): machine failure → retry; agent-judged failure →
+ * inbox; unclear → retry conservatively.
+ * The inbox is for humans and must not be flooded by provider flakiness (otherwise the
+ * human-intervention rate loses meaning).
+ * Exit codes follow the run contract: 0 done / 1 failed→inbox / 2 abort / 3 retry suggested.
  */
 export function classify({ code, signal, stderr, timedOut, stopReason }) {
-  if (timedOut) return { exit: 2, kind: 'abort', reason: 'run 超时中止' };
-  if (code === 0) return { exit: 0, kind: 'ok', reason: 'pi 正常退出' };
+  if (timedOut) return { exit: 2, kind: 'abort', reason: 'run timed out and was aborted' };
+  if (code === 0) return { exit: 0, kind: 'ok', reason: 'pi exited normally' };
   if (code === 143 || code === 129 || signal) {
-    return { exit: 2, kind: 'abort', reason: `被信号终止（${signal ?? code}）` };
+    return { exit: 2, kind: 'abort', reason: `terminated by signal (${signal ?? code})` };
   }
-  if (code === -1) return { exit: 3, kind: 'retry', reason: 'pi 无法启动（安装/路径问题）' };
+  if (code === -1) {
+    return { exit: 3, kind: 'retry', reason: 'pi failed to start (install/path problem)' };
+  }
   const s = String(stderr ?? '');
-  // 凭据/配置类故障（缺 key、key 无效、pi 未解析到模型）：属宿主配置问题，不是任务问题，
-  // 绝不能因此把任务推进人工收件箱 —— 实测 pi 在无 key 时输出 "No models available"。
+  // Credential/config failures (missing key, invalid key, pi resolved no model): these are
+  // host configuration problems, not task problems, and must never push a task into the
+  // human inbox — observed: pi prints "No models available" when there is no key.
   if (/no models? available|no model resolved|use \/login|api key|unauthorized|forbidden|401|403|invalid.*(token|key)|not authenticated/i.test(s)) {
-    return { exit: 3, kind: 'retry', reason: '引擎凭据/配置未就绪 → 重试（需检查 secrets）' };
+    return {
+      exit: 3, kind: 'retry',
+      reason: 'engine credential/config not ready → retry (check secrets)',
+    };
   }
   if (/rate.?limit|429|timeout|timed out|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up|502|503|504|overloaded|capacity/i.test(s)) {
-    return { exit: 3, kind: 'retry', reason: '疑似 provider/网络瞬时故障 → 重试' };
+    return { exit: 3, kind: 'retry', reason: 'suspected transient provider/network flake → retry' };
   }
   if (stopReason === 'error' || stopReason === 'aborted') {
-    return { exit: 1, kind: 'failed', reason: `agent 停止原因=${stopReason} → 转收件箱` };
+    return { exit: 1, kind: 'failed', reason: `agent stopReason=${stopReason} → to inbox` };
   }
-  return { exit: 3, kind: 'retry', reason: `退出码 ${code} 无法归因 → 保守重试` };
+  return {
+    exit: 3, kind: 'retry',
+    reason: `exit code ${code} unclassifiable → retry conservatively`,
+  };
 }
