@@ -15,6 +15,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,33 +29,63 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 export const R2_PREFIX = 'state/';
 
 /**
- * 每仓一桶。
+ * 每仓一桶，桶名 `loop-state-<owner>-<repo>`。
  *
  * 为什么不用一个桶装所有仓库：R2 的 API token 权限只能限到**桶**，限不到前缀
  * （Access Policy 的资源标识是 `...r2.bucket.<ACCOUNT_ID>_<JURISDICTION>_<BUCKET>`，
  * 没有 key/prefix 维度）。共用桶时「每仓一把独立 token」形同虚设 —— 每把都能读写
  * 整个桶，一次凭据泄漏或 fork 注入的影响面就是所有接入仓库。
  *
- * 桶名规则 `loop-state-<repo>`，`R2_BUCKET` 可覆盖（迁移、排查、临时指向别的桶）。
+ * 为什么带 owner：桶名是账号内全局唯一的平铺空间，桶名撞车就真的撞车。带上 owner
+ * 把冲突面从「仓库名」提到「owner + 仓库名」，将来管理多个 GitHub 组织也不会互撞。
+ * `R2_BUCKET` 可覆盖（迁移、排查、临时指向别的桶）。
  */
-let repoNameCache = null;
+let ownerRepoCache = null;
 
-function repoName() {
-  if (repoNameCache) return repoNameCache;
-  // CI：GITHUB_REPOSITORY = "owner/repo"
-  const fromCi = (process.env.GITHUB_REPOSITORY ?? '').split('/')[1];
-  if (fromCi) return (repoNameCache = fromCi);
-  // 本地（seed 等）：package.json 的 name，与仓库名约定一致
-  try {
-    repoNameCache = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).name;
-  } catch (e) {
-    throw new Error(`无法确定仓库名（GITHUB_REPOSITORY 未设，且读不到 ${path.join(ROOT, 'package.json')}）：${e.message}`);
+/** 解析 owner/repo：CI 取 GITHUB_REPOSITORY，本地取 package.json 的 repository.url。 */
+function ownerRepo() {
+  if (ownerRepoCache) return ownerRepoCache;
+
+  const fromCi = (process.env.GITHUB_REPOSITORY ?? '').trim();
+  if (fromCi.includes('/')) {
+    const [owner, repo] = fromCi.split('/');
+    return (ownerRepoCache = { owner, repo });
   }
-  return repoNameCache;
+
+  let pkg;
+  try {
+    pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  } catch (e) {
+    throw new Error(`无法确定仓库身份：GITHUB_REPOSITORY 未设，且读不到 ${path.join(ROOT, 'package.json')}（${e.message}）。请显式设置 R2_BUCKET。`);
+  }
+  // npm 允许 repository 是字符串（`"owner/repo"`、`"github:owner/repo"`）或对象（`{ url }`）
+  const raw = typeof pkg.repository === 'string' ? pkg.repository : (pkg.repository?.url ?? '');
+  const url = String(raw).replace(/^git\+/, '').replace(/\.git$/, '');
+  const m = /github\.com[/:]([^/]+)\/(.+)$/.exec(url)
+    ?? /^(?:github:)?([\w.-]+)\/([\w.-]+)$/.exec(url);
+  if (!m) {
+    throw new Error(`无法从 package.json 推导 owner/repo（repository = ${raw || '缺失'}）。请显式设置 R2_BUCKET。`);
+  }
+  return (ownerRepoCache = { owner: m[1], repo: m[2] });
+}
+
+/** R2 桶名只允许小写字母/数字/连字符，且不以连字符开头或结尾（官方约束）。 */
+const sanitize = (seg) => String(seg).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+const BUCKET_MAX = 63;
+
+function derivedBucketName() {
+  const { owner, repo } = ownerRepo();
+  const base = `loop-state-${sanitize(owner)}-${sanitize(repo)}`;
+  if (base.length <= BUCKET_MAX) return base;
+  // GitHub 仓库名上限 100 字符，`owner-repo` 拼接后理论上会超过 63。
+  // 截断 + 稳定哈希:同一仓库每次推导同一桶名,不同仓库也不会因截断而碰撞。
+  const h = createHash('sha256').update(base).digest('hex').slice(0, 8);
+  return `${base.slice(0, BUCKET_MAX - h.length - 1).replace(/-+$/, '')}-${h}`;
 }
 
 /** 本仓的 R2 桶名。 */
-export const bucket = () => process.env.R2_BUCKET || `loop-state-${repoName()}`;
+export const bucket = () => process.env.R2_BUCKET || derivedBucketName();
 
 const REQUIRED = ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY'];
 

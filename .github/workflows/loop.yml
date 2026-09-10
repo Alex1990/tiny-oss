@@ -66,7 +66,7 @@ jobs:
       # 非敏感配置：优先读 repository variable，回落同名 secret（两种配法都支持）。
       # ACCOUNT_ID 是 R2 端点的一部分（https://<id>.r2.cloudflarestorage.com），不是凭据。
       R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
-      # 桶名无需配置：代码按 `loop-state-<repo>` 自动推导（每仓一桶）。
+      # 桶名无需配置：代码按 `loop-state-<owner>-<repo>` 自动推导（每仓一桶）。
       # 仅当要指向别的桶（迁移/排查）时才设它；未设时展开为空串 → 走推导。
       R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
 
