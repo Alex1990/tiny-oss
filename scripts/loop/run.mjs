@@ -44,7 +44,7 @@ import { spawnSync } from 'node:child_process';
 import {
   makeState, ensureDirs, loadTask, saveTask, nextTaskId, listTasks,
   readRunLines, appendRunRow, readJson, writeJson,
-  nowIso, parseArgs, renderSummary,
+  nowIso, parseArgs, renderStateSummary,
   OUTCOME_MAP, lockExpired, describeActions,
   beginRun, finishRun,
 } from './shared/state.mjs';
@@ -307,7 +307,7 @@ write level: LOOP_WRITE_LEVEL=report|auto (default report)`);
     if (cmd === 'start') return await cmdStart(args);
     if (cmd === 'end') return await cmdEnd(args);
     if (cmd === 'checkpoint') return await cmdCheckpoint(args);
-    if (cmd === 'summary') return await renderSummary(S);
+    if (cmd === 'summary') return await renderStateSummary(S);
     if (cmd === 'view') return await cmdView(args);
   } catch (e) {
     fail(e.message);
