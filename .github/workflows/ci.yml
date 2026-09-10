@@ -36,6 +36,17 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # The coverage step posts a PR comment. Dependabot-triggered runs get a
+    # read-only GITHUB_TOKEN by default (`pull_request` events from Dependabot
+    # are treated like fork PRs), which made that one step fail with
+    # "Resource not accessible by integration (HTTP 403)" — a red CI on every
+    # Dependabot PR while the tests themselves passed. Unlike a fork PR, a
+    # Dependabot run *can* be granted more: the `permissions` key is the
+    # documented way to widen the default scope. `contents: read` is kept for
+    # checkout; nothing else is needed.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 

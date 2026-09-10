@@ -59,6 +59,26 @@ jobs:
   loop:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    # Skip any `pull_request` run that cannot authenticate.
+    #
+    # `pull_request` is the only event we listen to where secrets can be absent:
+    # GitHub treats a Dependabot-triggered run like a fork run and issues a
+    # read-only token with **no secrets at all**, and a fork PR never has them.
+    # Unguarded, such a run dies at `Pull state from R2` and shows up as a red
+    # loop — indistinguishable from a real defect — while it cannot do anything
+    # useful anyway (no R2 credentials, no LLM key).
+    #
+    # `pull_request_target` (loop PR closed) does carry secrets, as do
+    # issues / schedule / release / workflow_dispatch, so those still run.
+    #
+    # Deliberately accepted for A1: read-only analysis of an external PR (host
+    # spec §6) therefore cannot run, because even a read-only analysis needs the
+    # LLM key. Enabling it means giving that path its own credentials — see D28
+    # in scripts/loop/README.md.
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.pull_request.head.repo.full_name == github.repository
+          && github.actor != 'dependabot[bot]')
     # Note: job-level env can only reference contexts like github / secrets / vars.
     # `inputs` is unavailable for non-workflow_dispatch events, and the `runner`
     # context exists only inside steps — neither belongs here (this once broke
