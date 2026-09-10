@@ -2,7 +2,7 @@
 /**
  * tiny-oss Loop 本地宿主（CLI）
  *
- * 状态层原语全部来自 `./lib/state.mjs`（与 runner 编排 run-stage.mjs 共用，
+ * 状态层原语全部来自 `./shared/state.mjs`（与 runner 编排 entry.mjs 共用，
  * 保证单一实现）。本文件只负责人工驱动的命令行仪式。
  *
  * 用法（`pnpm loop` = 本文件，见 package.json）：

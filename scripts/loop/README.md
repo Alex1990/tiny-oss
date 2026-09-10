@@ -240,6 +240,8 @@ Successor to 05 §8's checklist, rewritten because the drift criterion is
 vacuous when nothing is written to GitHub. Source: this file, plus
 `state/SUMMARY.md` and the Actions run pages.
 
+- [ ] `workflow_dispatch` smoke (`-f smoke=true`): pipeline green end to end
+      (checkout → pi install → R2 pull → push) with no agent run
 - [ ] `workflow_dispatch` smoke: real issue → triage run → task file + state
       transition correct, **GitHub unchanged**
 - [ ] Every route has one real execution: issue triage / bugfix-feature / deps /
@@ -315,6 +317,33 @@ vacuous when nothing is written to GitHub. Source: this file, plus
       `entry.mjs` handled PRs — so the local coverage exercise could not create
       the task files the A1 sweep expects to find. Added `--pr <n>` (kind `pr`,
       same number space, `OPEN` validation like D1).
+- [x] D18 (A1) The job always checked out the default branch, so the manual
+      smoke entry could not test this workflow's *own* PR: `main` has no
+      `scripts/loop/` yet, and every dispatch died with `MODULE_NOT_FOUND`.
+      Default-branch checkout is right for production paths (issues / schedule /
+      release / `pull_request_target`, and it is what keeps fork code out of the
+      runner), so the fix is narrower: `workflow_dispatch` checks out
+      `github.ref`. Dispatch can only target refs in this repository, so the
+      safety property is unchanged. Found by a real run before it was
+      documented.
+- [x] D19 (A1) `LOOP_MODEL` was set to `deepseek/deepseek-flash`, which is not
+      in pi's DeepSeek catalogue — the real ids are `deepseek-v4-flash`,
+      `deepseek-v4-flash-vision-exp` and `deepseek-v4-pro`. pi **silently falls
+      back** on an unknown `--model` instead of failing, so every run would have
+      used an unintended model while appearing healthy (the session log records
+      `modelId: "deepseek-flash"`, so it was accepted, not corrected). Fixed the
+      id, and the install step now validates `LOOP_MODEL` against
+      `pi --list-models deepseek` and fails the job on a mismatch. A misspelled
+      model name must never be a silent fallback.
+- [x] D20 (A1) Three comments still pointed at `scripts/loop/lib/` after the D10
+      rename to `shared/`, and `run.mjs` named a `run-stage.mjs` that never
+      existed (the orchestrator is `entry.mjs`). Spotted by a real run.
+- [ ] D21 (proposed by a real run, not yet implemented) The dependabot CI
+      failure is a *reporting* step, not a test failure: `Comment coverage on
+      PR` gets `gh: Resource not accessible by integration (HTTP 403)` because
+      GitHub forces the token read-only for Dependabot-triggered workflows.
+      `permissions:` cannot lift that. Needs a maintainer decision (guard the
+      step, `continue-on-error`, or move it to a `pull_request_target` job).
 
 ## Environment facts
 
@@ -325,11 +354,26 @@ vacuous when nothing is written to GitHub. Source: this file, plus
 - **Engine install measured on the runner (2026-09-10)**: `npm i -g
   @earendil-works/pi-coding-agent@0.85.1` → `added 132 packages in 6s`,
   `pi --version` → `0.85.1`. Well inside the job budget.
-- `pi --list-models deepseek` prints `No models available. Use /login ...` when
-  no key is configured — the model catalogue is credential-gated, so the
-  `LOOP_MODEL` question is settled by the first run that has
-  `DEEPSEEK_API_KEY` set. Credential/config failures classify as `retry`, not
-  as a task failure, so a missing key never fills the human inbox.
+- **First real end-to-end run (2026-09-10, run 34509379949, 3m05s, all steps
+  green)**: R2 pull and push both worked against `loop-state-alex1990-tiny-oss`
+  (bucket name derived correctly from `GITHUB_REPOSITORY`); the agent completed a
+  system-level triage, wrote its report and `result.json`, and consumed 102,860
+  tokens.
+  - **Report boundary held.** Verified independently rather than from the run's
+    own summary: PRs #21/#35 still carry no loop label, #21/#35 have zero
+    comments, and no item in the repository carries `needs-triage`. Everything
+    the agent wanted to do arrived as a proposal checklist in the report.
+  - pi's built-in DeepSeek catalogue (credential-gated, printed per run):
+    `deepseek-v4-flash`, `deepseek-v4-flash-vision-exp`, `deepseek-v4-pro`.
+    There is no `deepseek-flash` — see D19.
+- **Infrastructure smoke**: `gh workflow run loop.yml -f smoke=true` exercises
+  checkout → toolchain → pi install → R2 pull → push and **skips the agent
+  entirely**, so "is the pipeline healthy?" is answerable without spending
+  tokens or waiting on an LLM. Use it first when onboarding a repository or when
+  a credential is suspected to have stopped working. Note that an empty `stage`
+  does **not** produce a cheaper run: GitHub applies the input's `default:`
+  (`triage`), which starts a real system-level triage — the first smoke of this
+  workflow cost 102,860 tokens that way, which is why this switch exists.
 - `gh` works from this machine (list/view in seconds); the older note about
   direct GitHub timeouts and a stopped proxy is stale.
 - No `rclone` and no `aws` CLI on this Windows box — R2 sync is runner-side only;

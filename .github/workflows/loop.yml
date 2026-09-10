@@ -30,6 +30,10 @@ on:
         description: 'L2 rehearsal: set "true" to allow real GitHub writes (default report-only)'
         required: false
         default: 'false'
+      smoke:
+        description: 'Infrastructure only: exercise checkout/install/R2 pull+push, skip the agent'
+        required: false
+        default: 'false'
 
 concurrency:
   group: loop
@@ -56,7 +60,8 @@ jobs:
       LOOP_REPO: ${{ github.repository }}
       # 非 dispatch 事件下 github.event.inputs 为 null → 取默认 report（严格只报告）
       LOOP_EXECUTE_WRITES: ${{ github.event.inputs.execute_writes || 'false' }}
-      LOOP_MODEL: deepseek/deepseek-flash
+      LOOP_SMOKE: ${{ github.event.inputs.smoke || 'false' }}
+      LOOP_MODEL: deepseek/deepseek-v4-flash
       LOOP_RUN_TIMEOUT_MS: '3300000' # 55min，留出 push 余量（job timeout 60min）
       GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN || github.token }}
       # 凭据：只能是 secret
@@ -98,7 +103,16 @@ jobs:
           npm i -g @earendil-works/pi-coding-agent@0.85.1
           pi --version
           echo '--- available DeepSeek models ---'
-          pi --list-models deepseek || true
+          available=$(pi --list-models deepseek)
+          echo "$available"
+          # pi 对无效 --model 是**静默回退到默认模型**，不报错 —— 一个拼错的
+          # 模型名会安静地用错模型跑完每一次 run。所以在装好后立刻校验。
+          want="${LOOP_MODEL#*/}"
+          if ! grep -qE "(^|[[:space:]])${want}([[:space:]]|$)" <<<"$available"; then
+            echo "::error::LOOP_MODEL=$LOOP_MODEL 不在 pi 的 DeepSeek 目录中（期望模型段 '$want'）。"
+            exit 1
+          fi
+          echo "model $want is available"
 
       - name: Pull state from R2
         run: node scripts/loop/r2-sync.mjs pull
