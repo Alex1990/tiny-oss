@@ -177,6 +177,28 @@ async function handleMetrics({ decision }) {
   return { state: 'metrics', wrote, row, transition };
 }
 
+/* --------------------------------------------------------------- terminal */
+
+/**
+ * Terminalise a task with no metric attached — a PR that closed was not
+ * loop-produced, so it must not enter the acceptance rate, but its task still has
+ * to finish. Shares `markTaskTerminal` with the metrics path so there is one
+ * definition of "what terminal means".
+ */
+async function handleTaskTerminal({ decision }) {
+  const transition = await markTaskTerminal(S, decision.taskId, decision.to, {
+    event: decision.to === 'accepted' ? 'merged' : 'closed-unmerged',
+    detail: `${decision.pr ? `PR #${decision.pr} ` : ''}${decision.reason}`,
+  });
+  if (transition.changed) {
+    log(`task #${decision.taskId}: ${transition.from} → ${decision.to} (${decision.reason})`);
+    await renderStateSummary(S);
+  } else {
+    log(`task #${decision.taskId}: no transition needed (${transition.reason})`);
+  }
+  return { state: 'terminal', transition, note: decision.reason };
+}
+
 /* ------------------------------------------------------------------ run */
 
 async function doRun({ decision, ctx, repo, writeLevel }) {
@@ -394,10 +416,12 @@ async function main() {
     log(result.wrote
       ? `metrics written: ${JSON.stringify(result.row)}`
       : 'metrics already present, skipped (idempotent)');
+  } else if (decision.action === 'terminal') {
+    result = await handleTaskTerminal({ decision });
   }
 
   await writeStepSummary(renderStepSummary({ decision, result, writeLevel }));
-  return 0; // noop / inbox-only / metrics / a completed run all exit successfully
+  return 0; // noop / inbox-only / metrics / terminal / a completed run all exit successfully
 }
 
 main()

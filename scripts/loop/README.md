@@ -89,6 +89,7 @@ GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single w
 | same-repo PR, other branches | run(triage) — PRs are a triage surface |
 | `pull_request_review` on a loop PR | run(pr-review) |
 | `pull_request_target` closed (loop PR) | metrics: merged / closed-unmerged **and** the task moves to `accepted` / `rejected` |
+| `pull_request_target` closed (other PR) | task → `accepted` / `rejected` only; **no metric** (not loop-produced) |
 | `release` published | metrics: released |
 | `schedule` daily / weekly | system run: sweep / retro-scheduled |
 | `workflow_dispatch` | run per inputs (`task`/`stage`); `execute_writes=true` = L2 rehearsal |
@@ -510,6 +511,19 @@ was *correct*, and whether new events produce proposals that match reality.
       the row through the existing `writer` field (`writer: "sweep-corrected"`),
       so dedup still matches. Recorded now because the ambiguity is in the norms
       layer, and whoever implements the backfill will read that sentence first.
+- [x] D33 (A1) A non-loop PR closing left its task stranded. `pull_request_target`
+      returned `noop` for any PR without `loop-task:`, which is right about the
+      **metric** (not loop-produced ⇒ never in the acceptance rate) but wrong
+      about the **task**: ops.md maps "(none, merged) → accepted" and "(none,
+      closed unmerged) → rejected" regardless of provenance. Every owner or
+      dependabot PR gets a task from `pull_request` triage, so each merged PR left
+      a zombie in `waiting-human` — the task for the very PR that fixed D30 (#39)
+      demonstrated it live — visible forever under "Inbox" in SUMMARY.md and
+      uncorrectable by sweep, which lists *open* GitHub items and so cannot see a
+      closure. The router now emits a `terminal` decision for that case; the
+      entry handles it through the same `markTaskTerminal` as the metrics path, so
+      "what terminal means" has one definition, and the acceptance row is still
+      never written for a non-loop PR.
 
 ## Environment facts
 
