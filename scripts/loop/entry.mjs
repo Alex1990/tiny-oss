@@ -1,21 +1,24 @@
 #!/usr/bin/env node
 /**
- * Loop runner 编排入口 —— GitHub Actions job 调用的唯一脚本。
+ * Loop runner orchestration entry — the only script the GitHub Actions job calls.
  *
- * 一次调用 = 一个决策：路由事件 → 落 inbox / 写评测 / 跑一个 run。
- * 状态层读写全部经 `shared/state.mjs`；本文件只做编排与报告，不直接改状态字段。
+ * One invocation = one decision: route the event → write inbox / write metrics / run one run.
+ * All state layer reads and writes go through `shared/state.mjs`; this file only orchestrates
+ * and reports, and never edits state fields directly.
  *
- * 不变量：
- *   - 收尾是**唯一写入者**：agent 只写 `state/reports/<runId>.result.json`，
- *     由本文件调 finishRun 落状态（05 §5.1 把收尾列为 run 脚本仪式）。
- *   - report 边界下不产生任何 GitHub 写操作（写动作只作为清单进报告）。
- *   - 事件幂等：`eventIds` 记已消费事件键，重复投递 → no-op。
+ * Invariants:
+ *   - finish is the **single writer**: the agent only writes
+ *     `state/reports/<runId>.result.json`, and this file calls finishRun to persist state
+ *     (05 §5.1 lists finish as a run-script ritual).
+ *   - Under the report boundary no GitHub write happens (write actions only enter the
+ *     report as a checklist).
+ *   - Event idempotence: `eventIds` records consumed event keys, a duplicate delivery → no-op.
  *
- * 环境契约（workflow 注入）：
+ * Environment contract (injected by the workflow):
  *   LOOP_EVENT_NAME / LOOP_EVENT_ACTION / LOOP_EVENT_JSON / LOOP_REPO
- *   LOOP_WRITE_LEVEL（report|auto，默认 report）
- *   LOOP_MODEL（pi 的 --model，如 deepseek/deepseek-flash）
- *   LOOP_RUN_TIMEOUT_MS、LOOP_SESSION_DIR、GITHUB_STEP_SUMMARY
+ *   LOOP_WRITE_LEVEL (report|auto, default report)
+ *   LOOP_MODEL (pi's --model, e.g. deepseek/deepseek-flash)
+ *   LOOP_RUN_TIMEOUT_MS, LOOP_SESSION_DIR, GITHUB_STEP_SUMMARY
  */
 
 import os from 'node:os';
@@ -38,17 +41,20 @@ const S = makeState(ROOT);
 const log = (m) => console.log(`[loop] ${m}`);
 const warn = (m) => console.warn(`[loop] warn: ${m}`);
 
-/* ------------------------------------------------------------ GitHub 读取 */
+/* ------------------------------------------------------------ GitHub read */
 
 function ghJson(args) {
   const r = spawnSync('gh', args, { encoding: 'utf8' });
-  if (r.status !== 0) throw new Error(`gh ${args.join(' ')} 失败: ${(r.stderr || '').trim()}`);
+  if (r.status !== 0) throw new Error(`gh ${args.join(' ')} failed: ${(r.stderr || '').trim()}`);
   return JSON.parse(r.stdout);
 }
 
 const GH_FIELDS = 'number,title,body,state,labels,url';
 
-/** 任务文件不存在时从 GitHub 拉取建档；已存在则镜像标签（GitHub 为准）。 */
+/**
+ * When the task file is missing, create it from GitHub; if it already exists, mirror the
+ * labels (GitHub wins).
+ */
 async function prepareTask({ taskId, kind, repo }) {
   const existing = await readJson(S.taskFile(taskId));
   if (existing) {
@@ -66,7 +72,7 @@ async function prepareTask({ taskId, kind, repo }) {
   };
   t.timeline.push({ at: t.createdAt, event: 'created', by: 'workflow', detail: `${kind} from GitHub` });
   await writeJson(S.taskFile(t.id), t);
-  log(`任务 #${t.id} 已建档（${kind}）`);
+  log(`task #${t.id} created (${kind})`);
   return t;
 }
 
@@ -74,14 +80,14 @@ const claimability = (t) => {
   if (t.status === 'processing') {
     return lockExpired(t.lockedBy)
       ? { ok: true, resume: true }
-      : { ok: false, reason: `被 ${t.lockedBy?.runId} 持有` };
+      : { ok: false, reason: `held by ${t.lockedBy?.runId}` };
   }
   return ['new', 'ready', 'waiting-info'].includes(t.status)
     ? { ok: true }
     : { ok: false, reason: `status=${t.status}` };
 };
 
-/* -------------------------------------------------------------- 事件入箱 */
+/* -------------------------------------------------------------- event inbox */
 
 function summarizeEvent(ctx) {
   const e = ctx.event ?? {};
@@ -91,19 +97,20 @@ function summarizeEvent(ctx) {
 }
 
 /**
- * 信息补足事件：永不静默丢弃。先落 eventInbox，再按任务状态决定是否补跑（05 §3 判定顺序）。
+ * Follow-up information events: never silently dropped. First land in eventInbox, then decide
+ * whether to re-run based on task status (05 §3 decision order).
  */
 async function handleInbox({ ctx, repo }) {
   const key = eventKey(ctx);
   const taskId = ctx.event?.issue?.number ?? ctx.event?.pull_request?.number;
   const t = await readJson(S.taskFile(taskId));
   if (!t) {
-    log(`事件不入箱：#${taskId} 尚无对应任务（先由生命周期事件建档）`);
-    return { state: 'noop', note: `#${taskId} 无对应任务，事件不入箱` };
+    log(`event not inboxed: no task for #${taskId} yet (lifecycle event creates it first)`);
+    return { state: 'noop', note: `#${taskId} has no matching task, event not inboxed` };
   }
   if ((t.eventIds ?? []).includes(key)) {
-    log(`事件已消费（幂等跳过）：${key}`);
-    return { state: 'noop', note: `事件已消费（${key}）` };
+    log(`event already consumed (idempotent skip): ${key}`);
+    return { state: 'noop', note: `event already consumed (${key})` };
   }
 
   t.eventInbox = [...(t.eventInbox ?? []), {
@@ -112,18 +119,23 @@ async function handleInbox({ ctx, repo }) {
   t.eventIds = [...(t.eventIds ?? []), key].slice(-50);
   await saveTask(S, t);
 
-  // new/ready 补跑原 stage；waiting-info 重新 triage；其余状态留待消费方接手
+  // new/ready re-run the original stage; waiting-info re-runs triage; other states await a consumer
   if (['new', 'ready'].includes(t.status)) {
-    return { state: 'run', taskId: t.id, stage: t.stage ?? 'triage', kind: t.kind, note: '补跑' };
+    return { state: 'run', taskId: t.id, stage: t.stage ?? 'triage', kind: t.kind, note: 're-run' };
   }
   if (t.status === 'waiting-info') {
-    return { state: 'run', taskId: t.id, stage: 'triage', kind: t.kind, note: '补充信息后重新 triage' };
+    return {
+      state: 'run', taskId: t.id, stage: 'triage', kind: t.kind, note: 're-triage on new info',
+    };
   }
-  log(`事件已入箱，不产生 run：任务 #${t.id} status=${t.status}（留待消费方接手）`);
-  return { state: 'inbox-only', note: `任务 status=${t.status}，事件已入箱待消费` };
+  log(`event inboxed, no run produced: task #${t.id} status=${t.status} (awaiting a consumer)`);
+  return {
+    state: 'inbox-only',
+    note: `task status=${t.status}, event inboxed and awaiting consumption`,
+  };
 }
 
-/* ---------------------------------------------------------------- 评测 */
+/* ---------------------------------------------------------------- metrics */
 
 async function handleMetrics({ decision }) {
   const row = { at: nowIso(), ...decision.metrics };
@@ -152,12 +164,12 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
     task = await prepareTask({ taskId: decision.taskId, kind, repo });
     const claim = claimability(task);
     if (!claim.ok) {
-      // 跳过必须有日志：事件风暴下，人要从 Actions 日志一眼看出
-      // "这个事件被正确跳过了"，而不是以为它悄悄失败。
-      log(`跳过：任务 #${task.id} 不可领取（${claim.reason}）—— 事件已幂等处理，不产生 run`);
-      return { state: 'skipped', note: `任务 #${task.id} 不可领取：${claim.reason}` };
+      // A skip must be logged: during an event storm, a human must see at a glance in the
+      // Actions log that "this event was correctly skipped", not think it silently failed.
+      log(`skip: task #${task.id} not claimable (${claim.reason}) — event handled idempotently`);
+      return { state: 'skipped', note: `task #${task.id} not claimable: ${claim.reason}` };
     }
-    if (claim.resume) warn(`任务 #${task.id} 锁已过期，接管续跑`);
+    if (claim.resume) warn(`task #${task.id} lock expired, taking over and resuming`);
   }
 
   const rid = await beginRun(S, task, stage, {
@@ -165,7 +177,9 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
     trigger: `${ctx.eventName}.${ctx.action || '(none)'}`,
     model: process.env.LOOP_MODEL ?? null,
   });
-  log(`run ${rid} 开始（${task ? `task #${task.id}, ` : '系统级, '}stage=${stage}${decision.mode === 'readonly' ? ', readonly' : ''}）`);
+  log(`run ${rid} started (`
+    + `${task ? `task #${task.id}, ` : 'system-level, '}stage=${stage}`
+    + `${decision.mode === 'readonly' ? ', readonly' : ''})`);
 
   const prompt = buildPrompt({
     task, stage, runId: rid, writeLevel, mode: decision.mode, repo,
@@ -187,22 +201,23 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
   const events = parseEvents(res.stdout);
   const { usage, stopReason, toolCalls, turns } = summarize(events);
 
-  // agent 的结论文件（编排层是收尾的唯一写入者）
+  // the agent's result file (the orchestration layer is the single writer for finish)
   const result = await readJson(path.join(S.reportsDir, `${rid}.result.json`));
   const cls = classify({ code: res.code, signal: res.signal, stderr: res.stderr, timedOut: res.timedOut, stopReason });
 
   let outcome; let note;
   if (result?.outcome && outcomeAllowed(stage, result.outcome)) {
     outcome = result.outcome;
-    note = result.note ?? `agent 判定（exit=${res.code}）`;
+    note = result.note ?? `agent decision (exit=${res.code})`;
   } else if (result?.outcome) {
     outcome = 'failed';
-    note = `agent 给出 outcome=${result.outcome}，但 stage=${stage} 不允许（允许: ${allowedOutcomes(stage).join(', ')}）`;
+    note = `agent returned outcome=${result.outcome}, but stage=${stage} does not allow it `
+      + `(allowed: ${allowedOutcomes(stage).join(', ')})`;
     warn(note);
   } else {
     outcome = cls.exit === 1 ? 'failed' : 'retry';
-    note = `${cls.reason}（无结果文件）`;
-    warn(`未取到 ${rid}.result.json —— ${note}`);
+    note = `${cls.reason} (no result file)`;
+    warn(`no ${rid}.result.json found — ${note}`);
   }
 
   const { task: done, actions } = await finishRun(S, {
@@ -214,11 +229,13 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
     writeLevel, log, warn,
   });
 
-  log(`run ${rid} 收尾: outcome=${outcome} (exit ${cls.exit})${usage?.totalTokens ? `, tokens=${usage.totalTokens}` : ''}`);
+  log(`run ${rid} finished: outcome=${outcome} (exit ${cls.exit})`
+    + `${usage?.totalTokens ? `, tokens=${usage.totalTokens}` : ''}`);
   if (actions.length) {
     log(writeLevel === 'auto'
-      ? `GitHub 动作已执行 ${actions.length} 项`
-      : `GitHub 动作未执行（report 边界）：${actions.length} 项待人工，见报告与 Step Summary`);
+      ? `GitHub actions executed: ${actions.length}`
+      : `GitHub actions not executed (report boundary): ${actions.length} `
+        + 'pending human review, see the report and Step Summary');
   }
   if (done) log(`task #${done.id} → status=${done.status}${done.labels?.length ? `, label=${done.labels.join(',')}` : ''}`);
 
@@ -233,7 +250,7 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
 
 async function writeStepSummary(md) {
   const f = process.env.GITHUB_STEP_SUMMARY;
-  if (!f) { log('（无 GITHUB_STEP_SUMMARY，跳过）'); return; }
+  if (!f) { log('(no GITHUB_STEP_SUMMARY, skipping)'); return; }
   await fs.appendFile(f, md + '\n', 'utf8');
 }
 
@@ -271,21 +288,23 @@ async function main() {
   const action = process.env.LOOP_EVENT_ACTION ?? '';
   const event = JSON.parse(process.env.LOOP_EVENT_JSON || '{}');
   const repo = process.env.LOOP_REPO ?? 'Alex1990/tiny-oss';
-  // 写边界：workflow 传 LOOP_EXECUTE_WRITES（workflow_dispatch 的预演开关），
-  // 也接受显式 LOOP_WRITE_LEVEL 覆盖（本地调试用）。
+  // Write boundary: the workflow passes LOOP_EXECUTE_WRITES (the workflow_dispatch dry-run
+  // switch), but an explicit LOOP_WRITE_LEVEL override wins (used for local debugging).
   const writeLevel = process.env.LOOP_WRITE_LEVEL
     ?? (process.env.LOOP_EXECUTE_WRITES === 'true' ? 'auto' : 'report');
 
   await ensureDirs(S);
   const ctx = { eventName, action, event };
   const decision = route(ctx);
-  log(`event=${eventName}.${action || '(none)'} → ${decision.action}（${decision.reason}）· writeLevel=${writeLevel}`);
+  log(`event=${eventName}.${action || '(none)'} → ${decision.action} `
+    + `(${decision.reason}) · writeLevel=${writeLevel}`);
 
-  // 冒烟模式：只验证基础设施（checkout / 工具链 / pi 安装 / R2 pull+push），
-  // 不启动 agent。A1 的手动冒烟入口要能在不消耗 token、不等 LLM 的情况下
-  // 回答两件事：管道通不通，以及刚拉下来的状态层对不对。
+  // Smoke mode: verify infrastructure only (checkout / toolchain / pi install / R2 pull+push)
+  // and never start an agent. A1's manual smoke entry point must answer two questions without
+  // spending tokens or waiting for an LLM: is the pipeline alive, and is the freshly pulled
+  // state layer correct?
   if (process.env.LOOP_SMOKE === 'true') {
-    log('smoke 模式：跳过 agent，仅验证基础设施');
+    log('smoke mode: skipping the agent, verifying infrastructure only');
     const tasks = await listTasks(S);
     const byStatus = {};
     for (const t of tasks) byStatus[t.status] = (byStatus[t.status] ?? 0) + 1;
@@ -306,7 +325,7 @@ async function main() {
     const expectsState = process.env.LOOP_EXPECT_TASKS;
     if (expectsState && String(tasks.length) !== String(expectsState)) {
       await writeStepSummary(`## Loop — smoke FAILED\n\nExpected ${expectsState} tasks in the state layer, found ${tasks.length}. The R2 pull is not returning what was seeded.\n`);
-      throw new Error(`状态层任务数为 ${tasks.length}，期望 ${expectsState}`);
+      throw new Error(`state layer has ${tasks.length} tasks, expected ${expectsState}`);
     }
 
     await writeStepSummary([
@@ -332,17 +351,22 @@ async function main() {
     const r = await handleInbox({ ctx, repo });
     if (r.state === 'run') {
       result = await doRun({
-        decision: { ...decision, taskId: r.taskId, stage: r.stage, kind: r.kind, reason: `${decision.reason}（${r.note}）` },
+        decision: {
+          ...decision, taskId: r.taskId, stage: r.stage, kind: r.kind,
+          reason: `${decision.reason} (${r.note})`,
+        },
         ctx, repo, writeLevel,
       });
     } else result = r;
   } else if (decision.action === 'metrics') {
     result = await handleMetrics({ decision });
-    log(result.wrote ? `评测已写入：${JSON.stringify(result.row)}` : `评测已存在，跳过（幂等）`);
+    log(result.wrote
+      ? `metrics written: ${JSON.stringify(result.row)}`
+      : 'metrics already present, skipped (idempotent)');
   }
 
   await writeStepSummary(renderSummary({ decision, result, writeLevel }));
-  return 0; // noop / inbox-only / metrics / 已完成的 run 都是成功退出
+  return 0; // noop / inbox-only / metrics / a completed run all exit successfully
 }
 
 main()

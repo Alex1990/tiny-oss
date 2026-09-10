@@ -1,7 +1,8 @@
 name: Loop
 
-# 单一 workflow = 调度器 + 沙盒（05 §5.1）：所有事件并入同一串行域，
-# concurrency 组提供平台级单写者锁（R2 无并发写）。
+# Single workflow = scheduler + sandbox (05 §5.1): every event joins one serial
+# domain, and the concurrency group provides the platform-level single-writer
+# lock (R2 has no concurrent writes).
 on:
   issues:
     types: [opened, reopened, edited]
@@ -16,7 +17,7 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: '17 3 * * *' # daily sweep（每周 retro 的 cron 见 scripts/loop/lib/route.mjs WEEKLY_CRON）
+    - cron: '17 3 * * *' # daily sweep; weekly retro cron: scripts/loop/lib/route.mjs WEEKLY_CRON
   workflow_dispatch:
     inputs:
       task:
@@ -39,8 +40,9 @@ concurrency:
   group: loop
   cancel-in-progress: false
 
-# 最小权限：读 GitHub 用 GITHUB_TOKEN；写操作（仅 execute_writes=true 预演）走
-# LOOP_GH_TOKEN，且只在默认分支上下文存在 —— fork 事件无 secrets（平台保证）。
+# Least privilege: GitHub reads use GITHUB_TOKEN; writes (only the
+# execute_writes=true rehearsal) go through LOOP_GH_TOKEN and exist only in
+# default-branch contexts — fork events carry no secrets (platform guarantee).
 permissions:
   contents: read
   issues: read
@@ -50,43 +52,52 @@ jobs:
   loop:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    # 注意：job 级 env 只能引用 github / secrets / vars 等上下文。
-    # `inputs` 在非 workflow_dispatch 事件下不可用，`runner` 上下文只存在于 step 内 ——
-    # 两者都不放在这里（曾经导致 workflow 解析失败，GitHub 只报 "workflow file issue"）。
+    # Note: job-level env can only reference contexts like github / secrets / vars.
+    # `inputs` is unavailable for non-workflow_dispatch events, and the `runner`
+    # context exists only inside steps — neither belongs here (this once broke
+    # workflow parsing, with GitHub only reporting "workflow file issue").
     env:
       LOOP_EVENT_NAME: ${{ github.event_name }}
       LOOP_EVENT_ACTION: ${{ github.event.action }}
       LOOP_EVENT_JSON: ${{ toJSON(github.event) }}
       LOOP_REPO: ${{ github.repository }}
-      # 非 dispatch 事件下 github.event.inputs 为 null → 取默认 report（严格只报告）
+      # For non-dispatch events github.event.inputs is null → default to report (report-only)
       LOOP_EXECUTE_WRITES: ${{ github.event.inputs.execute_writes || 'false' }}
       LOOP_SMOKE: ${{ github.event.inputs.smoke || 'false' }}
       LOOP_MODEL: deepseek/deepseek-v4-flash
-      LOOP_RUN_TIMEOUT_MS: '3300000' # 55min，留出 push 余量（job timeout 60min）
+      LOOP_RUN_TIMEOUT_MS: '3300000' # 55min, leaving headroom for push (job timeout 60min)
       GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN || github.token }}
-      # 凭据：只能是 secret
+      # Credentials: secrets only
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      # 非敏感配置：优先读 repository variable，回落同名 secret（两种配法都支持）。
-      # ACCOUNT_ID 是 R2 端点的一部分（https://<id>.r2.cloudflarestorage.com），不是凭据。
+      # Non-sensitive config: prefer the repository variable, falling back to the
+      # same-named secret (both setups are supported). ACCOUNT_ID is part of the
+      # R2 endpoint (https://<id>.r2.cloudflarestorage.com), not a credential.
       R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID || secrets.R2_ACCOUNT_ID }}
-      # 桶名无需配置：代码按 `loop-state-<owner>-<repo>` 自动推导（每仓一桶）。
-      # 仅当要指向别的桶（迁移/排查）时才设它；未设时展开为空串 → 走推导。
+      # The bucket name needs no config: the code derives it from
+      # `loop-state-<owner>-<repo>` (one bucket per repo). Set it only to point at
+      # another bucket (migration/troubleshooting); unset expands to an empty
+      # string → derivation is used.
       R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
 
     steps:
-      # checkout 什么 —— 按"这段代码可不可信"决定：
+      # What to check out — decided by "is this code trusted":
       #
-      #   workflow_dispatch  → github.ref。人来指定的冒烟/演练入口；dispatch 只能针对
-      #                        本仓 ref，fork 分支不在其中，所以仍然安全。
-      #   同仓 PR            → PR 的 head 分支。loop 自己开的 PR（`loop/<n>-*`）就是这一类，
-      #                        而 pr-review 必须拿到 PR 的代码才能审 —— 只检 default 分支
-      #                        会让 pr-review 永远看不到被审内容。同仓分支只有
-      #                        OWNER/MEMBER/COLLABORATOR 能建，属可信代码。
-      #   其他一切           → 默认分支。**fork PR 落在这里**：绝不 checkout 外部代码，
-      #                        只用本仓默认分支的可信脚本，diff 用 `gh pr diff` 读。
-      #                        issues / schedule / release / pull_request_target 同理。
+      #   workflow_dispatch  → github.ref. The human-driven smoke/rehearsal entry;
+      #                        dispatch can only target refs in this repo, so fork
+      #                        branches are excluded and it stays safe.
+      #   same-repo PR       → the PR's head branch. The PRs loop itself opens
+      #                        (`loop/<n>-*`) fall here, and pr-review must get the
+      #                        PR code to review it — checking out only the default
+      #                        branch would leave pr-review blind to the content
+      #                        under review. Same-repo branches can only be created
+      #                        by OWNER/MEMBER/COLLABORATOR, so the code is trusted.
+      #   everything else    → the default branch. **Fork PRs land here**: never
+      #                        check out external code, use only trusted scripts
+      #                        from this repo's default branch, and read diffs with
+      #                        `gh pr diff`. Same for issues / schedule / release /
+      #                        pull_request_target.
       - uses: actions/checkout@v4
         with:
           ref: >-
@@ -117,11 +128,12 @@ jobs:
           echo '--- available DeepSeek models ---'
           available=$(pi --list-models deepseek)
           echo "$available"
-          # pi 对无效 --model 是**静默回退到默认模型**，不报错 —— 一个拼错的
-          # 模型名会安静地用错模型跑完每一次 run。所以在装好后立刻校验。
+          # pi **silently falls back to the default model** for an invalid
+          # --model rather than erroring — a misspelled model name would quietly
+          # run every run with the wrong model. Validate right after install.
           want="${LOOP_MODEL#*/}"
           if ! grep -qE "(^|[[:space:]])${want}([[:space:]]|$)" <<<"$available"; then
-            echo "::error::LOOP_MODEL=$LOOP_MODEL 不在 pi 的 DeepSeek 目录中（期望模型段 '$want'）。"
+            echo "::error::LOOP_MODEL=$LOOP_MODEL not in pi's DeepSeek catalog (want '$want')"
             exit 1
           fi
           echo "model $want is available"
@@ -134,7 +146,8 @@ jobs:
           LOOP_SESSION_DIR: ${{ runner.temp }}/pi-sessions
         run: node scripts/loop/entry.mjs
 
-      # 崩溃/超时也要把状态层推回（任务留在 processing，由下次 sweep 按 TTL 回收）
+      # Push the state layer back even on crash/timeout (the task stays in
+      # processing and is reclaimed by the next sweep via TTL)
       - name: Push state to R2
         if: always()
         run: node scripts/loop/r2-sync.mjs push

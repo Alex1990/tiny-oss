@@ -1,24 +1,27 @@
 #!/usr/bin/env node
 /**
- * tiny-oss Loop 本地宿主（CLI）
+ * tiny-oss Loop local host (CLI)
  *
- * 状态层原语全部来自 `./shared/state.mjs`（与 runner 编排 entry.mjs 共用，
- * 保证单一实现）。本文件只负责人工驱动的命令行仪式。
+ * All state layer primitives come from `./shared/state.mjs` (shared with the
+ * runner orchestrator entry.mjs, so there is a single implementation). This
+ * file only handles the manually driven command-line ceremony.
  *
- * 用法（`pnpm loop` = 本文件，见 package.json）：
+ * Usage (`pnpm loop` = this file, see package.json):
  *   pnpm loop start  [--stage <triage|bugfix|feature|...>] [--task <n>]
- *                     [--new --title "..." --body "..."]   # 新建本地合成任务
- *                     [--issue <gh#>]                      # 导入 GitHub issue（需 gh，只读）
+ *                     [--new --title "..." --body "..."]   # create a local synthetic task
+ *                     [--issue <gh#>]                      # import a GitHub issue (gh, read-only)
  *   pnpm loop checkpoint --run <runId> --note "..."
  *   pnpm loop end     --run <runId> --outcome <outcome> [--comment "..."] [--label <n>]
- *                      [--task <n>]                        # 反查未收尾 run（D2）
+ *                      [--task <n>]                        # look up an unfinished run (D2)
  *   pnpm loop summary | view [--run <runId> | --task <n>]
  *
- * 写边界（--write-level | LOOP_WRITE_LEVEL，默认 report）：
- *   report  只写状态层 + 报告：GitHub 写动作仅以"待人工执行"清单呈现（A1 语义）
- *   auto    执行打标/评论/关闭（A0 已放权语义；升 L2 后为常态）
+ * Write level (--write-level | LOOP_WRITE_LEVEL, default report):
+ *   report  only writes the state layer + report: GitHub write actions are
+ *           presented solely as a "pending human action" checklist (A1 semantics)
+ *   auto    performs labelling/commenting/closing (A0 delegated semantics; the
+ *           norm once we move to L2)
  *
- * outcome 取值与状态转移（ops.md "Labels → task state"）：
+ * outcome values and state transitions (ops.md "Labels → task state"):
  *   triaged      → ready          + ready-for-agent
  *   needs-info   → waiting-info   + needs-info
  *   needs-triage → waiting-human  + needs-triage
@@ -28,8 +31,9 @@
  *   accepted     → accepted        None
  *   failed       → waiting-human  + needs-triage
  *
- * D9：start 领取时若本地任务为终态（closed/rejected）而 GitHub issue 已重开为 OPEN，
- * 自动重置 ready + 清 decision + timeline 记 reopened 再领取，回 triage。
+ * D9: at claim time, if the local task is in a terminal state (closed/rejected)
+ * but the GitHub issue has been reopened as OPEN, automatically reset to ready +
+ * clear decision + record reopened in the timeline, then claim, back to triage.
  */
 
 import path from 'node:path';
@@ -57,7 +61,8 @@ function fail(msg) {
 
 function resolveWriteLevel(args) {
   const wl = args['write-level'] ?? process.env.LOOP_WRITE_LEVEL ?? 'report';
-  if (!WRITE_LEVELS.includes(wl)) fail(`--write-level 须为 ${WRITE_LEVELS.join('|')}（当前: ${wl}）`);
+  if (!WRITE_LEVELS.includes(wl)) fail(`--write-level must be ${WRITE_LEVELS.join('|')} ` +
+    `(got: ${wl})`);
   return wl;
 }
 
@@ -67,21 +72,24 @@ async function cmdStart(args) {
   const { stage, task, 'new': isNew, title, body, issue, pr, url } = args;
   await ensureDirs(S);
   const s = stage ?? 'triage';
-  if (!stage) console.log('[loop] --stage 缺省，默认 triage');
+  if (!stage) console.log('[loop] --stage omitted, defaulting to triage');
 
   let t;
   if (isNew || issue || pr) {
-    if (isNew && !title) fail('--new 需要 --title');
+    if (isNew && !title) fail('--new requires --title');
     let id;
     let kind = 'issue';
     let extra = {};
     if (pr) {
-      // PR 与 issue 共用 triage 面（issue-tracker.md）；kind 区分，编号空间相同。
+      // PRs and issues share the triage surface (issue-tracker.md): kind keeps
+      // them apart, the numbering space is the same.
       const gh = spawnSync('gh', ['pr', 'view', String(pr), '--json',
         'number,title,body,state,labels,url'], { encoding: 'utf8' });
-      if (gh.status !== 0) fail(`gh pr view 失败（gh 未装或无认证？）：${(gh.stderr || '').trim()}`);
+      if (gh.status !== 0) fail(`gh pr view failed (gh missing or unauthenticated?): ` +
+        `${(gh.stderr || '').trim()}`);
       const it = JSON.parse(gh.stdout);
-      if (it.state !== 'OPEN') fail(`PR #${it.number} 状态=${it.state}，仅 OPEN 的 PR 可导入（D1）`);
+      if (it.state !== 'OPEN') fail(`PR #${it.number} is ${it.state}; ` +
+        `only OPEN PRs can be imported (D1)`);
       id = it.number;
       kind = 'pr';
       extra = { url: it.url };
@@ -94,9 +102,11 @@ async function cmdStart(args) {
     } else if (issue) {
       const gh = spawnSync('gh', ['issue', 'view', String(issue), '--json',
         'number,title,body,state,labels,url'], { encoding: 'utf8' });
-      if (gh.status !== 0) fail(`gh issue view 失败（gh 未装或无认证？）：${(gh.stderr || '').trim()}`);
+      if (gh.status !== 0) fail(`gh issue view failed (gh missing or unauthenticated?): ` +
+        `${(gh.stderr || '').trim()}`);
       const it = JSON.parse(gh.stdout);
-      if (it.state !== 'OPEN') fail(`#${it.number} 状态=${it.state}，仅 OPEN 的 issue 可导入（D1）`);
+      if (it.state !== 'OPEN') fail(`#${it.number} is ${it.state}; ` +
+        `only OPEN issues can be imported (D1)`);
       id = it.number;
       extra = { url: it.url };
       t = {
@@ -116,51 +126,62 @@ async function cmdStart(args) {
       extra = { synthetic: true };
     }
     if (await readJson(S.taskFile(id))) {
-      fail(`任务 #${id} 已存在，拒绝覆盖（${S.taskFile(id)}）；重跑请用 start --task ${id} [--stage <s>]（D3）`);
+      fail(`task #${id} already exists, refusing to overwrite (${S.taskFile(id)}); ` +
+        `rerun: start --task ${id} [--stage <s>] (D3)`);
     }
     t.timeline.push({ at: t.createdAt, event: 'created', by: 'manual', ...extra });
     await writeJson(S.taskFile(id), t);
-    console.log(`[loop] 任务 #${id} 已创建（${isNew ? '本地合成' : pr ? 'GitHub PR 导入' : 'GitHub 导入'}）`);
+    console.log(`[loop] task #${id} created (` +
+      `${isNew ? 'local synthetic' : pr ? 'GitHub PR import' : 'GitHub import'})`);
   } else {
-    t = await loadTask(S, task ?? fail('--task <n> 或 --pr/--issue/--new 必填'));
+    t = await loadTask(S, task ?? fail('--task <n> or --pr/--issue/--new is required'));
   }
 
-  // 领取检查：new/ready/waiting-info 可领；processing 活锁拒领、死锁可覆盖；
-  // 终态任务而 GitHub issue 已重开 → 自动重置 ready 再领取（D9）
+  // Claim check: new/ready/waiting-info are claimable; a live processing lock
+  // refuses the claim, an expired one can be overridden; a terminal task whose
+  // GitHub issue was reopened → reset to ready and claim again (D9)
   const claimable = ['new', 'ready', 'waiting-info'];
   if (t.status === 'processing') {
     if (!lockExpired(t.lockedBy)) {
-      fail(`任务 #${t.id} 被 ${t.lockedBy?.runId ?? '?'} 持有（status=processing），请先结束或等 TTL 过期`);
+      fail(`task #${t.id} is held by ${t.lockedBy?.runId ?? '?'} (status=processing), ` +
+        `finish it or wait for the TTL to expire`);
     }
-    console.warn(`[loop] warn: 任务 #${t.id} 的锁已过期（${t.lockedBy?.runId}），本次接管续跑`);
+    console.warn(`[loop] warn: task #${t.id} lock expired ` +
+      `(${t.lockedBy?.runId}), taking over to resume`);
   } else if (!claimable.includes(t.status) && t.url) {
     const repo = repoOf(t.url);
     const ghState = repo
       ? spawnSync('gh', ['issue', 'view', String(t.id), '-R', repo, '--json', 'state', '-q', '.state'], { encoding: 'utf8' })
       : null;
     if (ghState && ghState.status === 0 && ghState.stdout.trim() === 'OPEN') {
-      console.warn(`[loop] warn: 任务 #${t.id} 本地 status=${t.status}，GitHub issue 已重开 → 重置为 ready（D9）`);
+      console.warn(`[loop] warn: task #${t.id} local status=${t.status}, GitHub issue ` +
+        `reopened → reset to ready (D9)`);
       t.status = 'ready';
       t.decision = null;
-      t.timeline.push({ at: nowIso(), event: 'reopened', by: 'github', detail: 'GitHub issue 重开 → 终态重置为 ready（D9）' });
+      t.timeline.push({ at: nowIso(), event: 'reopened', by: 'github',
+        detail: 'GitHub issue reopened → terminal state reset to ready (D9)' });
     }
   }
   if (!claimable.includes(t.status)) {
-    fail(`任务 #${t.id} status=${t.status} 不可领取（可领: ${claimable.join('/')}；GitHub 已重开的终态任务会自动放行）`);
+    fail(`task #${t.id} status=${t.status} is not claimable (claimable: ${claimable.join('/')}); ` +
+      `terminal tasks whose GitHub issue was reopened are let through`);
   }
 
   const rid = await beginRun(S, t, s, { sandbox: `local:${process.platform}`, trigger: 'manual' });
 
-  console.log(`[loop] run 开始: ${rid}`);
-  console.log(`[loop] task #${t.id}（stage=${s}）已领取 → ${path.relative(ROOT, S.taskFile(t.id))}`);
-  console.log('[loop] 开场仪式：先读 AGENTS.md → docs/agents/ops.md → 对应 skill:');
+  console.log(`[loop] run started: ${rid}`);
+  console.log(`[loop] task #${t.id} (stage=${s}) claimed → ` +
+    `${path.relative(ROOT, S.taskFile(t.id))}`);
+  console.log('[loop] opening ritual: read AGENTS.md → docs/agents/ops.md → the matching skill:');
   const skillFile = path.join(ROOT, 'skills', s, 'SKILL.md');
   const hasSkill = await fs.access(skillFile).then(() => true, () => false);
   console.log(hasSkill
     ? `[loop]              skills/${s}/SKILL.md`
-    : `[loop]              skills/${s}/SKILL.md 不存在（该 stage 无专属 skill；用到 verify/review 时读对应 SKILL.md）`);
-  console.log(`[loop] 写边界: ${resolveWriteLevel(args)}（report = 只写状态层与报告，GitHub 写动作仅列出）`);
-  console.log('[loop] 过程可记 checkpoint；完成后执行:');
+    : `[loop]              skills/${s}/SKILL.md not found (no skill for this stage; ` +
+      `read the matching one when you reach verify/review)`);
+  console.log(`[loop] write level: ${resolveWriteLevel(args)} ` +
+    `(report = only writes the state layer and report, GitHub write actions are only listed)`);
+  console.log('[loop] checkpoints can be recorded along the way; when done run:');
   console.log(`  pnpm loop end --run ${rid} --outcome <${Object.keys(OUTCOME_MAP).join('|')}> [--comment "..."] [--note "..."]`);
 }
 
@@ -171,17 +192,18 @@ async function cmdEnd(args) {
   const wl = resolveWriteLevel(args);
   let rid = run;
   if (!rid) {
-    if (!task) fail('--run <runId> 或 --task <n>（反查未收尾 run）必填');
+    if (!task) fail('--run <runId> or --task <n> (look up an unfinished run) is required');
     const t0 = await loadTask(S, task);
     const open = [];
     for (const r of [...t0.runs].reverse()) {
       const ls = await readRunLines(S, r);
       if (ls.length && !ls.some((l) => l.event === 'end')) open.push(r);
     }
-    if (!open.length) fail(`任务 #${task} 无未收尾的 run`);
-    if (open.length > 1) fail(`任务 #${task} 有多个未收尾 run（${open.join(', ')}），请用 --run 指定`);
+    if (!open.length) fail(`task #${task} has no unfinished run`);
+    if (open.length > 1) fail(`task #${task} has multiple unfinished runs ` +
+      `(${open.join(', ')}); pick one with --run`);
     rid = open[0];
-    console.log(`[loop] 反查到未收尾 run: ${rid}`);
+    console.log(`[loop] looked up unfinished run: ${rid}`);
   }
   try {
     const { task: t, actions, applied } = await finishRun(S, {
@@ -190,20 +212,21 @@ async function cmdEnd(args) {
       log: console.log, warn: console.warn,
     });
     const m = OUTCOME_MAP[outcome];
-    console.log(`[loop] run ${rid} 收尾: outcome=${outcome}`);
+    console.log(`[loop] run ${rid} finish: outcome=${outcome}`);
     console.log(`[loop] task #${t.id} → status=${t.status}${m.label ? `, label=${m.label}` : ''}`);
     if (actions.length) {
       if (wl === 'auto') {
-        console.log(`[loop] GitHub 写动作已执行 ${applied.length}/${actions.length} 项`);
+        console.log(`[loop] GitHub write actions applied ${applied.length}/${actions.length}`);
       } else {
-        console.log('[loop] 写边界=report：以下 GitHub 动作待人工执行');
+        console.log('[loop] write level=report: GitHub write actions awaiting human execution');
         for (const d of describeActions(actions)) console.log(`  - ${d}`);
-        console.log(`[loop] 已追加到报告: ${path.relative(ROOT, path.join(S.reportsDir, `${rid}.md`))}`);
+        console.log(`[loop] appended to report: ` +
+          `${path.relative(ROOT, path.join(S.reportsDir, `${rid}.md`))}`);
       }
     } else if (noGithub) {
-      console.log('[loop] --no-github：跳过 GitHub 写动作');
+      console.log('[loop] --no-github: skipping GitHub write actions');
     }
-    console.log('[loop] SUMMARY.md 已刷新');
+    console.log('[loop] SUMMARY.md refreshed');
   } catch (e) {
     fail(e.message);
   }
@@ -218,11 +241,11 @@ function repoOf(url) {
 
 async function cmdCheckpoint(args) {
   const { run: rid, note } = args;
-  if (!rid || !note) fail('--run <runId> --note "..." 必填');
+  if (!rid || !note) fail('--run <runId> --note "..." is required');
   const rows = await readRunLines(S, rid);
-  if (!rows.length) fail(`run ${rid} 不存在`);
+  if (!rows.length) fail(`run ${rid} does not exist`);
   await appendRunRow(S, rid, { runId: rid, event: 'checkpoint', at: nowIso(), note });
-  console.log(`[loop] run ${rid} checkpoint 已记录`);
+  console.log(`[loop] run ${rid} checkpoint recorded`);
 }
 
 /* ---------------------------------------------------------------- view */
@@ -231,7 +254,7 @@ async function cmdView(args) {
   const { run: rid, task } = args;
   if (rid) {
     const rows = await readRunLines(S, rid);
-    if (!rows.length) fail(`run ${rid} 不存在`);
+    if (!rows.length) fail(`run ${rid} does not exist`);
     for (const l of rows) console.log(JSON.stringify(l, null, 2));
     return;
   }
@@ -250,28 +273,35 @@ async function main() {
   const argv = process.argv.slice(2);
   const cmd = argv[0];
   if (!cmd || cmd === '--help' || cmd === '-h') {
-    console.log(`用法:
-  pnpm loop start [--stage <stage>] --task <n>   # stage 缺省 triage
+    console.log(`usage:
+  pnpm loop start [--stage <stage>] --task <n>   # stage defaults to triage
                   [--pr <n> | --issue <gh#> | --new --title ".." [--body ".."]]
   pnpm loop checkpoint --run <runId> --note ".."
   pnpm loop end --run <runId> --outcome <outcome> [--note ".."] [--comment ".."]
        [--label <name>] [--no-github] [--task <n>]
-       [--write-level report|auto]   # 默认 report：GitHub 写动作仅列出
+       [--write-level report|auto]   # default report: GitHub write actions are only listed
   pnpm loop summary | view [--run <id>|--task <n>]
-outcome（任务）: ${Object.keys(OUTCOME_MAP).join(' | ')}
-outcome（系统级 run）: completed | failed | retry | aborted
-state 根: ${S.root}（env STATE_DIR 可覆盖）
-写边界: LOOP_WRITE_LEVEL=report|auto（默认 report）`);
+outcome (task): ${Object.keys(OUTCOME_MAP).join(' | ')}
+outcome (system-level run): completed | failed | retry | aborted
+state root: ${S.root} (env STATE_DIR overrides)
+write level: LOOP_WRITE_LEVEL=report|auto (default report)`);
     return;
   }
   const args = parseArgs(argv.slice(1));
   await ensureDirs(S);
-  if (cmd === 'start') return cmdStart(args);
-  if (cmd === 'end') return cmdEnd(args);
-  if (cmd === 'checkpoint') return cmdCheckpoint(args);
-  if (cmd === 'summary') return renderSummary(S);
-  if (cmd === 'view') return cmdView(args);
-  fail(`未知子命令 ${cmd}（--help 查看用法）`);
+  // The shared library throws (it is used by the orchestrator too, where a throw is
+  // right); a CLI should print a one-line reason instead of a stack trace. Catch it
+  // here so every subcommand behaves the same way.
+  try {
+    if (cmd === 'start') return await cmdStart(args);
+    if (cmd === 'end') return await cmdEnd(args);
+    if (cmd === 'checkpoint') return await cmdCheckpoint(args);
+    if (cmd === 'summary') return await renderSummary(S);
+    if (cmd === 'view') return await cmdView(args);
+  } catch (e) {
+    fail(e.message);
+  }
+  fail(`unknown subcommand ${cmd} (see --help for usage)`);
 }
 
 await main();
