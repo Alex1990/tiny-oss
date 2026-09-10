@@ -426,13 +426,24 @@ was *correct*, and whether new events produce proposals that match reality.
       Summary, so the Actions log showed a route line and then nothing — a skip
       was indistinguishable from a silent failure. Every path (skip, inbox
       no-op, inbox-only, duplicate event, no-op route) now logs its reason.
-- [ ] D26 (A1, open) A task in `waiting-merge` cannot be re-claimed, so a loop
-      PR that receives a new commit (`synchronize`) is skipped instead of
-      re-reviewed, and `review_requested`-style re-entry has no path back.
-      Re-review after new commits is normal in a PR loop; the fix probably
-      belongs in the `pr-review` route (reopen `waiting-merge` → `ready` on
-      `synchronize` for loop PRs) rather than in claimability. Left open
-      deliberately: A1's week should show how often it actually bites.
+- [ ] D26 (A1, open) A `pull_request.synchronize` on a PR task is skipped whenever
+      its state is not claimable, so a PR that gains a commit is never re-analysed
+      or re-reviewed. Two faces, both observed on real PRs:
+      - `waiting-merge`: a loop PR that receives a new commit is skipped instead of
+        re-reviewed, so `review_requested`-style re-entry has no path back.
+      - `waiting-human`: **observed live on #39** — the first push opened the PR and
+        triaged it to `waiting-human`; the second push logged
+        `skip: task #39 not claimable (status=waiting-human)`. Every later push is
+        skipped too, so the task's analysis is frozen at whatever the first
+        revision looked like.
+
+      This is a real consequence of running at the report boundary: `flows` §2a
+      describes request-changes → `processing` → re-review on `synchronize`, but a
+      report-boundary `pr-review` cannot comment or relabel, so it can only land in
+      `waiting-human` — where nothing re-enters. Left open deliberately: A1's week
+      should quantify how often this bites (it will have hit every loop PR by then),
+      and the fix is a design choice — re-open the task on `synchronize` for PR
+      kinds, or add a bounded re-triage — not a one-line guard.
 - [x] D27 (A1) `run.mjs`'s subcommands did not catch errors thrown by the shared
       library, so `pnpm loop start --task <missing>` printed a full Node stack
       trace instead of a one-line reason — the library throws (correct for the
