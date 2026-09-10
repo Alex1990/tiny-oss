@@ -22,6 +22,11 @@ const noop = (reason) => ({ action: 'noop', reason });
 const run = (o) => ({ action: 'run', ...o });
 const metrics = (o) => ({ action: 'metrics', ...o });
 const inbox = (o) => ({ action: 'inbox', ...o });
+/**
+ * Move a task to a terminal state without recording metrics — for closures that
+ * must not count toward the acceptance rate because the PR was not loop-produced.
+ */
+const terminal = (o) => ({ action: 'terminal', ...o });
 
 /**
  * Loop PR test: head branch `loop/<n>-*` and body containing `loop-task: #<n>`
@@ -121,18 +126,33 @@ export function route({ eventName, action, event = {} }) {
     case 'pull_request_target': {
       const pr = event.pull_request ?? {};
       if (action !== 'closed') return noop(`pull_request_target.${action} has no Loop action`);
-      const loopTask = loopTaskOf(pr);
-      if (!loopTask) return noop('closing a non-loop PR is not counted for auto-acceptance');
       const merged = Boolean(pr.merged);
-      return metrics({
-        reason: `loop PR ${merged ? 'merged' : 'closed-unmerged'}`,
-        metrics: {
-          event: merged ? 'merged' : 'closed-unmerged',
-          taskId: loopTask,
-          pr: pr.number,
-          accepted: merged,
-          writer: 'workflow',
-        },
+      const loopTask = loopTaskOf(pr);
+      if (loopTask) {
+        return metrics({
+          reason: `loop PR ${merged ? 'merged' : 'closed-unmerged'}`,
+          metrics: {
+            event: merged ? 'merged' : 'closed-unmerged',
+            taskId: loopTask,
+            pr: pr.number,
+            accepted: merged,
+            writer: 'workflow',
+          },
+        });
+      }
+      // Not loop-produced, so it must not enter the acceptance metric — but its own
+      // task still has to reach a terminal state, or it sits in the inbox forever
+      // (ops.md maps "(none, merged) -> accepted", "(none, closed unmerged) ->
+      // rejected"). Every owner/dependabot PR gets a task from `pull_request`
+      // triage, so without this each one strands a zombie in the state layer, and
+      // sweep cannot repair it: sweep lists *open* GitHub items, which cannot see
+      // a closure.
+      return terminal({
+        reason: `non-loop PR ${merged ? 'merged' : 'closed-unmerged'} `
+          + '(not counted for auto-acceptance)',
+        taskId: pr.number,
+        to: merged ? 'accepted' : 'rejected',
+        pr: pr.number,
       });
     }
 
