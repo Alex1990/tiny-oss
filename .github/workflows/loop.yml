@@ -17,7 +17,7 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: '17 3 * * *' # daily sweep; weekly retro cron: scripts/loop/lib/route.mjs WEEKLY_CRON
+    - cron: '17 3 * * *' # daily sweep; weekly retro cron: scripts/loop/shared/route.mjs WEEKLY_CRON
   workflow_dispatch:
     inputs:
       task:
