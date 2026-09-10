@@ -64,17 +64,34 @@ function resolveWriteLevel(args) {
 /* ---------------------------------------------------------------- start */
 
 async function cmdStart(args) {
-  const { stage, task, 'new': isNew, title, body, issue, url } = args;
+  const { stage, task, 'new': isNew, title, body, issue, pr, url } = args;
   await ensureDirs(S);
   const s = stage ?? 'triage';
   if (!stage) console.log('[loop] --stage 缺省，默认 triage');
 
   let t;
-  if (isNew || issue) {
+  if (isNew || issue || pr) {
     if (isNew && !title) fail('--new 需要 --title');
     let id;
+    let kind = 'issue';
     let extra = {};
-    if (issue) {
+    if (pr) {
+      // PR 与 issue 共用 triage 面（issue-tracker.md）；kind 区分，编号空间相同。
+      const gh = spawnSync('gh', ['pr', 'view', String(pr), '--json',
+        'number,title,body,state,labels,url'], { encoding: 'utf8' });
+      if (gh.status !== 0) fail(`gh pr view 失败（gh 未装或无认证？）：${(gh.stderr || '').trim()}`);
+      const it = JSON.parse(gh.stdout);
+      if (it.state !== 'OPEN') fail(`PR #${it.number} 状态=${it.state}，仅 OPEN 的 PR 可导入（D1）`);
+      id = it.number;
+      kind = 'pr';
+      extra = { url: it.url };
+      t = {
+        id, kind, title: it.title, url: it.url, body: it.body,
+        status: 'new', stage: null, labels: (it.labels || []).map((l) => l.name),
+        createdAt: nowIso(), updatedAt: nowIso(), lockedBy: null, decision: null,
+        agentPlan: null, prs: [id], runs: [], timeline: [], eventInbox: [], eventIds: [],
+      };
+    } else if (issue) {
       const gh = spawnSync('gh', ['issue', 'view', String(issue), '--json',
         'number,title,body,state,labels,url'], { encoding: 'utf8' });
       if (gh.status !== 0) fail(`gh issue view 失败（gh 未装或无认证？）：${(gh.stderr || '').trim()}`);
@@ -83,7 +100,7 @@ async function cmdStart(args) {
       id = it.number;
       extra = { url: it.url };
       t = {
-        id, kind: 'issue', title: it.title, url: it.url, body: it.body,
+        id, kind, title: it.title, url: it.url, body: it.body,
         status: 'new', stage: null, labels: (it.labels || []).map((l) => l.name),
         createdAt: nowIso(), updatedAt: nowIso(), lockedBy: null, decision: null,
         agentPlan: null, prs: [], runs: [], timeline: [],
@@ -91,7 +108,7 @@ async function cmdStart(args) {
     } else {
       id = await nextTaskId(S);
       t = {
-        id, kind: 'issue', title, url: url ?? null, body: body ?? '',
+        id, kind, title, url: url ?? null, body: body ?? '',
         status: 'new', stage: null, labels: [],
         createdAt: nowIso(), updatedAt: nowIso(), lockedBy: null, decision: null,
         agentPlan: null, prs: [], runs: [], timeline: [],
@@ -103,9 +120,9 @@ async function cmdStart(args) {
     }
     t.timeline.push({ at: t.createdAt, event: 'created', by: 'manual', ...extra });
     await writeJson(S.taskFile(id), t);
-    console.log(`[loop] 任务 #${id} 已创建（${isNew ? '本地合成' : 'GitHub 导入'}）`);
+    console.log(`[loop] 任务 #${id} 已创建（${isNew ? '本地合成' : pr ? 'GitHub PR 导入' : 'GitHub 导入'}）`);
   } else {
-    t = await loadTask(S, task ?? fail('--task <n> 或 --new/--issue 必填'));
+    t = await loadTask(S, task ?? fail('--task <n> 或 --pr/--issue/--new 必填'));
   }
 
   // 领取检查：new/ready/waiting-info 可领；processing 活锁拒领、死锁可覆盖；
@@ -235,7 +252,7 @@ async function main() {
   if (!cmd || cmd === '--help' || cmd === '-h') {
     console.log(`用法:
   pnpm loop start [--stage <stage>] --task <n>   # stage 缺省 triage
-                  [--new --title ".." [--body ".."] | --issue <gh#>]
+                  [--pr <n> | --issue <gh#> | --new --title ".." [--body ".."]]
   pnpm loop checkpoint --run <runId> --note ".."
   pnpm loop end --run <runId> --outcome <outcome> [--note ".."] [--comment ".."]
        [--label <name>] [--no-github] [--task <n>]

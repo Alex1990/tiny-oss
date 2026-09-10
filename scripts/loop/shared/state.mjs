@@ -290,13 +290,15 @@ export function planActions(t, outcome, { label, comment, note } = {}) {
   if (outcome === 'retry') return []; // 未实际执行（故障/草稿），不该产生写动作建议
   const repo = ghRepoOf(t.url);
   if (!repo) return [];
+  // PR 与 issue 是两个不同的 gh 子命令面：对 PR 编号调 `gh issue edit` 会失败。
+  const gh = t.kind === 'pr' ? 'pr' : 'issue';
   const acts = [];
   const l = label ?? OUTCOME_MAP[outcome]?.label ?? null;
-  if (l) acts.push({ kind: 'label', repo, number: t.id, label: l, stripRoles: true });
+  if (l) acts.push({ kind: 'label', gh, repo, number: t.id, label: l, stripRoles: true });
   if (outcome === 'closed') {
-    acts.push({ kind: 'close', repo, number: t.id, body: comment ?? note ?? 'Closed by the loop.' });
+    acts.push({ kind: 'close', gh, repo, number: t.id, body: comment ?? note ?? 'Closed by the loop.' });
   } else if (comment) {
-    acts.push({ kind: 'comment', repo, number: t.id, body: comment });
+    acts.push({ kind: 'comment', gh, repo, number: t.id, body: comment });
   }
   return acts;
 }
@@ -319,25 +321,26 @@ export function applyActions(actions, { log = console.log, warn = console.warn }
   const applied = [];
   for (const a of actions) {
     const gh = (args) => spawnSync('gh', args, { encoding: 'utf8' });
+    const sub = a.gh ?? 'issue'; // PR 走 gh pr，issue 走 gh issue
     if (a.kind === 'label') {
       let stale = [];
       if (a.stripRoles) {
-        const cur = gh(['issue', 'view', String(a.number), '-R', a.repo, '--json', 'labels', '-q', '.labels[].name']);
+        const cur = gh([sub, 'view', String(a.number), '-R', a.repo, '--json', 'labels', '-q', '.labels[].name']);
         stale = cur.status === 0
           ? cur.stdout.trim().split('\n').filter(Boolean).filter((l) => ROLE_LABELS.includes(l) && l !== a.label)
           : [];
       }
-      const args = ['issue', 'edit', String(a.number), '-R', a.repo, '--add-label', a.label];
+      const args = [sub, 'edit', String(a.number), '-R', a.repo, '--add-label', a.label];
       for (const st of stale) args.push('--remove-label', st);
       const r = gh(args);
       if (r.status !== 0) warn(`[loop] warn: 打标 ${a.label} 失败: ${(r.stderr || '').trim()}`);
       else { log(`[loop] gh: #${a.number} +label ${a.label}${stale.length ? `, -label ${stale.join(', ')}` : ''}`); applied.push(a); }
     } else if (a.kind === 'close') {
-      const r = gh(['issue', 'close', String(a.number), '-R', a.repo, '--comment', a.body]);
+      const r = gh([sub, 'close', String(a.number), '-R', a.repo, '--comment', a.body]);
       if (r.status !== 0) warn(`[loop] warn: close #${a.number} 失败: ${(r.stderr || '').trim()}`);
       else { log(`[loop] gh: #${a.number} closed with comment`); applied.push(a); }
     } else if (a.kind === 'comment') {
-      const r = gh(['issue', 'comment', String(a.number), '-R', a.repo, '--body', a.body]);
+      const r = gh([sub, 'comment', String(a.number), '-R', a.repo, '--body', a.body]);
       if (r.status !== 0) warn(`[loop] warn: 评论 #${a.number} 失败: ${(r.stderr || '').trim()}`);
       else { log(`[loop] gh: #${a.number} commented`); applied.push(a); }
     }
