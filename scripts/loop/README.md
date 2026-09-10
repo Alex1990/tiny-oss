@@ -96,6 +96,23 @@ GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single w
 
 Anything else is a no-op that still exits 0 — event storms cost nothing.
 
+### Outcomes: two vocabularies
+
+A run is either task-scoped or system-level, and they do not share an outcome
+vocabulary — conflating them corrupts the metrics.
+
+| | Task-scoped (`issues opened`, loop PR, …) | System-level (`sweep`, `retro-scheduled`, release preflight) |
+| --- | --- | --- |
+| Outcomes | `triaged`, `needs-info`, `needs-triage`, `pr-opened`, `closed`, `rejected`, `accepted`, `failed`, `retry` | `completed`, `failed`, `retry`, `aborted` |
+| Effect | moves the task to its mapped status + label | records the run only; no task moves |
+| Whitelist | per-stage (`STAGE_OUTCOMES` in `shared/state.mjs`) | `SYSTEM_OUTCOMES` |
+
+`closed` is a *task* outcome meaning "closed without a PR, so it never enters
+the acceptance denominator". A system-level run recording `closed` would make
+retro count sweep/retro executions as closed tasks, so `finishRun` refuses it.
+A real sweep initially reported `closed` for exactly this reason; the run now
+records `completed`.
+
 ### Failure classification (exit codes)
 
 The run contract wants 0/1/2/3/137; pi only reports 0/1/143/129. Machine faults
@@ -344,6 +361,16 @@ vacuous when nothing is written to GitHub. Source: this file, plus
       GitHub forces the token read-only for Dependabot-triggered workflows.
       `permissions:` cannot lift that. Needs a maintainer decision (guard the
       step, `continue-on-error`, or move it to a `pull_request_target` job).
+- [x] D22 (A1) `renderSummary` had no section for `status: new`, so a task the
+      sweep had just created was invisible in the human summary — the one item
+      most in need of attention. Reported by a real sweep run; a `未处理 (new)`
+      section now lists them.
+- [x] D23 (A1) System-level runs had no outcome vocabulary of their own. The
+      first real sweep recorded `closed`, which in the task vocabulary means
+      "closed without a PR, excluded from the acceptance denominator" — retro
+      reading end rows would have counted sweep/retro executions as closed
+      tasks. System runs now use `completed / failed / retry / aborted`, and
+      `finishRun` rejects a task-scoped outcome for a task-less run.
 
 ## Environment facts
 
