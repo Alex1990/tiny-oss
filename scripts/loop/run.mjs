@@ -138,9 +138,16 @@ async function cmdStart(args) {
   }
 
   // Claim check: new/ready/waiting-info are claimable; a live processing lock
-  // refuses the claim, an expired one can be overridden; a terminal task whose
-  // GitHub issue was reopened → reset to ready and claim again (D9)
+  // refuses the claim, an expired one can be overridden; a task the loop had
+  // already closed, whose GitHub item was reopened, is reset to ready (D9).
   const claimable = ['new', 'ready', 'waiting-info'];
+  // D9 applies to terminal states only. `accepted` is terminal but means
+  // "delivered and merged", and `waiting-human`/`waiting-merge` are open by
+  // definition — a waiting-human task is in the inbox *because* a human must
+  // decide, so finding its GitHub item open is the normal case, not a reopen.
+  // Treating any non-claimable state as reopened silently turned inbox tasks
+  // into auto-claimable ones and wiped their triage decision.
+  const reopenable = ['closed', 'rejected'];
   if (t.status === 'processing') {
     if (!lockExpired(t.lockedBy)) {
       fail(`task #${t.id} is held by ${t.lockedBy?.runId ?? '?'} (status=processing), ` +
@@ -148,7 +155,7 @@ async function cmdStart(args) {
     }
     console.warn(`[loop] warn: task #${t.id} lock expired ` +
       `(${t.lockedBy?.runId}), taking over to resume`);
-  } else if (!claimable.includes(t.status) && t.url) {
+  } else if (reopenable.includes(t.status) && t.url) {
     const repo = repoOf(t.url);
     const ghState = repo
       ? spawnSync('gh', ['issue', 'view', String(t.id), '-R', repo, '--json', 'state', '-q', '.state'], { encoding: 'utf8' })
@@ -163,8 +170,12 @@ async function cmdStart(args) {
     }
   }
   if (!claimable.includes(t.status)) {
-    fail(`task #${t.id} status=${t.status} is not claimable (claimable: ${claimable.join('/')}); ` +
-      `terminal tasks whose GitHub issue was reopened are let through`);
+    const hint = t.status === 'waiting-human'
+      ? 'it is in the human inbox — a human decides first (label/status), then it can be claimed'
+      : t.status === 'waiting-merge'
+        ? 'it is awaiting a human merge'
+        : `terminal states (${reopenable.join('/')}) whose GitHub item was reopened are let through`;
+    fail(`task #${t.id} status=${t.status} is not claimable (claimable: ${claimable.join('/')}); ${hint}`);
   }
 
   const rid = await beginRun(S, t, s, { sandbox: `local:${process.platform}`, trigger: 'manual' });
