@@ -267,9 +267,14 @@ was *correct*, and whether new events produce proposals that match reality.
       (checkout → pi install → R2 pull → push) with no agent run — run
       `34509932312`, 51s; re-run `34511261607` also confirmed the seeded state
       layer round-trips (5 tasks / 10 runs / 2 reports / 3 acceptance rows)
-- [ ] `workflow_dispatch` smoke: a **new** event → run → task file + state
-      transition correct, **GitHub unchanged** (the two real runs so far were
-      system-level, so the task-scoped path is unproven on Actions)
+- [x] `workflow_dispatch` smoke: a **new** event → run → task file + state
+      transition correct, **GitHub unchanged** — run `34511902164`
+      (`task=36 stage=triage`, 80,289 tokens): task claimed → `processing` →
+      agent triaged → `needs-triage` → task set to `waiting-human` with the
+      matching label. Verified against GitHub rather than the run's own report:
+      PR #36 has no labels and no label timeline events, and no item in the
+      repository carries a loop label written by this run (the single
+      `ready-for-human` hit is issue #30, closed on 09-08 during A0).
 - [ ] Every route has one real execution on Actions: issue triage / bugfix-feature
       / deps / external-PR readonly / release preflight (deps and external-PR
       were exercised locally during A0; `sweep` ran for real — run `34511392550`)
