@@ -20,6 +20,23 @@ tiny-oss is a tiny object storage SDK focused on uploading, with a functional AP
 - Integration specs (`test/*-integration.spec.ts`) need `npm run serve` first (Hono server on :8080, credentials from `.env`); signature/unit specs don't.
 - Input data is `Blob | ArrayBuffer | Uint8Array | string`; mini programs pass `ArrayBuffer`.
 
+## Commit messages
+
+Conventional commits, and the type drives the user-facing `CHANGELOG.md`
+(`changelogen`), so it must describe what a **package consumer** can observe:
+
+- `feat` / `fix` / `perf` — reaches users; only for changes to the published
+  package's behaviour.
+- `docs` — user-facing documentation (`README.md`, `UPGRADING.md`).
+- `chore(<area>)` — repository maintenance no consumer sees: the loop host
+  (`scripts/loop/`), CI workflows, the norms layer (this file, `docs/agents/`,
+  `skills/`), tooling. Name the area: `chore(loop)`, `chore(ci)`,
+  `chore(norms)`.
+
+Never use `fix` or `refactor` for maintenance work. Both are rendered in the
+CHANGELOG — `refactor` additionally carries a patch semver — so internal
+iteration would read to a user as a change to the package.
+
 ## References
 
 - Usage and per-provider options: `README.md`; building a custom provider: README "Extension" section and `src/provider.ts`.
