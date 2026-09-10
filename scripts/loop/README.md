@@ -389,6 +389,26 @@ was *correct*, and whether new events produce proposals that match reality.
       reading end rows would have counted sweep/retro executions as closed
       tasks. System runs now use `completed / failed / retry / aborted`, and
       `finishRun` rejects a task-scoped outcome for a task-less run.
+- [x] D24 (A1) `D18`'s fix covered `workflow_dispatch` but not `pull_request`,
+      which still checked out the default branch — so a `pr-review` run could
+      never see the code it was asked to review, and every `pull_request` run on
+      the A1 PR itself died with `MODULE_NOT_FOUND`. Checkout is now keyed on
+      trust: `workflow_dispatch` → `github.ref`; **same-repo** PR → its head
+      branch (only OWNER/MEMBER/COLLABORATOR can push those, and this is what
+      makes loop's own `loop/<n>-*` PRs reviewable); everything else → the
+      default branch, which is where fork PRs land so external code is never
+      checked out. Verified across seven event shapes.
+- [x] D25 (A1) Decisions that produce *no* run were logged only into the Step
+      Summary, so the Actions log showed a route line and then nothing — a skip
+      was indistinguishable from a silent failure. Every path (skip, inbox
+      no-op, inbox-only, duplicate event, no-op route) now logs its reason.
+- [ ] D26 (A1, open) A task in `waiting-merge` cannot be re-claimed, so a loop
+      PR that receives a new commit (`synchronize`) is skipped instead of
+      re-reviewed, and `review_requested`-style re-entry has no path back.
+      Re-review after new commits is normal in a PR loop; the fix probably
+      belongs in the `pr-review` route (reopen `waiting-merge` → `ready` on
+      `synchronize` for loop PRs) rather than in claimability. Left open
+      deliberately: A1's week should show how often it actually bites.
 
 ## Environment facts
 

@@ -97,8 +97,14 @@ async function handleInbox({ ctx, repo }) {
   const key = eventKey(ctx);
   const taskId = ctx.event?.issue?.number ?? ctx.event?.pull_request?.number;
   const t = await readJson(S.taskFile(taskId));
-  if (!t) return { state: 'noop', note: `#${taskId} 无对应任务，事件不入箱` };
-  if ((t.eventIds ?? []).includes(key)) return { state: 'noop', note: `事件已消费（${key}）` };
+  if (!t) {
+    log(`事件不入箱：#${taskId} 尚无对应任务（先由生命周期事件建档）`);
+    return { state: 'noop', note: `#${taskId} 无对应任务，事件不入箱` };
+  }
+  if ((t.eventIds ?? []).includes(key)) {
+    log(`事件已消费（幂等跳过）：${key}`);
+    return { state: 'noop', note: `事件已消费（${key}）` };
+  }
 
   t.eventInbox = [...(t.eventInbox ?? []), {
     id: key, type: `${ctx.eventName}.${ctx.action}`, at: nowIso(), summary: summarizeEvent(ctx),
@@ -113,6 +119,7 @@ async function handleInbox({ ctx, repo }) {
   if (t.status === 'waiting-info') {
     return { state: 'run', taskId: t.id, stage: 'triage', kind: t.kind, note: '补充信息后重新 triage' };
   }
+  log(`事件已入箱，不产生 run：任务 #${t.id} status=${t.status}（留待消费方接手）`);
   return { state: 'inbox-only', note: `任务 status=${t.status}，事件已入箱待消费` };
 }
 
@@ -144,7 +151,12 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
     const kind = decision.kind ?? 'issue';
     task = await prepareTask({ taskId: decision.taskId, kind, repo });
     const claim = claimability(task);
-    if (!claim.ok) return { state: 'skipped', note: `任务 #${task.id} 不可领取：${claim.reason}` };
+    if (!claim.ok) {
+      // 跳过必须有日志：事件风暴下，人要从 Actions 日志一眼看出
+      // "这个事件被正确跳过了"，而不是以为它悄悄失败。
+      log(`跳过：任务 #${task.id} 不可领取（${claim.reason}）—— 事件已幂等处理，不产生 run`);
+      return { state: 'skipped', note: `任务 #${task.id} 不可领取：${claim.reason}` };
+    }
     if (claim.resume) warn(`任务 #${task.id} 锁已过期，接管续跑`);
   }
 
