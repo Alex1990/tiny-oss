@@ -259,7 +259,10 @@ async function main() {
   const action = process.env.LOOP_EVENT_ACTION ?? '';
   const event = JSON.parse(process.env.LOOP_EVENT_JSON || '{}');
   const repo = process.env.LOOP_REPO ?? 'Alex1990/tiny-oss';
-  const writeLevel = process.env.LOOP_WRITE_LEVEL ?? 'report';
+  // 写边界：workflow 传 LOOP_EXECUTE_WRITES（workflow_dispatch 的预演开关），
+  // 也接受显式 LOOP_WRITE_LEVEL 覆盖（本地调试用）。
+  const writeLevel = process.env.LOOP_WRITE_LEVEL
+    ?? (process.env.LOOP_EXECUTE_WRITES === 'true' ? 'auto' : 'report');
 
   await ensureDirs(S);
   const ctx = { eventName, action, event };
