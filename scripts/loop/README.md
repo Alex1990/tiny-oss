@@ -234,6 +234,13 @@ vacuous when nothing is written to GitHub. Source: this file, plus
 - [x] D15 (A1) Credential/config failures (missing key → pi prints "No models
       available") would have classified as an agent failure and pushed the task
       into the human inbox. They now classify as `retry`.
+- [x] D16 (A1) GitHub write actions always used the `gh issue` subcommand, so
+      they would have failed on PR tasks ("PRs are a triage surface" means most
+      of them). The subcommand is now chosen by `task.kind`.
+- [x] D17 (A1) `run.mjs` could not import a PR (`--issue` only), while
+      `entry.mjs` handled PRs — so the local coverage exercise could not create
+      the task files the A1 sweep expects to find. Added `--pr <n>` (kind `pr`,
+      same number space, `OPEN` validation like D1).
 
 ## Environment facts
 
