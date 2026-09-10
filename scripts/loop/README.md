@@ -257,25 +257,38 @@ Successor to 05 §8's checklist, rewritten because the drift criterion is
 vacuous when nothing is written to GitHub. Source: this file, plus
 `state/SUMMARY.md` and the Actions run pages.
 
-- [ ] `workflow_dispatch` smoke (`-f smoke=true`): pipeline green end to end
-      (checkout → pi install → R2 pull → push) with no agent run
-- [ ] `workflow_dispatch` smoke: real issue → triage run → task file + state
-      transition correct, **GitHub unchanged**
-- [ ] Every route has one real execution: issue triage / bugfix-feature / deps /
-      external-PR readonly / sweep / release preflight
+Checked items cite the run that proves them. Note on the drift criterion: every
+GitHub action proposed while A1 runs at the report boundary stays unexecuted by
+design, so a task whose file says `needs-triage` and whose GitHub item has no
+label is **expected**, not drift. What must be judged is whether each proposal
+was *correct*, and whether new events produce proposals that match reality.
+
+- [x] `workflow_dispatch` smoke (`-f smoke=true`): pipeline green end to end
+      (checkout → pi install → R2 pull → push) with no agent run — run
+      `34509932312`, 51s; re-run `34511261607` also confirmed the seeded state
+      layer round-trips (5 tasks / 10 runs / 2 reports / 3 acceptance rows)
+- [ ] `workflow_dispatch` smoke: a **new** event → run → task file + state
+      transition correct, **GitHub unchanged** (the two real runs so far were
+      system-level, so the task-scoped path is unproven on Actions)
+- [ ] Every route has one real execution on Actions: issue triage / bugfix-feature
+      / deps / external-PR readonly / release preflight (deps and external-PR
+      were exercised locally during A0; `sweep` ran for real — run `34511392550`)
 - [ ] Serial lock: two consecutive dispatches queue, never run concurrently
       (run timestamps prove it)
 - [ ] Crash path: cancel a job mid-run → task stays `processing` → next sweep
       reclaims it by TTL
 - [ ] Metrics: a human merge writes one `acceptance` row, no duplicates;
       `released` backfills to the intended task
-- [ ] Engine stability: N consecutive headless pi runs without hanging; exit-code
-      mapping matches the failure-classification table
-- [ ] Cost readable: every run's `tokens`/`durationMs` land in the end row; the
-      `pi --list-models deepseek` line confirms the real model id
-- [ ] Reports human-readable: the Step Summary alone tells you what happened,
-      without downloading anything
-- [ ] State layer and GitHub show no drift after a week → human decides on L2
+- [x] Cost readable: `tokens` and `durationMs` land in the end row — real runs
+      recorded 102,860 and 77,850 tokens; the install step prints
+      `model deepseek-v4-flash is available` and fails the job on a mismatch
+- [x] Reports human-readable: the Step Summary alone tells you what happened
+      (outcome, exit code, token usage, model, proposed actions) without
+      downloading anything
+- [ ] Engine stability: N consecutive headless pi runs without hanging
+      (2 successful runs so far); exit-code mapping matches the
+      failure-classification table
+- [ ] No drift **and** no incorrect proposal after a week → human decides on L2
 
 ## Defect log
 
