@@ -403,16 +403,6 @@ was *correct*, and whether new events produce proposals that match reality.
       *can* be widened, and the official docs name `permissions` as the fix.
       The `test` job now declares `contents: read` + `pull-requests: write`, so
       a Dependabot PR no longer shows a red CI whose tests all passed.
-- [ ] D28 (A1, open) Both `pull_request` rows that need no write access are
-      nevertheless unrunnable, because the platform withholds **all** secrets
-      (not just write permission) from Dependabot-triggered runs and from fork
-      PRs: even read-only analysis needs the LLM key, and `deps` needs the R2
-      credentials. The job-level guard skips them (see the trigger section) so
-      they fail visibly *before* wasting a runner rather than after pulling
-      state. Options when A1's week is over: a `pull_request_target` two-step
-      where only this repository's scripts run (§6's design), or Dependabot
-      secrets for `deps`. Chosen for A1: neither — the week is for validating
-      the run contract, and the guard keeps the red/green signal honest.
 - [x] D22 (A1) `renderSummary` had no section for `status: new`, so a task the
       sweep had just created was invisible in the human summary — the one item
       most in need of attention. Reported by a real sweep run; a `Unprocessed (new)`
@@ -449,6 +439,29 @@ was *correct*, and whether new events produce proposals that match reality.
       orchestrator, which needs the failure) while a CLI should not. `main` now
       wraps dispatch, so every subcommand reports the same way. Found while
       reviewing the translated error messages.
+- [ ] D28 (A1, open) Both `pull_request` rows that need no write access are
+      nevertheless unrunnable, because the platform withholds **all** secrets
+      (not just write permission) from Dependabot-triggered runs and from fork
+      PRs: even read-only analysis needs the LLM key, and `deps` needs the R2
+      credentials. The job-level guard skips them (see the trigger section) so
+      they fail visibly *before* wasting a runner rather than after pulling
+      state. Options when A1's week is over: a `pull_request_target` two-step
+      where only this repository's scripts run (§6's design), or Dependabot
+      secrets for `deps`. Chosen for A1: neither — the week is for validating
+      the run contract, and the guard keeps the red/green signal honest.
+- [x] D29 (A1) D9's reopen check fired on **any** non-claimable status, not just
+      the terminal ones. A `waiting-human` task (the inbox) is open on GitHub by
+      definition, so a single `start --task` "reopened" it: the status was reset
+      to `ready`, the triage decision was **wiped**, and a bogus `reopened` event
+      was appended — silently converting an inbox item into an auto-claimable one
+      and bypassing the cognitive guard. `waiting-merge` was affected the same
+      way. The README entry for D9 always said `closed/rejected`; the
+      implementation was broader than its own description. The check is now
+      limited to `closed`/`rejected`, and the not-claimable error tells you what
+      the state actually requires (inbox → a human decides first; waiting-merge →
+      awaiting merge). Verified across five scenarios: inbox and awaiting-merge
+      are refused without touching the decision, `closed` + a genuinely reopened
+      GitHub item is still let through, and `closed` + a closed item is not.
 
 ## Environment facts
 
