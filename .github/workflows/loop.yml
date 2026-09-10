@@ -17,7 +17,14 @@ on:
   release:
     types: [published]
   schedule:
-    - cron: '17 3 * * *' # daily sweep; weekly retro cron: scripts/loop/shared/route.mjs WEEKLY_CRON
+    # Daily sweep: reconcile GitHub against the state layer, expire stale tasks,
+    # fold in dependency/security notices, refresh SUMMARY.
+    - cron: '17 3 * * *'
+    # Weekly retro: aggregate the two metrics and propose process changes.
+    # Must equal WEEKLY_CRON in scripts/loop/shared/route.mjs — the router
+    # compares the cron string exactly, so a typo here silently degrades to a
+    # sweep rather than failing loudly.
+    - cron: '23 3 * * 1'
   workflow_dispatch:
     inputs:
       task:
