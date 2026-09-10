@@ -3,7 +3,7 @@
  * Loop runner 编排入口 —— GitHub Actions job 调用的唯一脚本。
  *
  * 一次调用 = 一个决策：路由事件 → 落 inbox / 写评测 / 跑一个 run。
- * 状态层读写全部经 `lib/state.mjs`；本文件只做编排与报告，不直接改状态字段。
+ * 状态层读写全部经 `shared/state.mjs`；本文件只做编排与报告，不直接改状态字段。
  *
  * 不变量：
  *   - 收尾是**唯一写入者**：agent 只写 `state/reports/<runId>.result.json`，
@@ -268,6 +268,22 @@ async function main() {
   const ctx = { eventName, action, event };
   const decision = route(ctx);
   log(`event=${eventName}.${action || '(none)'} → ${decision.action}（${decision.reason}）· writeLevel=${writeLevel}`);
+
+  // 冒烟模式：只验证基础设施（checkout / 工具链 / pi 安装 / R2 pull+push），
+  // 不启动 agent。A1 的手动冒烟入口要能在不消耗 token、不等 LLM 的情况下
+  // 回答"管道通不通"——加新仓库、怀疑凭据失效时首先用它。
+  if (process.env.LOOP_SMOKE === 'true') {
+    log('smoke 模式：跳过 agent，仅验证基础设施');
+    await writeStepSummary([
+      '## Loop — smoke (infrastructure only)', '',
+      `- event: \`${eventName}.${action || '(none)'}\``,
+      `- routing decision (not executed): \`${decision.action}\` — ${decision.reason}`,
+      `- write level: \`${writeLevel}\``,
+      '- R2: pulled and pushed by the surrounding workflow steps',
+      '- agent: **skipped** (no tokens spent)',
+    ].join('\n'));
+    return 0;
+  }
 
   let result = { state: 'noop', note: decision.reason };
 
