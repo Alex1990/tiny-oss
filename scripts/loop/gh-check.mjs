@@ -96,29 +96,43 @@ const readResults = reads.map(([label, args]) => {
   return { label, ok: r.ok };
 });
 
-console.log('\n[loop:gh] writes — probes target an impossible number, nothing is changed:');
-const writes = [
+console.log('\n[loop:gh] writes the loop needs (probes target an impossible id — nothing changes):');
+const needed = [
   ['Issues: write        (label/comment/close)', ['api', '--method', 'PATCH',
     `repos/${repo}/issues/${IMPOSSIBLE}`, '-f', 'state=open']],
-  ['Pull requests: write (open/edit PR)', ['api', '--method', 'PATCH',
+  ['Pull requests: write (open/edit PR, reviews)', ['api', '--method', 'PATCH',
     `repos/${repo}/pulls/${IMPOSSIBLE}`, '-f', 'state=open']],
-  ['Contents: write      (MERGE + push)', ['api', '--method', 'PUT',
-    `repos/${repo}/pulls/${IMPOSSIBLE}/merge`]],
 ];
-const results = writes.map(([label, args]) => probe(label, args));
-const canMerge = results.find((r) => r.label.startsWith('Contents'))?.present ?? false;
+const needResults = needed.map(([label, args]) => probe(label, args));
+
+console.log('\n[loop:gh] scopes the loop must NOT hold:');
+const forbidden = [
+  ['Contents: write      (MERGE + push + release)', ['api', '--method', 'PUT',
+    `repos/${repo}/pulls/${IMPOSSIBLE}/merge`]],
+  ['Actions: write       (trigger/disable workflows)', ['api', '--method', 'POST',
+    `repos/${repo}/actions/workflows/${IMPOSSIBLE}/dispatches`, '-f', 'ref=main']],
+];
+const forbiddenResults = forbidden.map(([label, args]) => probe(label, args));
+// Read-only probe: listing secret *names* needs the Secrets permission. The
+// listing itself is never printed — only whether the permission is present.
+const secrets = gh(['api', `repos/${repo}/actions/secrets`]);
+console.log(`  ${secrets.ok ? 'present' : 'ABSENT '}  Secrets access       (list/overwrite CI secrets)`);
+
+const held = forbiddenResults.filter((r) => r.present).map((r) => r.label.trim().split(/\s+/)[0]);
 const brokenReads = readResults.filter((r) => !r.ok);
-const canLabel = results.find((r) => r.label.startsWith('Issues'))?.present ?? false;
+const canLabel = needResults.find((r) => r.label.startsWith('Issues'))?.present ?? false;
 
 console.log('');
-if (canMerge) {
-  console.log('[loop:gh] WARNING: the token holds Contents:write. That single scope grants'
-    + ' merging (PUT /pulls/{n}/merge), branch pushes, and POST /releases — none of which'
-    + ' the loop should have. See "GitHub write credential" in scripts/loop/README.md.');
-  console.log('[loop:gh] Recreate the PAT with: Issues RW, Pull requests RW, Contents read.');
+if (held.length) {
+  console.log(`[loop:gh] WARNING: the token holds ${[...held, ...(secrets.ok ? ['Secrets'] : [])].join(', ')}.`
+    + ' Each of those is a way to reach code or CI without going through a pull request —'
+    + ' Contents alone grants merging (PUT /pulls/{n}/merge), branch pushes and POST /releases.');
+  console.log('[loop:gh] Recreate the PAT as: Issues Read and write, Pull requests Read and write,'
+    + ' Contents Read-only, and Nothing for Actions/Secrets/Administration/Workflows.'
+    + ' See "GitHub write credential" in scripts/loop/README.md.');
 } else {
-  console.log('[loop:gh] Contents:write absent — merging is impossible for this credential,'
-    + ' which is the intended L2c property.');
+  console.log('[loop:gh] none of the forbidden scopes are held — merging, branch pushes and'
+    + ' workflow control are impossible for this credential, which is the intended L2c property.');
 }
 console.log(`[loop:gh] label/comment/close: ${canLabel ? 'available' : 'NOT available — the loop cannot do its job'}`);
 console.log(`[loop:gh] reads: ${brokenReads.length
