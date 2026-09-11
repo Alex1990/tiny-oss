@@ -181,20 +181,34 @@ console.log(`[loop:gh] reads: ${brokenReads.length
 
 // The credential the *agent* will hold. `runPi` swaps GH_TOKEN for GH_READ_TOKEN
 // under the report boundary, so this decides whether the agent could write if it
-// ignored its prompt. Identity is the decisive check: `github-actions[bot]` is
-// the job token, whose reach the workflow's `permissions:` block sets, and that
-// block is read-only here.
+// ignored its prompt.
+//
+// Identity cannot be read from `GET /user` here: `github.token` is a GitHub App
+// installation token and is refused there entirely, which is why the check below
+// combines two signals that *are* observable — whether the credential can read
+// the repository at all, and whether a write is refused.
 console.log('\n[loop:gh] credential handed to the agent under the report boundary:');
 if (!agentToken) {
   console.log('  (GH_READ_TOKEN is not set — runPi would pass GH_TOKEN through unchanged,'
     + ' i.e. the agent inherits the host credential above.)');
 } else {
-  const agentWho = identity(agentToken);
-  const agentIsJob = agentWho === 'github-actions[bot]';
-  console.log(`  authenticates as: ${agentWho ?? '(failed)'}`);
-  console.log(agentIsJob
-    ? '  OK: it is github.token, so `permissions:` caps it — the agent reaches GitHub read-only'
-      + ' even if it ignores its prompt. The report boundary is a platform guarantee.'
-    : `  WARNING: it is ${agentWho}, a user token — the agent inherits that user's reach and the`
-      + ' report boundary is back to being a prompt instruction only.');
+  const canRead = gh(['api', `repos/${repo}`, '--jq', '.full_name'], { token: agentToken });
+  const asUser = gh(['api', 'user', '--jq', '.login'], { token: agentToken });
+  console.log(`  can read the repo:          ${canRead.ok ? 'yes' : `NO — the agent cannot read GitHub (${canRead.status})`}`);
+  console.log(`  acts as a user:             ${asUser.ok ? `yes (${asUser.out}) — a PAT or user token` : 'no — a GitHub App token, i.e. github.token'}`);
+  const agentWrite = idempotentWrite('Issues: write', issueProbe, agentToken);
+
+  if (!canRead.ok) {
+    console.log('  WARNING: the agent cannot read GitHub, so triage/sweep will find nothing.');
+  } else if (asUser.ok) {
+    console.log(`  WARNING: the agent holds a *user* token (${asUser.out}) — it inherits that`
+      + " user's reach, so the report boundary is a prompt instruction only.");
+  } else if (agentWrite) {
+    console.log('  WARNING: the agent can write (github.token is not capped to read — check the'
+      + " workflow's `permissions:` block).");
+  } else {
+    console.log('  OK: github.token, read-only by the workflow\'s `permissions:` block — the agent'
+      + ' reaches GitHub read-only even if it ignores its prompt. The report boundary is a'
+      + ' platform guarantee.');
+  }
 }
