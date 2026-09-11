@@ -344,10 +344,13 @@ was *correct*, and whether new events produce proposals that match reality.
       (outcome, exit code, token usage, model, proposed actions) without
       downloading anything
 - [ ] Engine stability: N consecutive headless pi runs without hanging — all 18
-      recorded runs reached an end row with no hang (A0 + A1 combined). Note the
-      inverse gap: **every run so far exited 0**, so the failure-classification
-      table (machine/config failure → `retry`; agent-judged → inbox) has never
-      been exercised by a real failure.
+      **recorded** runs reached an end row with no hang (A0 + A1 combined). Note
+      the inverse gap: every recorded run exited 0, so the classification table
+      (machine/config failure → `retry`; agent-judged → inbox) has never been
+      consulted. The three guard failures do not change this: they die at
+      `Install engine (pi)`, before `entry.mjs`, so they write no run row at all
+      — see the failure-classification item above. (Distinction worth keeping:
+      21 workflow executions, 18 run records.)
 - [ ] No drift **and** no incorrect proposal after a week → human decides on L2
 
 ### Not reachable under A1 (structural — decide before the L2 switchover)
@@ -602,6 +605,9 @@ that has never met production.
       `always() && steps.pull.outcome != 'skipped'`. Deliberately not
       `== 'success'`: a *failed* pull may still leave a usable tree, and
       recording post-crash state is the whole point of `always()`.
+      Verified on `34608064576` (same bad model after the fix): step 9 is now
+      `skipped` while step 6 stays `failure`, so the only red step is the one
+      that actually failed.
 
 ## Environment facts
 
