@@ -25,11 +25,10 @@ import { spawnSync } from 'node:child_process';
 const IMPOSSIBLE = '999999999'; // far beyond any real issue/PR number here
 
 /** Run `gh`, returning the HTTP status it saw and whether it succeeded. */
-function gh(args, { json = false } = {}) {
-  const r = spawnSync('gh', json ? [...args, '--jq', '.'] : args, {
-    encoding: 'utf8',
-    env: { ...process.env, GH_PAGER: '', NO_COLOR: '1' },
-  });
+function gh(args, { token = null } = {}) {
+  const env = { ...process.env, GH_PAGER: '', NO_COLOR: '1' };
+  if (token) env.GH_TOKEN = token;
+  const r = spawnSync('gh', args, { encoding: 'utf8', env });
   const all = `${r.stdout || ''}\n${r.stderr || ''}`;
   const m = /HTTP (\d{3})/.exec(all);
   return {
@@ -138,3 +137,31 @@ console.log(`[loop:gh] label/comment/close: ${canLabel ? 'available' : 'NOT avai
 console.log(`[loop:gh] reads: ${brokenReads.length
   ? `${brokenReads.length} FAILED — the host's sweep will break: ${brokenReads.map((r) => r.label.trim().split(/\s+/)[0]).join(', ')}`
   : 'all OK'}`);
+
+// The credential the *agent* will hold. `runPi` swaps GH_TOKEN for GH_READ_TOKEN
+// under the report boundary, so this is the one that decides whether the agent
+// could write if it ignored its prompt. Measuring it here makes that property
+// observable without spending a single token on a real agent run.
+const agentToken = process.env.GH_READ_TOKEN;
+console.log('\n[loop:gh] credential handed to the agent under the report boundary:');
+if (!agentToken) {
+  console.log('  (GH_READ_TOKEN is not set — runPi would pass GH_TOKEN through unchanged,'
+    + ' i.e. the agent inherits the host credential above)');
+} else {
+  const agentProbes = [
+    ['Issues: write', ['api', '--method', 'PATCH', `repos/${repo}/issues/${IMPOSSIBLE}`, '-f', 'state=open']],
+    ['Contents: write (merge/push)', ['api', '--method', 'PUT', `repos/${repo}/pulls/${IMPOSSIBLE}/merge`]],
+  ];
+  const agentHeld = [];
+  for (const [label, args] of agentProbes) {
+    const r = gh(args, { token: agentToken });
+    const present = hasScope(r.status);
+    if (present) agentHeld.push(label);
+    console.log(`  ${present ? 'present' : 'ABSENT '}  ${label}`);
+  }
+  console.log(agentHeld.length
+    ? `  WARNING: the agent holds ${agentHeld.join(', ')} — the report boundary is back to being`
+      + ' a prompt instruction only.'
+    : '  OK: the agent holds no write scope, so even ignoring its prompt it reaches GitHub'
+      + ' read-only. The report boundary is a platform guarantee.');
+}

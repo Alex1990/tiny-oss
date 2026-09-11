@@ -97,6 +97,12 @@ jobs:
       LOOP_MODEL: ${{ github.event.inputs.model || 'deepseek/deepseek-v4-flash' }}
       LOOP_RUN_TIMEOUT_MS: '3300000' # 55min, leaving headroom for push (job timeout 60min)
       GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN || github.token }}
+      # Handed to the agent subprocess in place of GH_TOKEN under the report
+      # boundary (see runPi in shared/agent.mjs). `github.token` here is capped
+      # at read by the `permissions:` block above, so the agent cannot write even
+      # if LOOP_GH_TOKEN is a write-capable PAT. Host-side writes still use
+      # GH_TOKEN, in the host's own process.
+      GH_READ_TOKEN: ${{ github.token }}
       # Credentials: secrets only
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

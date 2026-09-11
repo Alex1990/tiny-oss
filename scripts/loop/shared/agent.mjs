@@ -125,7 +125,9 @@ export function summarize(events) {
  */
 export const SESSION_HINT = 'session files land under --session-dir (uploaded as an artifact)';
 
-export function runPi({ prompt, cwd, sessionDir, model, timeoutMs = 3600000, log = () => {} }) {
+export function runPi({
+  prompt, cwd, sessionDir, model, timeoutMs = 3600000, writeLevel = 'report', log = () => {},
+}) {
   return new Promise((resolve) => {
     const args = [
       '--mode', 'json',
@@ -140,8 +142,24 @@ export function runPi({ prompt, cwd, sessionDir, model, timeoutMs = 3600000, log
     // to pi, overridable with LOOP_ENGINE_CMD (e.g. run the same contract locally through
     // another CLI or wrapper script).
     const engine = (process.env.LOOP_ENGINE_CMD || 'pi').split(/\s+/).filter(Boolean);
+
+    // `env: process.env` hands the agent everything the host sees, including
+    // `GH_TOKEN` — which is `secrets.LOOP_GH_TOKEN || github.token`, so as soon
+    // as a PAT is configured the agent inherits whatever that PAT can do. Under
+    // the report boundary nothing the agent does is supposed to reach GitHub,
+    // and that must not rest on the prompt alone: hand it the job token instead,
+    // which the workflow caps at `read-only` via `permissions:`. Writes by the
+    // *host* (applyActions) still use the real GH_TOKEN in its own process.
+    const childEnv = { ...process.env };
+    if (writeLevel !== 'auto' && process.env.GH_READ_TOKEN) {
+      childEnv.GH_TOKEN = process.env.GH_READ_TOKEN;
+      log('[loop] agent is given a read-only GitHub token (report boundary)');
+    } else if (writeLevel === 'auto') {
+      log('[loop] agent is given the write-capable GitHub token (auto mode)');
+    }
+
     const child = spawn(engine[0], [...engine.slice(1), ...args], {
-      cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'],
+      cwd, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
     let stderr = '';
