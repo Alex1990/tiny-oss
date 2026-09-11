@@ -168,6 +168,16 @@ jobs:
           fi
           echo "model $want is available"
 
+      # Measure what the GitHub credential can actually do, before the agent can
+      # reach it. `GH_TOKEN` is `secrets.LOOP_GH_TOKEN || github.token`, so
+      # configuring a PAT silently changes every `gh` call in this job — it can
+      # narrow the read-only ones sweep depends on, or widen what the agent can
+      # write. Neither is visible from this file. Probes are side-effect free:
+      # they call write endpoints against an impossible id, so `403` means the
+      # scope is absent and `404`/`422` means it is present.
+      - name: Check GitHub credential
+        run: node scripts/loop/gh-check.mjs
+
       - name: Pull state from R2
         id: pull
         run: node scripts/loop/r2-sync.mjs pull
