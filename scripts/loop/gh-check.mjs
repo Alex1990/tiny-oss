@@ -134,18 +134,29 @@ const prProbe = {
 const canLabel = idempotentWrite('Issues: write        (label/comment/close)', issueProbe, hostToken);
 idempotentWrite('Pull requests: write (open/edit PR, reviews)', prProbe, hostToken);
 
-// `permissions.push` is the repository-write flag, which on GitHub's model is
-// exactly `Contents: write` — the scope that carries merging, branch pushes and
-// `POST /releases` together. It is read from GitHub rather than probed.
+// `PATCH /git/refs/{ref}` is in the Contents write set, and setting a ref to the
+// SHA it already has is a no-op — so a 2xx means real write ability and nothing
+// changes.
+//
+// This is the only sound way to measure Contents. The repository's
+// `.permissions` object is NOT a token scope report: it describes the
+// *authenticated user's* role, so it answers `push: true` for any token
+// belonging to an admin, no matter how narrowly the token was scoped. Reading it
+// here reported a Contents Read-only PAT as write-capable.
+const defaultBranch = gh(['api', `repos/${repo}`, '--jq', '.default_branch'],
+  { token: hostToken }).out || 'main';
+const refProbe = {
+  read: ['api', `repos/${repo}/git/refs/heads/${defaultBranch}`, '--jq', '.object.sha'],
+  write: (sha) => ['api', '--method', 'PATCH',
+    `repos/${repo}/git/refs/heads/${defaultBranch}`, '-f', `sha=${sha}`],
+};
+const canPush = idempotentWrite(
+  `Contents: write      (MERGE + push + release)`, refProbe, hostToken,
+);
 const hostPerm = gh(['api', `repos/${repo}`, '--jq', '.permissions'], { token: hostToken });
-let canPush = null;
-if (hostPerm.ok && hostPerm.out) {
-  try {
-    canPush = JSON.parse(hostPerm.out).push === true;
-  } catch { /* leave null */ }
-  console.log(`  ${canPush ? 'present' : 'ABSENT '}  Contents: write      (MERGE + push + release)`);
-} else {
-  console.log('  UNKNOWN   Contents: write      (repo permissions unreadable)');
+if (hostPerm.ok) {
+  console.log(`  (info) repo .permissions = ${hostPerm.out.replace(/\s+/g, ' ')}`
+    + ' — the *user\'s* role, not this token\'s scopes; do not read it as a scope report');
 }
 
 console.log('\n[loop:gh] scopes reached by a credential that lacks them entirely:');
@@ -197,13 +208,14 @@ if (!agentToken) {
   console.log(`  can read the repo:          ${canRead.ok ? 'yes' : `NO — the agent cannot read GitHub (${canRead.status})`}`);
   console.log(`  acts as a user:             ${asUser.ok ? `yes (${asUser.out}) — a PAT or user token` : 'no — a GitHub App token, i.e. github.token'}`);
   const agentWrite = idempotentWrite('Issues: write', issueProbe, agentToken);
+  const agentPush = idempotentWrite('Contents: write', refProbe, agentToken);
 
   if (!canRead.ok) {
     console.log('  WARNING: the agent cannot read GitHub, so triage/sweep will find nothing.');
   } else if (asUser.ok) {
     console.log(`  WARNING: the agent holds a *user* token (${asUser.out}) — it inherits that`
       + " user's reach, so the report boundary is a prompt instruction only.");
-  } else if (agentWrite) {
+  } else if (agentWrite || agentPush) {
     console.log('  WARNING: the agent can write (github.token is not capped to read — check the'
       + " workflow's `permissions:` block).");
   } else {
