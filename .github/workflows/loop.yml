@@ -42,6 +42,9 @@ on:
         description: 'Infrastructure only: exercise checkout/install/R2 pull+push, skip the agent'
         required: false
         default: 'false'
+      model:
+        description: 'Override the engine model id (default deepseek/deepseek-v4-flash). A bad value must fail the D19 guard.'
+        required: false
 
 concurrency:
   group: loop
@@ -91,7 +94,7 @@ jobs:
       # For non-dispatch events github.event.inputs is null → default to report (report-only)
       LOOP_EXECUTE_WRITES: ${{ github.event.inputs.execute_writes || 'false' }}
       LOOP_SMOKE: ${{ github.event.inputs.smoke || 'false' }}
-      LOOP_MODEL: deepseek/deepseek-v4-flash
+      LOOP_MODEL: ${{ github.event.inputs.model || 'deepseek/deepseek-v4-flash' }}
       LOOP_RUN_TIMEOUT_MS: '3300000' # 55min, leaving headroom for push (job timeout 60min)
       GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN || github.token }}
       # Credentials: secrets only
