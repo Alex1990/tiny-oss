@@ -68,8 +68,9 @@ keep reporting. What *does* change: the agent subprocess inherits
 left between the agent and a write is the prompt. That is the trade, and it is
 why the scope below matters.
 
-**Do not grant `Contents: write`.** Merging a PR is not under "Pull requests" —
-it is under "Contents" (GitHub's endpoint→permission table):
+**Do not grant the agent's credential `Contents: write`.** Merging a PR is not
+under "Pull requests" — it is under "Contents" (GitHub's endpoint→permission
+table):
 
 | Action | gh command | Permission required |
 | --- | --- | --- |
@@ -87,30 +88,71 @@ Two consequences that are easy to get wrong:
    `PATCH /pulls/{n}`, reviews and review comments — the merge endpoint sits in
    the `Contents` section, because merging means writing commits to the target
    branch.
-2. **"Can open a PR" and "can merge a PR" are the same permission.** Opening a
-   PR needs a head branch, creating one needs `Contents: write`, and that is the
-   merge permission. They cannot be separated in this model.
+2. **"Can open a PR" and "can merge a PR" are the same permission** — within a
+   single credential. Opening a PR needs a head branch; creating one needs
+   `Contents: write`; and that is the merge permission. Separating them means
+   splitting the *roles*, which is what L2c below does.
 
-So the L2 step has two distinct sizes, and only the first is safe today:
+So the L2 step has three sizes rather than two. Two are pure scope choices; the
+third is the one that satisfies "loop may open PRs but must never merge them",
+and it needs a small host change.
 
-| | Scopes | Gains | Cost |
+| | Scopes / changes | Loop can | Loop cannot |
 | --- | --- | --- | --- |
-| **L2a** (recommended) | `Issues: RW`, `Pull requests: RW`, `Contents: read`, Metadata: read | labels, comments, closes, review comments | cannot open PRs — but **merging is impossible**, and no code or branch can be touched |
-| **L2b** | L2a + `Contents: RW` | everything above plus branch push and PR creation | **also grants merge**, `POST /releases` (the release gate) and `POST /dispatches` |
+| **L2a** | `Issues: RW` + `Pull requests: RW` + `Contents: read` | label, comment, close, review | open PRs, merge, touch code or branches |
+| **L2c** | L2a, **plus** the host pushes `loop/*` branches with its own token | label, comment, close, review, **open PRs** | **merge anything** |
+| **L2b** | L2a + `Contents: RW` on the loop's own credential | everything, PR creation included | — (nothing; this is the unchecked size) |
 
 Prefer a **fine-grained** PAT scoped to `Alex1990/tiny-oss`; a classic `repo`
 token grants all of the above at once, defeating the point. Set an expiry and
 record who renews it, or L2 fails silently later.
 
-Server-side protection does **not** rescue L2b here: this is a solo repository
-(one collaborator, `admin: true`), so a ruleset requiring approvals would block
-the owner's own PRs forever (GitHub forbids self-approval), and adding an
-admin `bypass_actor` would let the loop's PAT bypass it too. The existing
-`Main branch` ruleset is `enforcement: disabled` and contains only `deletion`
-and `non_fast_forward` — it never restricted merging.
+#### L2c — the loop opens PRs and still cannot merge
 
-Net effect of choosing L2a: `no self-merge` stops being a prompt constraint and
-becomes a platform impossibility — the same guarantee `git push` has today.
+Worth stating up front: **a single credential cannot express this.** Opening a
+PR needs a head branch, creating one needs `Contents: write`, and that is the
+same permission `PUT /pulls/{n}/merge` requires. The split has to happen across
+*roles*, not inside one scope list:
+
+| Credential | Held by | Scopes | Used for |
+| --- | --- | --- | --- |
+| `GITHUB_TOKEN` (job) | the workflow's own steps | `contents: write` | creating and pushing the `loop/<n>-*` branch |
+| `LOOP_GH_TOKEN` (PAT) | the agent subprocess | `Issues: RW`, `Pull requests: RW` — **no `Contents`** | labels, comments, opening the PR |
+
+Two details are required and both are easy to miss:
+
+- `actions/checkout` must set **`persist-credentials: false`**. Its default is
+  `true` and writes the job token into the repository's git config so scripts
+  can run authenticated git commands — which would hand the agent exactly the
+  `Contents: write` this design exists to remove.
+- Pushing is the *only* thing that has to move to a host step. Committing is a
+  local operation with no network credential, so the agent can still stage and
+  commit its work in the workspace; the host pushes the branch and opens the PR
+  from the agent's proposed metadata. That also fits the existing division of
+  labour — the agent proposes, the host executes.
+
+Result: the agent has no route to `PUT /pulls/{n}/merge` (403 — no `Contents`),
+and no route to push anything anywhere. The loop still produces PRs. `no
+self-merge` becomes a platform guarantee instead of a prompt instruction, which
+is the whole point.
+
+One side effect to plan for: a PR created with `GITHUB_TOKEN` produces a
+`pull_request` event whose workflow runs start in an **approval-required** state
+(except `closed`/`labeled`/`edited`, which do not create runs at all). So the
+loop will not triage or review its own PR, and CI will not run on it, until a
+human clicks "Approve workflows to run". For this loop that is a feature — it
+removes the recursive self-review the `pr-review` route would otherwise perform
+on the loop's own output, and it matches D26's direction. A human merging the PR
+still fires `pull_request_target.closed` normally, which is what drives the
+`metrics` gate.
+
+Server-side protection does **not** substitute for any of this: this is a solo
+repository (one collaborator, `admin: true`), so a ruleset requiring approvals
+would block the owner's own PRs forever (GitHub forbids self-approval), and
+adding an admin `bypass_actor` would let the loop's PAT bypass it too. The
+existing `Main branch` ruleset is `enforcement: disabled` and contains only
+`deletion` and `non_fast_forward` — it never restricted merging. The guarantee
+has to come from the credential split.
 
 ## A1 architecture (Actions + R2)
 
@@ -411,10 +453,11 @@ was *correct*, and whether new events produce proposals that match reality.
       — see the failure-classification item above. (Distinction worth keeping:
       21 workflow executions, 18 run records.)
 - [ ] No drift **and** no incorrect proposal after a week → human decides on L2.
-      When it does, choose the scope deliberately: **L2a** (`Issues: RW` +
-      `Pull requests: RW`, no `Contents: RW`) keeps merging impossible for the
-      loop, while **L2b** adds PR creation and merge in one indivisible step.
-      See "GitHub write credential" above for the endpoint-level evidence.
+      Owner's target is **L2c**: the loop opens PRs but can never merge. That
+      needs the credential split (host pushes branches with `GITHUB_TOKEN`; the
+      agent's PAT carries no `Contents`) plus `persist-credentials: false` — see
+      "GitHub write credential" above for the endpoint-level evidence, and note
+      that a single credential cannot express it.
 
 ### Not reachable under A1 (structural — decide before the L2 switchover)
 
