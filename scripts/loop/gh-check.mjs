@@ -112,6 +112,14 @@ const forbidden = [
     `repos/${repo}/actions/workflows/${IMPOSSIBLE}/dispatches`, '-f', 'ref=main']],
 ];
 const forbiddenResults = forbidden.map(([label, args]) => probe(label, args));
+// Independent confirmation of the probes above: GitHub's own `permissions`
+// object, which needs no inference from a status code. Relevant because the
+// `403` vs `404` reading assumes GitHub checks permissions *before* resource
+// lookup, which is worth verifying rather than assuming.
+const hostPerm = gh(['api', `repos/${repo}`, '--jq', '.permissions']);
+console.log(`  repo permissions: ${hostPerm.ok
+  ? hostPerm.out.replace(/\s+/g, ' ')
+  : `(unreadable — ${(hostPerm.err || hostPerm.status).toString().slice(0, 60)})`}`);
 // Read-only probe: listing secret *names* needs the Secrets permission. The
 // listing itself is never printed — only whether the permission is present.
 const secrets = gh(['api', `repos/${repo}/actions/secrets`]);
@@ -159,6 +167,13 @@ if (!agentToken) {
     if (present) agentHeld.push(label);
     console.log(`  ${present ? 'present' : 'ABSENT '}  ${label}`);
   }
+  // Cross-check the probe, because `403` vs `404` is an inference about where
+  // GitHub checks permissions relative to resource lookup. The `permissions`
+  // object is reported by GitHub itself and needs no inference.
+  const agentPerm = gh(['api', `repos/${repo}`, '--jq', '.permissions'], { token: agentToken });
+  console.log(`  repo permissions: ${agentPerm.ok
+    ? agentPerm.out.replace(/\s+/g, ' ')
+    : `(unreadable — ${(agentPerm.err || agentPerm.status).toString().slice(0, 60)})`}`);
   console.log(agentHeld.length
     ? `  WARNING: the agent holds ${agentHeld.join(', ')} — the report boundary is back to being`
       + ' a prompt instruction only.'
