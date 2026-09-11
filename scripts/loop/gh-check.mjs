@@ -8,21 +8,32 @@
  * moment a real PAT is configured it replaces the job token for **every** `gh`
  * call, including the read-only ones sweep depends on. A PAT that is narrower
  * than the job token therefore breaks reads silently, and one that is broader
- * silently hands the agent write access nobody chose. Neither is visible from
- * the workflow file, so it has to be measured.
+ * silently widens what the loop can do. Neither is visible from the workflow
+ * file, so it has to be measured.
  *
- * Permission probing without side effects: a write endpoint is called against a
- * resource number that cannot exist. `403` means the token lacks the scope;
- * `404`/`422` means the request passed the permission check and only failed on
- * the missing resource — i.e. the scope is present. Nothing is ever mutated,
- * because every probe targets an id far beyond this repository's range.
+ * How permissions are measured — two methods, because the obvious one is wrong:
+ *
+ *   1. GitHub's own `permissions` object for the credential. No inference.
+ *   2. **Idempotent writes** for scopes the object does not describe (Issues and
+ *      Pull requests). The probe reads the current value and writes it straight
+ *      back, so nothing changes — but a `2xx` means the write really executed,
+ *      which only happens with the write scope.
+ *
+ * The tempting method — call a write endpoint against an impossible id and read
+ * `403` as "no permission", `404` as "permission present" — does **not** work.
+ * Measured against a `github.token` capped to read-only by `permissions:`, the
+ * write probes returned `404`, not `403`. So `404` means only "the credential
+ * has *some* scope for this resource", read or write, and the method reports
+ * false positives. `403` remains meaningful for a scope the token lacks
+ * entirely, which is why the Actions and Secrets checks still use it.
  *
  * The token itself is never printed. Only the login it authenticates as.
  */
 
 import { spawnSync } from 'node:child_process';
 
-const IMPOSSIBLE = '999999999'; // far beyond any real issue/PR number here
+const IMPOSSIBLE = '999999999'; // beyond any real issue/PR number here
+const SEP = '\u0001'; // unlikely in a real title
 
 /** Run `gh`, returning the HTTP status it saw and whether it succeeded. */
 function gh(args, { token = null } = {}) {
@@ -39,18 +50,28 @@ function gh(args, { token = null } = {}) {
   };
 }
 
-/**
- * `403`/`401` = scope absent. Anything else means the permission check passed
- * and the request failed later (missing resource, bad body) — scope present.
- */
-const hasScope = (status) => status !== null && status !== 403 && status !== 401;
+/** A scope the credential lacks entirely answers `403`; anything else is "has some access". */
+const hasAnyScope = (status) => status !== null && status !== 403 && status !== 401;
 
-function probe(label, args) {
-  const r = gh(args);
-  const present = hasScope(r.status);
-  console.log(`  ${present ? 'present' : 'ABSENT '}  ${label}`
-    + ` (HTTP ${r.status ?? 'n/a'})`);
-  return { label, present, status: r.status, err: r.err };
+/** Identity is the decisive fact for a credential we did not choose. */
+function identity(token) {
+  const r = gh(['api', 'user', '--jq', '.login'], { token });
+  return r.ok ? r.out : null;
+}
+
+/**
+ * Write nothing, change nothing — but require the write scope to succeed.
+ * Returns `true` (2xx), `false` (refused), or `null` (no target to probe with).
+ */
+function idempotentWrite(label, { read, write }, token) {
+  const cur = gh(read, { token });
+  if (!cur.ok || !cur.out) {
+    console.log(`  UNKNOWN   ${label} (nothing to probe against)`);
+    return null;
+  }
+  const w = gh(write(cur.out), { token });
+  console.log(`  ${w.ok ? 'present' : 'ABSENT '}  ${label} (HTTP ${w.status ?? 'n/a'})`);
+  return w.ok;
 }
 
 const repo = process.argv[2] || process.env.GITHUB_REPOSITORY || '';
@@ -59,25 +80,25 @@ if (!repo) {
   process.exit(1);
 }
 
+const hostToken = process.env.GH_TOKEN || null;
+const agentToken = process.env.GH_READ_TOKEN || null;
+
 console.log(`[loop:gh] repo: ${repo}`);
 
-const who = gh(['api', 'user', '--jq', '.login']);
-if (!who.ok) {
+const hostWho = identity(hostToken);
+if (!hostWho) {
   // A token that cannot even identify itself is the one hard failure: every
   // later `gh` call in the job would fail too, so fail loudly and early.
-  console.error(`[loop:gh] error: token cannot authenticate — ${who.err || who.status}`);
+  console.error('[loop:gh] error: GH_TOKEN cannot authenticate');
   process.exit(1);
 }
-console.log(`[loop:gh] token authenticates as: ${who.out}`);
-const isJobToken = who.out === 'github-actions[bot]';
-// Only claim which credential this is inside Actions: run locally, `gh` uses
-// whatever the developer is logged in as, and naming LOOP_GH_TOKEN there would
-// be plainly wrong.
-if (process.env.GITHUB_ACTIONS) {
-  console.log(`[loop:gh] credential: ${isJobToken
-    ? 'github.token (job token — LOOP_GH_TOKEN is unset or empty)'
-    : 'LOOP_GH_TOKEN (a PAT, replacing the job token for every gh call)'}`);
-}
+const hostIsJob = hostWho === 'github-actions[bot]';
+// Locally there is no GH_TOKEN — `gh` falls back to the developer's own login,
+// so saying "github.token" there would be plainly wrong.
+const hostSource = !hostToken
+  ? '(GH_TOKEN unset — gh used its own local login)'
+  : hostIsJob ? 'github.token (job token)' : 'LOOP_GH_TOKEN (a PAT, replacing the job token)';
+console.log(`[loop:gh] host credential: ${hostSource} — authenticates as ${hostWho}`);
 
 console.log('\n[loop:gh] reads — the host depends on these; a miss breaks sweep:');
 // sweep lists open issues/PRs and calls `gh release list`; repo metadata is the
@@ -89,57 +110,69 @@ const reads = [
   ['releases list      (sweep)', ['release', 'list', '-R', repo, '--limit', '1']],
 ];
 const readResults = reads.map(([label, args]) => {
-  const r = gh(args);
+  const r = gh(args, { token: hostToken });
   console.log(`  ${r.ok ? 'OK     ' : 'FAILED '}  ${label}`
     + `${r.ok ? '' : ` — ${(r.err || r.status).toString().slice(0, 90)}`}`);
   return { label, ok: r.ok };
 });
 
-console.log('\n[loop:gh] writes the loop needs (probes target an impossible id — nothing changes):');
-const needed = [
-  ['Issues: write        (label/comment/close)', ['api', '--method', 'PATCH',
-    `repos/${repo}/issues/${IMPOSSIBLE}`, '-f', 'state=open']],
-  ['Pull requests: write (open/edit PR, reviews)', ['api', '--method', 'PATCH',
-    `repos/${repo}/pulls/${IMPOSSIBLE}`, '-f', 'state=open']],
-];
-const needResults = needed.map(([label, args]) => probe(label, args));
+console.log('\n[loop:gh] host write scopes (idempotent probes — each restores the value it read):');
+const issueProbe = {
+  read: ['api', `repos/${repo}/issues?state=open&per_page=1`, '--jq', `.[0] | "\\(.number)${SEP}\\(.title)"`],
+  write: (cur) => {
+    const [n, title] = cur.split(SEP);
+    return ['api', '--method', 'PATCH', `repos/${repo}/issues/${n}`, '-f', `title=${title}`];
+  },
+};
+const prProbe = {
+  read: ['api', `repos/${repo}/pulls?state=open&per_page=1`, '--jq', `.[0] | "\\(.number)${SEP}\\(.title)"`],
+  write: (cur) => {
+    const [n, title] = cur.split(SEP);
+    return ['api', '--method', 'PATCH', `repos/${repo}/pulls/${n}`, '-f', `title=${title}`];
+  },
+};
+const canLabel = idempotentWrite('Issues: write        (label/comment/close)', issueProbe, hostToken);
+idempotentWrite('Pull requests: write (open/edit PR, reviews)', prProbe, hostToken);
 
-console.log('\n[loop:gh] scopes the loop must NOT hold:');
-const forbidden = [
-  ['Contents: write      (MERGE + push + release)', ['api', '--method', 'PUT',
-    `repos/${repo}/pulls/${IMPOSSIBLE}/merge`]],
+// `permissions.push` is the repository-write flag, which on GitHub's model is
+// exactly `Contents: write` — the scope that carries merging, branch pushes and
+// `POST /releases` together. It is read from GitHub rather than probed.
+const hostPerm = gh(['api', `repos/${repo}`, '--jq', '.permissions'], { token: hostToken });
+let canPush = null;
+if (hostPerm.ok && hostPerm.out) {
+  try {
+    canPush = JSON.parse(hostPerm.out).push === true;
+  } catch { /* leave null */ }
+  console.log(`  ${canPush ? 'present' : 'ABSENT '}  Contents: write      (MERGE + push + release)`);
+} else {
+  console.log('  UNKNOWN   Contents: write      (repo permissions unreadable)');
+}
+
+console.log('\n[loop:gh] scopes reached by a credential that lacks them entirely:');
+const absent = [
   ['Actions: write       (trigger/disable workflows)', ['api', '--method', 'POST',
     `repos/${repo}/actions/workflows/${IMPOSSIBLE}/dispatches`, '-f', 'ref=main']],
 ];
-const forbiddenResults = forbidden.map(([label, args]) => probe(label, args));
-// Independent confirmation of the probes above: GitHub's own `permissions`
-// object, which needs no inference from a status code. Relevant because the
-// `403` vs `404` reading assumes GitHub checks permissions *before* resource
-// lookup, which is worth verifying rather than assuming.
-const hostPerm = gh(['api', `repos/${repo}`, '--jq', '.permissions']);
-console.log(`  repo permissions: ${hostPerm.ok
-  ? hostPerm.out.replace(/\s+/g, ' ')
-  : `(unreadable — ${(hostPerm.err || hostPerm.status).toString().slice(0, 60)})`}`);
-// Read-only probe: listing secret *names* needs the Secrets permission. The
+for (const [label, args] of absent) {
+  const r = gh(args, { token: hostToken });
+  console.log(`  ${hasAnyScope(r.status) ? 'present' : 'ABSENT '}  ${label} (HTTP ${r.status ?? 'n/a'})`);
+}
+// Read-only probe: listing secret *names* requires the Secrets permission. The
 // listing itself is never printed — only whether the permission is present.
-const secrets = gh(['api', `repos/${repo}/actions/secrets`]);
+const secrets = gh(['api', `repos/${repo}/actions/secrets`], { token: hostToken });
 console.log(`  ${secrets.ok ? 'present' : 'ABSENT '}  Secrets access       (list/overwrite CI secrets)`);
 
-const held = forbiddenResults.filter((r) => r.present).map((r) => r.label.trim().split(/\s+/)[0]);
 const brokenReads = readResults.filter((r) => !r.ok);
-const canLabel = needResults.find((r) => r.label.startsWith('Issues'))?.present ?? false;
-
 console.log('');
-if (held.length) {
-  console.log(`[loop:gh] WARNING: the token holds ${[...held, ...(secrets.ok ? ['Secrets'] : [])].join(', ')}.`
-    + ' Each of those is a way to reach code or CI without going through a pull request —'
-    + ' Contents alone grants merging (PUT /pulls/{n}/merge), branch pushes and POST /releases.');
-  console.log('[loop:gh] Recreate the PAT as: Issues Read and write, Pull requests Read and write,'
-    + ' Contents Read-only, and Nothing for Actions/Secrets/Administration/Workflows.'
-    + ' See "GitHub write credential" in scripts/loop/README.md.');
-} else {
-  console.log('[loop:gh] none of the forbidden scopes are held — merging, branch pushes and'
-    + ' workflow control are impossible for this credential, which is the intended L2c property.');
+if (canPush) {
+  console.log('[loop:gh] WARNING: the host holds Contents:write. That single scope grants merging'
+    + ' (PUT /pulls/{n}/merge), branch pushes and POST /releases — none of which the loop needs'
+    + ' until L2. See "GitHub write credential" in scripts/loop/README.md. Recreate the PAT with:'
+    + ' Issues Read and write, Pull requests Read and write, Contents Read-only, and Nothing for'
+    + ' Actions/Secrets/Administration/Workflows.');
+} else if (canPush === false) {
+  console.log('[loop:gh] host holds no Contents:write — merging, branch pushes and releases are'
+    + ' impossible for it.');
 }
 console.log(`[loop:gh] label/comment/close: ${canLabel ? 'available' : 'NOT available — the loop cannot do its job'}`);
 console.log(`[loop:gh] reads: ${brokenReads.length
@@ -147,36 +180,21 @@ console.log(`[loop:gh] reads: ${brokenReads.length
   : 'all OK'}`);
 
 // The credential the *agent* will hold. `runPi` swaps GH_TOKEN for GH_READ_TOKEN
-// under the report boundary, so this is the one that decides whether the agent
-// could write if it ignored its prompt. Measuring it here makes that property
-// observable without spending a single token on a real agent run.
-const agentToken = process.env.GH_READ_TOKEN;
+// under the report boundary, so this decides whether the agent could write if it
+// ignored its prompt. Identity is the decisive check: `github-actions[bot]` is
+// the job token, whose reach the workflow's `permissions:` block sets, and that
+// block is read-only here.
 console.log('\n[loop:gh] credential handed to the agent under the report boundary:');
 if (!agentToken) {
   console.log('  (GH_READ_TOKEN is not set — runPi would pass GH_TOKEN through unchanged,'
-    + ' i.e. the agent inherits the host credential above)');
+    + ' i.e. the agent inherits the host credential above.)');
 } else {
-  const agentProbes = [
-    ['Issues: write', ['api', '--method', 'PATCH', `repos/${repo}/issues/${IMPOSSIBLE}`, '-f', 'state=open']],
-    ['Contents: write (merge/push)', ['api', '--method', 'PUT', `repos/${repo}/pulls/${IMPOSSIBLE}/merge`]],
-  ];
-  const agentHeld = [];
-  for (const [label, args] of agentProbes) {
-    const r = gh(args, { token: agentToken });
-    const present = hasScope(r.status);
-    if (present) agentHeld.push(label);
-    console.log(`  ${present ? 'present' : 'ABSENT '}  ${label}`);
-  }
-  // Cross-check the probe, because `403` vs `404` is an inference about where
-  // GitHub checks permissions relative to resource lookup. The `permissions`
-  // object is reported by GitHub itself and needs no inference.
-  const agentPerm = gh(['api', `repos/${repo}`, '--jq', '.permissions'], { token: agentToken });
-  console.log(`  repo permissions: ${agentPerm.ok
-    ? agentPerm.out.replace(/\s+/g, ' ')
-    : `(unreadable — ${(agentPerm.err || agentPerm.status).toString().slice(0, 60)})`}`);
-  console.log(agentHeld.length
-    ? `  WARNING: the agent holds ${agentHeld.join(', ')} — the report boundary is back to being`
-      + ' a prompt instruction only.'
-    : '  OK: the agent holds no write scope, so even ignoring its prompt it reaches GitHub'
-      + ' read-only. The report boundary is a platform guarantee.');
+  const agentWho = identity(agentToken);
+  const agentIsJob = agentWho === 'github-actions[bot]';
+  console.log(`  authenticates as: ${agentWho ?? '(failed)'}`);
+  console.log(agentIsJob
+    ? '  OK: it is github.token, so `permissions:` caps it — the agent reaches GitHub read-only'
+      + ' even if it ignores its prompt. The report boundary is a platform guarantee.'
+    : `  WARNING: it is ${agentWho}, a user token — the agent inherits that user's reach and the`
+      + ' report boundary is back to being a prompt instruction only.');
 }
