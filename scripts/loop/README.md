@@ -63,10 +63,21 @@ locks, and the platform one does not depend on the model behaving.
 
 Configuring the secret lifts only the platform lock — `writeLevel` still gates
 `applyActions` in `state.mjs`, and its default is `report`, so ordinary runs
-keep reporting. What *does* change: the agent subprocess inherits
-`env: process.env` (`shared/agent.mjs`), so a PAT reaches it and the only thing
-left between the agent and a write is the prompt. That is the trade, and it is
-why the scope below matters.
+keep reporting.
+
+It must not also lift the **agent's** lock. `runPi` spawns the agent with
+`env: process.env`, which would hand it whatever `GH_TOKEN` holds — and since
+that is now a PAT, the agent would inherit the PAT's full reach. So under the
+report boundary the child gets `GH_READ_TOKEN` instead: `github.token`, which
+`permissions:` caps at read. The agent therefore reaches GitHub read-only even
+if it ignores its prompt, while host-side writes keep using the real `GH_TOKEN`
+in the host's own process. Under `auto` the agent gets the write token, which is
+the point of that mode.
+
+Both are measurable without spending a token:
+`node scripts/loop/gh-check.mjs` probes each credential's scopes side-effect
+free (write endpoints against an impossible id — `403` means absent, `404`/`422`
+means present) and reports what the host holds and what the agent will hold.
 
 **Do not grant the agent's credential `Contents: write`.** Merging a PR is not
 under "Pull requests" — it is under "Contents" (GitHub's endpoint→permission

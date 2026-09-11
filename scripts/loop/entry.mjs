@@ -243,6 +243,7 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
     prompt, cwd: ROOT, sessionDir,
     model: process.env.LOOP_MODEL,
     timeoutMs,
+    writeLevel,
     log,
   });
   const events = parseEvents(res.stdout);
