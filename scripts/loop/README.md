@@ -47,11 +47,70 @@ pnpm loop summary | view                    # summary / task list
 | Level | Effect |
 | --- | --- |
 | `report` | State layer + report only. GitHub write actions are **listed, never executed** (A1 semantics). |
-| `auto` | Executes labels/comments/close (the A0 closed-loop boundary; L2 default, and the rehearsal mode). |
+| `auto` | Executes labels/comments/close (the A0 closed-loop boundary; L2 default, and the rehearsal mode). Note this is *permission* to write, not *ability*: with `LOOP_GH_TOKEN` unset, `auto` still cannot write — see the credential section below. |
 
 In `report` mode the pending actions are appended to `state/reports/<runId>.md`
 as a checklist and surfaced in the Actions Step Summary, so a human can execute
 them by hand.
+
+### GitHub write credential (`LOOP_GH_TOKEN`, unset today)
+
+`GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN || github.token }}`. The secret is
+**deliberately not configured**: `github.token` is capped by the workflow's
+`permissions: {contents: read, issues: read, pull-requests: read}`, so today a
+run that ignores its prompt and calls `gh pr merge` gets a 403. Two independent
+locks, and the platform one does not depend on the model behaving.
+
+Configuring the secret lifts only the platform lock — `writeLevel` still gates
+`applyActions` in `state.mjs`, and its default is `report`, so ordinary runs
+keep reporting. What *does* change: the agent subprocess inherits
+`env: process.env` (`shared/agent.mjs`), so a PAT reaches it and the only thing
+left between the agent and a write is the prompt. That is the trade, and it is
+why the scope below matters.
+
+**Do not grant `Contents: write`.** Merging a PR is not under "Pull requests" —
+it is under "Contents" (GitHub's endpoint→permission table):
+
+| Action | gh command | Permission required |
+| --- | --- | --- |
+| label / comment an **issue** | `gh issue edit` / `comment` | `Issues: write` |
+| label / comment a **PR** | `gh pr edit` / `comment` | `Issues: write` **or** `Pull requests: write` — both sections list `POST /issues/{n}/labels` and `/issues/{n}/comments` |
+| close an **issue** | `gh issue close` | `Issues: write` |
+| close a **PR** | `gh pr close` | `Pull requests: write` (GraphQL `closePullRequest`, not an `/issues/` call) |
+| open a PR | `gh pr create` | `Pull requests: write` **plus** `Contents: write` — the head branch must exist first |
+| **merge a PR** | `gh pr merge` | **`Contents: write`** — `PUT /pulls/{n}/merge` |
+| push / edit a file / delete a branch | `git push`, `PUT /contents/{path}`, `DELETE /git/refs/{ref}` | `Contents: write` |
+
+Two consequences that are easy to get wrong:
+
+1. **`Pull requests: write` cannot merge.** It covers `POST /pulls`,
+   `PATCH /pulls/{n}`, reviews and review comments — the merge endpoint sits in
+   the `Contents` section, because merging means writing commits to the target
+   branch.
+2. **"Can open a PR" and "can merge a PR" are the same permission.** Opening a
+   PR needs a head branch, creating one needs `Contents: write`, and that is the
+   merge permission. They cannot be separated in this model.
+
+So the L2 step has two distinct sizes, and only the first is safe today:
+
+| | Scopes | Gains | Cost |
+| --- | --- | --- | --- |
+| **L2a** (recommended) | `Issues: RW`, `Pull requests: RW`, `Contents: read`, Metadata: read | labels, comments, closes, review comments | cannot open PRs — but **merging is impossible**, and no code or branch can be touched |
+| **L2b** | L2a + `Contents: RW` | everything above plus branch push and PR creation | **also grants merge**, `POST /releases` (the release gate) and `POST /dispatches` |
+
+Prefer a **fine-grained** PAT scoped to `Alex1990/tiny-oss`; a classic `repo`
+token grants all of the above at once, defeating the point. Set an expiry and
+record who renews it, or L2 fails silently later.
+
+Server-side protection does **not** rescue L2b here: this is a solo repository
+(one collaborator, `admin: true`), so a ruleset requiring approvals would block
+the owner's own PRs forever (GitHub forbids self-approval), and adding an
+admin `bypass_actor` would let the loop's PAT bypass it too. The existing
+`Main branch` ruleset is `enforcement: disabled` and contains only `deletion`
+and `non_fast_forward` — it never restricted merging.
+
+Net effect of choosing L2a: `no self-merge` stops being a prompt constraint and
+becomes a platform impossibility — the same guarantee `git push` has today.
 
 ## A1 architecture (Actions + R2)
 
@@ -59,8 +118,8 @@ them by hand.
 GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single writer)
                  ├─ setup node/pnpm ▸ install pi ▸ print `pi --list-models deepseek`
                  ├─ r2-sync pull        (state layer → job-local state/)
-                 ├─ entry.mjs           (route → inbox | metrics | run)
-                 ├─ r2-sync push        (if: always())
+                 ├─ entry.mjs           (route → inbox | metrics | terminal | run)
+                 ├─ r2-sync push        (if: always() && pull did not skip — D34)
                  └─ upload pi sessions  (artifact, 90d)
 ```
 
@@ -351,7 +410,11 @@ was *correct*, and whether new events produce proposals that match reality.
       `Install engine (pi)`, before `entry.mjs`, so they write no run row at all
       — see the failure-classification item above. (Distinction worth keeping:
       21 workflow executions, 18 run records.)
-- [ ] No drift **and** no incorrect proposal after a week → human decides on L2
+- [ ] No drift **and** no incorrect proposal after a week → human decides on L2.
+      When it does, choose the scope deliberately: **L2a** (`Issues: RW` +
+      `Pull requests: RW`, no `Contents: RW`) keeps merging impossible for the
+      loop, while **L2b** adds PR creation and merge in one indivisible step.
+      See "GitHub write credential" above for the endpoint-level evidence.
 
 ### Not reachable under A1 (structural — decide before the L2 switchover)
 
@@ -365,7 +428,7 @@ validated at the report boundary however long it runs:
 | `pr-review` route | also needs a loop PR; A1 never produces one | untested here — exercised in A0 |
 | External-PR read-only analysis | D28 — a fork/Dependabot `pull_request` run carries no secrets, so not even a read-only analysis can reach the LLM | accepted for A1; needs its own credentials to enable |
 | Label/comment effects on GitHub | the report boundary never writes | proposals must be judged on *correctness*, not on effect |
-| `execute_writes` rehearsal | `LOOP_GH_TOKEN` is unset, so `auto` cannot write even when requested | correct as defence in depth — but it means **no write path has ever executed** |
+| `execute_writes` rehearsal | `LOOP_GH_TOKEN` is unset, so `auto` cannot write even when requested | correct as defence in depth — but it means **no write path has ever executed**. Configuring the PAT is a prerequisite for testing any of it; see "GitHub write credential" |
 | R2 bucket versioning | R2 offers no object versioning | accepted deviation from 05 §8 (see Environment facts); `push`/`seed` never use `--delete` |
 
 Consequence for the L2 decision: a clean observation week proves the loop is
