@@ -47,11 +47,123 @@ pnpm loop summary | view                    # summary / task list
 | Level | Effect |
 | --- | --- |
 | `report` | State layer + report only. GitHub write actions are **listed, never executed** (A1 semantics). |
-| `auto` | Executes labels/comments/close (the A0 closed-loop boundary; L2 default, and the rehearsal mode). |
+| `auto` | Executes labels/comments/close (the A0 closed-loop boundary; L2 default, and the rehearsal mode). Note this is *permission* to write, not *ability*: with `LOOP_GH_TOKEN` unset, `auto` still cannot write — see the credential section below. |
 
 In `report` mode the pending actions are appended to `state/reports/<runId>.md`
 as a checklist and surfaced in the Actions Step Summary, so a human can execute
 them by hand.
+
+### GitHub write credential (`LOOP_GH_TOKEN`, unset today)
+
+`GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN || github.token }}`. The secret is
+**deliberately not configured**: `github.token` is capped by the workflow's
+`permissions: {contents: read, issues: read, pull-requests: read}`, so today a
+run that ignores its prompt and calls `gh pr merge` gets a 403. Two independent
+locks, and the platform one does not depend on the model behaving.
+
+Configuring the secret lifts only the platform lock — `writeLevel` still gates
+`applyActions` in `state.mjs`, and its default is `report`, so ordinary runs
+keep reporting.
+
+It must not also lift the **agent's** lock. `runPi` spawns the agent with
+`env: process.env`, which would hand it whatever `GH_TOKEN` holds — and since
+that is now a PAT, the agent would inherit the PAT's full reach. So under the
+report boundary the child gets `GH_READ_TOKEN` instead: `github.token`, which
+`permissions:` caps at read. The agent therefore reaches GitHub read-only even
+if it ignores its prompt, while host-side writes keep using the real `GH_TOKEN`
+in the host's own process. Under `auto` the agent gets the write token, which is
+the point of that mode.
+
+Both are measurable without spending a token:
+`node scripts/loop/gh-check.mjs` probes each credential's scopes side-effect
+free (write endpoints against an impossible id — `403` means absent, `404`/`422`
+means present) and reports what the host holds and what the agent will hold.
+
+**Do not grant the agent's credential `Contents: write`.** Merging a PR is not
+under "Pull requests" — it is under "Contents" (GitHub's endpoint→permission
+table):
+
+| Action | gh command | Permission required |
+| --- | --- | --- |
+| label / comment an **issue** | `gh issue edit` / `comment` | `Issues: write` |
+| label / comment a **PR** | `gh pr edit` / `comment` | `Issues: write` **or** `Pull requests: write` — both sections list `POST /issues/{n}/labels` and `/issues/{n}/comments` |
+| close an **issue** | `gh issue close` | `Issues: write` |
+| close a **PR** | `gh pr close` | `Pull requests: write` (GraphQL `closePullRequest`, not an `/issues/` call) |
+| open a PR | `gh pr create` | `Pull requests: write` **plus** `Contents: write` — the head branch must exist first |
+| **merge a PR** | `gh pr merge` | **`Contents: write`** — `PUT /pulls/{n}/merge` |
+| push / edit a file / delete a branch | `git push`, `PUT /contents/{path}`, `DELETE /git/refs/{ref}` | `Contents: write` |
+
+Two consequences that are easy to get wrong:
+
+1. **`Pull requests: write` cannot merge.** It covers `POST /pulls`,
+   `PATCH /pulls/{n}`, reviews and review comments — the merge endpoint sits in
+   the `Contents` section, because merging means writing commits to the target
+   branch.
+2. **"Can open a PR" and "can merge a PR" are the same permission** — within a
+   single credential. Opening a PR needs a head branch; creating one needs
+   `Contents: write`; and that is the merge permission. Separating them means
+   splitting the *roles*, which is what L2c below does.
+
+So the L2 step has three sizes rather than two. Two are pure scope choices; the
+third is the one that satisfies "loop may open PRs but must never merge them",
+and it needs a small host change.
+
+| | Scopes / changes | Loop can | Loop cannot |
+| --- | --- | --- | --- |
+| **L2a** | `Issues: RW` + `Pull requests: RW` + `Contents: read` | label, comment, close, review | open PRs, merge, touch code or branches |
+| **L2c** | L2a, **plus** the host pushes `loop/*` branches with its own token | label, comment, close, review, **open PRs** | **merge anything** |
+| **L2b** | L2a + `Contents: RW` on the loop's own credential | everything, PR creation included | — (nothing; this is the unchecked size) |
+
+Prefer a **fine-grained** PAT scoped to `Alex1990/tiny-oss`; a classic `repo`
+token grants all of the above at once, defeating the point. Set an expiry and
+record who renews it, or L2 fails silently later.
+
+#### L2c — the loop opens PRs and still cannot merge
+
+Worth stating up front: **a single credential cannot express this.** Opening a
+PR needs a head branch, creating one needs `Contents: write`, and that is the
+same permission `PUT /pulls/{n}/merge` requires. The split has to happen across
+*roles*, not inside one scope list:
+
+| Credential | Held by | Scopes | Used for |
+| --- | --- | --- | --- |
+| `GITHUB_TOKEN` (job) | the workflow's own steps | `contents: write` | creating and pushing the `loop/<n>-*` branch |
+| `LOOP_GH_TOKEN` (PAT) | the agent subprocess | `Issues: RW`, `Pull requests: RW` — **no `Contents`** | labels, comments, opening the PR |
+
+Two details are required and both are easy to miss:
+
+- `actions/checkout` must set **`persist-credentials: false`**. Its default is
+  `true` and writes the job token into the repository's git config so scripts
+  can run authenticated git commands — which would hand the agent exactly the
+  `Contents: write` this design exists to remove.
+- Pushing is the *only* thing that has to move to a host step. Committing is a
+  local operation with no network credential, so the agent can still stage and
+  commit its work in the workspace; the host pushes the branch and opens the PR
+  from the agent's proposed metadata. That also fits the existing division of
+  labour — the agent proposes, the host executes.
+
+Result: the agent has no route to `PUT /pulls/{n}/merge` (403 — no `Contents`),
+and no route to push anything anywhere. The loop still produces PRs. `no
+self-merge` becomes a platform guarantee instead of a prompt instruction, which
+is the whole point.
+
+One side effect to plan for: a PR created with `GITHUB_TOKEN` produces a
+`pull_request` event whose workflow runs start in an **approval-required** state
+(except `closed`/`labeled`/`edited`, which do not create runs at all). So the
+loop will not triage or review its own PR, and CI will not run on it, until a
+human clicks "Approve workflows to run". For this loop that is a feature — it
+removes the recursive self-review the `pr-review` route would otherwise perform
+on the loop's own output, and it matches D26's direction. A human merging the PR
+still fires `pull_request_target.closed` normally, which is what drives the
+`metrics` gate.
+
+Server-side protection does **not** substitute for any of this: this is a solo
+repository (one collaborator, `admin: true`), so a ruleset requiring approvals
+would block the owner's own PRs forever (GitHub forbids self-approval), and
+adding an admin `bypass_actor` would let the loop's PAT bypass it too. The
+existing `Main branch` ruleset is `enforcement: disabled` and contains only
+`deletion` and `non_fast_forward` — it never restricted merging. The guarantee
+has to come from the credential split.
 
 ## A1 architecture (Actions + R2)
 
@@ -59,8 +171,8 @@ them by hand.
 GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single writer)
                  ├─ setup node/pnpm ▸ install pi ▸ print `pi --list-models deepseek`
                  ├─ r2-sync pull        (state layer → job-local state/)
-                 ├─ entry.mjs           (route → inbox | metrics | run)
-                 ├─ r2-sync push        (if: always())
+                 ├─ entry.mjs           (route → inbox | metrics | terminal | run)
+                 ├─ r2-sync push        (if: always() && pull did not skip — D34)
                  └─ upload pi sessions  (artifact, 90d)
 ```
 
@@ -351,7 +463,12 @@ was *correct*, and whether new events produce proposals that match reality.
       `Install engine (pi)`, before `entry.mjs`, so they write no run row at all
       — see the failure-classification item above. (Distinction worth keeping:
       21 workflow executions, 18 run records.)
-- [ ] No drift **and** no incorrect proposal after a week → human decides on L2
+- [ ] No drift **and** no incorrect proposal after a week → human decides on L2.
+      Owner's target is **L2c**: the loop opens PRs but can never merge. That
+      needs the credential split (host pushes branches with `GITHUB_TOKEN`; the
+      agent's PAT carries no `Contents`) plus `persist-credentials: false` — see
+      "GitHub write credential" above for the endpoint-level evidence, and note
+      that a single credential cannot express it.
 
 ### Not reachable under A1 (structural — decide before the L2 switchover)
 
@@ -365,7 +482,7 @@ validated at the report boundary however long it runs:
 | `pr-review` route | also needs a loop PR; A1 never produces one | untested here — exercised in A0 |
 | External-PR read-only analysis | D28 — a fork/Dependabot `pull_request` run carries no secrets, so not even a read-only analysis can reach the LLM | accepted for A1; needs its own credentials to enable |
 | Label/comment effects on GitHub | the report boundary never writes | proposals must be judged on *correctness*, not on effect |
-| `execute_writes` rehearsal | `LOOP_GH_TOKEN` is unset, so `auto` cannot write even when requested | correct as defence in depth — but it means **no write path has ever executed** |
+| `execute_writes` rehearsal | `LOOP_GH_TOKEN` is unset, so `auto` cannot write even when requested | correct as defence in depth — but it means **no write path has ever executed**. Configuring the PAT is a prerequisite for testing any of it; see "GitHub write credential" |
 | R2 bucket versioning | R2 offers no object versioning | accepted deviation from 05 §8 (see Environment facts); `push`/`seed` never use `--delete` |
 
 Consequence for the L2 decision: a clean observation week proves the loop is
