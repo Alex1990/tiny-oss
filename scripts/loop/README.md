@@ -293,10 +293,16 @@ was *correct*, and whether new events produce proposals that match reality.
       PR #36 has no labels and no label timeline events, and no item in the
       repository carries a loop label written by this run (the single
       `ready-for-human` hit is issue #30, closed on 09-08 during A0).
-- [ ] Every route that can run has one real execution on Actions: issue triage /
-      bugfix-feature / pr-review / sweep / release preflight. (`deps` and
-      external-PR are unrunnable under A1 — see D28 — and were exercised
-      locally during A0; `sweep` ran for real, run `34511392550`.)
+- [ ] Every route that can run has one real execution on Actions: issue triage ✓
+      (`issues.opened` → `r-20260911-121440-v8u6`, #42, 58,304 tokens),
+      bugfix-feature, sweep ✓ (`r-20260911-080231-zja0`, 82,107 tokens, from
+      `main`), release preflight. **`pr-review` is also unreachable under A1** —
+      it requires a loop PR (`loop/<n>-*`), which A1 never produces; note that
+      #39/#40/#41 were loop-*related* but not loop-*produced* (head
+      `chore/loop-*`), so they routed to `triage`, not `pr-review`. (`deps` and
+      external-PR are unrunnable under A1 too — see D28 — and were exercised
+      locally during A0; the older reference to sweep run `34511392550` came
+      from the pre-merge A0 host.)
 - [ ] **The guard holds**: a Dependabot PR and a fork PR both show the loop job
       as *skipped* (not failed), while a same-repo PR and a loop PR still run.
       Verify by pushing to a same-repo branch, and by observing the next
@@ -305,18 +311,48 @@ was *correct*, and whether new events produce proposals that match reality.
       (run timestamps prove it)
 - [ ] Crash path: cancel a job mid-run → task stays `processing` → next sweep
       reclaims it by TTL
-- [ ] Metrics: a human merge writes one `acceptance` row, no duplicates;
-      `released` backfills to the intended task
+- [ ] Metrics — **unreachable under A1; accepted unverified (2026-09-11)**: a
+      human merge writes one `acceptance` row, no duplicates; `released`
+      backfills to the intended task. A1 produces no loop PR, so the `metrics`
+      decision never fires and all 3 existing rows are A0-era (`manual-local`
+      ×2, `workflow-backfill`). D30/D33 cover the *shared* machinery
+      (`markTaskTerminal`, the `taskId|event|pr` dedup key) and D33 verified the
+      *no-write* half live; the write half (`planActions`) has never executed in
+      any host. Validating it needs `LOOP_GH_TOKEN` plus `execute_writes=true`,
+      i.e. leaving the report boundary — deliberately not done during the
+      observation week. **First item after the L2 switchover**: confirm the
+      first loop-PR merge writes exactly one row.
 - [x] Cost readable: `tokens` and `durationMs` land in the end row — real runs
       recorded 102,860 and 77,850 tokens; the install step prints
       `model deepseek-v4-flash is available` and fails the job on a mismatch
 - [x] Reports human-readable: the Step Summary alone tells you what happened
       (outcome, exit code, token usage, model, proposed actions) without
       downloading anything
-- [ ] Engine stability: N consecutive headless pi runs without hanging
-      (2 successful runs so far); exit-code mapping matches the
-      failure-classification table
+- [ ] Engine stability: N consecutive headless pi runs without hanging — all 18
+      recorded runs reached an end row with no hang (A0 + A1 combined). Note the
+      inverse gap: **every run so far exited 0**, so the failure-classification
+      table (machine/config failure → `retry`; agent-judged → inbox) has never
+      been exercised by a real failure.
 - [ ] No drift **and** no incorrect proposal after a week → human decides on L2
+
+### Not reachable under A1 (structural — decide before the L2 switchover)
+
+Distinct from the unchecked boxes above, which are merely **unsampled** and can
+still be earned during the week by manufacturing the event. These cannot be
+validated at the report boundary however long it runs:
+
+| Capability | Why it cannot run | Disposition |
+| --- | --- | --- |
+| `metrics` write path | A1 produces no loop PR, so `handleMetrics` never fires | accepted unverified; first item at L2 |
+| `pr-review` route | also needs a loop PR; A1 never produces one | untested here — exercised in A0 |
+| External-PR read-only analysis | D28 — a fork/Dependabot `pull_request` run carries no secrets, so not even a read-only analysis can reach the LLM | accepted for A1; needs its own credentials to enable |
+| Label/comment effects on GitHub | the report boundary never writes | proposals must be judged on *correctness*, not on effect |
+| `execute_writes` rehearsal | `LOOP_GH_TOKEN` is unset, so `auto` cannot write even when requested | correct as defence in depth — but it means **no write path has ever executed** |
+| R2 bucket versioning | R2 offers no object versioning | accepted deviation from 05 §8 (see Environment facts); `push`/`seed` never use `--delete` |
+
+Consequence for the L2 decision: a clean observation week proves the loop is
+**safe**, not that it is **complete**. The write half of the host is the part
+that has never met production.
 
 ## Defect log
 
@@ -527,9 +563,11 @@ was *correct*, and whether new events produce proposals that match reality.
       it through the same `markTaskTerminal` as the metrics path, so "what
       terminal means" has one definition, and the acceptance row is still never
       written for a non-loop PR.
-      Verified live on 2026-09-11 (`34595150462`, PR #40 merged): `task #40:
-      waiting-human → accepted`, and R2 then reported `closed=1 accepted=9` with
-      acceptance rows still at 3 — no metric for a non-loop PR.
+      Verified live twice on 2026-09-11: (`34595150462`, PR #40 merged) `task
+      #40: waiting-human → accepted`, R2 then reporting `closed=1 accepted=9`
+      with acceptance rows still at 3; and (`34597417493`, PR #41 merged) the
+      same transition for `#41`. No metric row either time — which is the
+      point.
       The #39 instance was **not** this fix's doing: the drift was self-healed by
       the 09-11 daily sweep (`r-20260911-080231-zja0`), which only found it
       because the #40 triage report had mentioned it in passing. That is the
