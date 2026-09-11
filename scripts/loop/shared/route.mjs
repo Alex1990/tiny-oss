@@ -143,10 +143,11 @@ export function route({ eventName, action, event = {} }) {
       // Not loop-produced, so it must not enter the acceptance metric — but its own
       // task still has to reach a terminal state, or it sits in the inbox forever
       // (ops.md maps "(none, merged) -> accepted", "(none, closed unmerged) ->
-      // rejected"). Every owner/dependabot PR gets a task from `pull_request`
-      // triage, so without this each one strands a zombie in the state layer, and
-      // sweep cannot repair it: sweep lists *open* GitHub items, which cannot see
-      // a closure.
+      // rejected"). Every owner PR gets a task from `pull_request` triage, so
+      // without this each merge strands a zombie in the state layer, and sweep
+      // cannot repair it: sweep lists *open* GitHub items, which cannot see a
+      // closure. (Dependabot PRs are skipped before triage by the credential
+      // guard, D28, so for them this branch is a no-op.)
       return terminal({
         reason: `non-loop PR ${merged ? 'merged' : 'closed-unmerged'} `
           + '(not counted for auto-acceptance)',

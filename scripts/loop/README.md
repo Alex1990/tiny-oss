@@ -515,15 +515,25 @@ was *correct*, and whether new events produce proposals that match reality.
       returned `noop` for any PR without `loop-task:`, which is right about the
       **metric** (not loop-produced ⇒ never in the acceptance rate) but wrong
       about the **task**: ops.md maps "(none, merged) → accepted" and "(none,
-      closed unmerged) → rejected" regardless of provenance. Every owner or
-      dependabot PR gets a task from `pull_request` triage, so each merged PR left
-      a zombie in `waiting-human` — the task for the very PR that fixed D30 (#39)
-      demonstrated it live — visible forever under "Inbox" in SUMMARY.md and
+      closed unmerged) → rejected" regardless of provenance. Every owner PR gets a
+      task from `pull_request` triage, so each merge left a zombie in
+      `waiting-human` — the task for the very PR that fixed D30 (#39) showed it
+      live — visible forever under "Inbox" in SUMMARY.md and, in general,
       uncorrectable by sweep, which lists *open* GitHub items and so cannot see a
-      closure. The router now emits a `terminal` decision for that case; the
-      entry handles it through the same `markTaskTerminal` as the metrics path, so
-      "what terminal means" has one definition, and the acceptance row is still
-      never written for a non-loop PR.
+      closure. (Dependabot PRs are skipped before triage by the credential guard
+      (D28), so for them the new branch is a no-op; it still matters if D28 is
+      ever lifted, and it correctly terminalises the older dependabot task #35.)
+      The router now emits a `terminal` decision for that case; the entry handles
+      it through the same `markTaskTerminal` as the metrics path, so "what
+      terminal means" has one definition, and the acceptance row is still never
+      written for a non-loop PR.
+      Verified live on 2026-09-11 (`34595150462`, PR #40 merged): `task #40:
+      waiting-human → accepted`, and R2 then reported `closed=1 accepted=9` with
+      acceptance rows still at 3 — no metric for a non-loop PR.
+      The #39 instance was **not** this fix's doing: the drift was self-healed by
+      the 09-11 daily sweep (`r-20260911-080231-zja0`), which only found it
+      because the #40 triage report had mentioned it in passing. That is the
+      accidental path D30/D33 exist to remove.
 
 ## Environment facts
 
