@@ -92,7 +92,7 @@ GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single w
 | `pull_request_target` closed (other PR) | task → `accepted` / `rejected` only; **no metric** (not loop-produced) |
 | `release` published | metrics: released |
 | `schedule` daily / weekly | system run: sweep / retro-scheduled |
-| `workflow_dispatch` | run per inputs (`task`/`stage`); `execute_writes=true` = L2 rehearsal |
+| `workflow_dispatch` | run per inputs (`task`/`stage`); `model` overrides the engine model; `execute_writes=true` = L2 rehearsal |
 
 Anything else is a no-op that still exits 0 — event storms cost nothing.
 
@@ -307,10 +307,25 @@ was *correct*, and whether new events produce proposals that match reality.
       as *skipped* (not failed), while a same-repo PR and a loop PR still run.
       Verify by pushing to a same-repo branch, and by observing the next
       Dependabot PR arrive.
-- [ ] Serial lock: two consecutive dispatches queue, never run concurrently
-      (run timestamps prove it)
+- [x] Serial lock: two consecutive dispatches queue, never run concurrently —
+      verified 2026-09-11 with two `workflow_dispatch` runs 25s apart
+      (`34607797259`, `34607838545`). The evidence is at **job** level, not
+      workflow: run 2's workflow `created_at` is 14:03:03 but its job
+      `created_at` is 14:03:07 — exactly run 1's job `completed_at` — and its
+      "Set up job" logs at 14:03:10. Workflow-level `created == started` on both,
+      so read alone it would have looked like concurrency; the job timestamps
+      show the 4s queue.
 - [ ] Crash path: cancel a job mid-run → task stays `processing` → next sweep
-      reclaims it by TTL
+      reclaims it by TTL. Still unsampled — and the model-guard runs show why the
+      cheap version of this test cannot work: the failure lands in `Install
+      engine (pi)`, *before* `Run stage`, so no task is ever claimed (`Pull state`
+      and `Run stage` both skipped). It needs a job actually cancelled after
+      `entry.mjs` has claimed a task.
+- [ ] Failure classification (`retry` vs inbox) — **still unexercised even though
+      a failing run now exists.** The D19 guard failure is a *workflow step*
+      failure: `entry.mjs` never ran, so no run row was written and the
+      classification table was never consulted. Only an in-agent failure (engine
+      crash, non-zero exit after a claim) exercises it.
 - [ ] Metrics — **unreachable under A1; accepted unverified (2026-09-11)**: a
       human merge writes one `acceptance` row, no duplicates; `released`
       backfills to the intended task. A1 produces no loop PR, so the `metrics`
@@ -572,6 +587,21 @@ that has never met production.
       the 09-11 daily sweep (`r-20260911-080231-zja0`), which only found it
       because the #40 triage report had mentioned it in passing. That is the
       accidental path D30/D33 exist to remove.
+- [x] D34 (A1) `Push state to R2` failed whenever `Pull state from R2` was
+      skipped. The push is `if: always()` so that a run which crashes or times
+      out still records its `processing` state for the next sweep — but
+      `state/` is gitignored and materialises only from a pull, so when an
+      earlier step fails there is no directory to upload and the step dies on
+      `aws: [ERROR]: The user-provided path ... does not exist` (exit 255,
+      observed on `34607797259` and `34607838545`, both after the D19 model
+      guard rejected a deliberately bad model). The job was already failing, so
+      the verdict was unchanged — but a second red step buries the first cause
+      and reads like R2 itself broke, which is exactly the kind of noise a
+      report-only phase must not generate while a human is reading logs daily.
+      Now the pull has an `id` and the push is conditioned on
+      `always() && steps.pull.outcome != 'skipped'`. Deliberately not
+      `== 'success'`: a *failed* pull may still leave a usable tree, and
+      recording post-crash state is the whole point of `always()`.
 
 ## Environment facts
 

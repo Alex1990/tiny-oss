@@ -169,6 +169,7 @@ jobs:
           echo "model $want is available"
 
       - name: Pull state from R2
+        id: pull
         run: node scripts/loop/r2-sync.mjs pull
 
       - name: Run stage
@@ -177,9 +178,18 @@ jobs:
         run: node scripts/loop/entry.mjs
 
       # Push the state layer back even on crash/timeout (the task stays in
-      # processing and is reclaimed by the next sweep via TTL)
+      # processing and is reclaimed by the next sweep via TTL).
+      #
+      # Guarded on `pull` having *run*: `state/` is gitignored, so it exists only
+      # after a pull. If an earlier step failed, pull is skipped, the directory
+      # never appears, and an unguarded push dies on
+      # `aws: [ERROR]: The user-provided path ... does not exist` — a second red
+      # step that buries the real cause and reads like R2 itself broke (D34).
+      # `!= 'skipped'` rather than `== 'success'` on purpose: a *failed* pull may
+      # still have left a usable tree, and the point of `always()` is to record
+      # the processing state after a mid-run crash.
       - name: Push state to R2
-        if: always()
+        if: always() && steps.pull.outcome != 'skipped'
         run: node scripts/loop/r2-sync.mjs push
 
       - name: Upload session transcripts
