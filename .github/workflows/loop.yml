@@ -35,9 +35,8 @@ on:
         required: false
         default: triage
       execute_writes:
-        description: 'L2 rehearsal: set "true" to allow real GitHub writes (default report-only)'
+        description: 'Override the repo variable for this run: "true" writes, "false" reports. Leave empty to follow vars.LOOP_EXECUTE_WRITES.'
         required: false
-        default: 'false'
       smoke:
         description: 'Infrastructure only: exercise checkout/install/R2 pull+push, skip the agent'
         required: false
