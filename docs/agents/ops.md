@@ -73,3 +73,14 @@ Never do work outside the declared stage; never modify norms-layer files
   `loop-task: #<n>`.
 - Don't claim a task whose lock is live; don't fight a live lock.
 - No self-merge; no norms-layer edits without a PR; no npm publish by the loop.
+- **`main` is protected by the `Main branch` ruleset**, and that — not a credential
+  — is what makes the line above true: every change to `main` must arrive through a
+  pull request carrying one approving review, the only bypass actor is the repository
+  owner, and the job token has no `administration` scope, so the loop cannot weaken
+  the rule. A direct push to `main` is refused for every credential the loop can
+  hold. Do not plan around it, and do not try to reproduce it with token scoping: a
+  PAT acts as its owner, who *is* the bypass actor. Details and the exact payload:
+  `scripts/loop/README.md` § "Branch protection is the gate".
+- The job token cannot push changes to `.github/workflows/**` (no `workflows`
+  permission exists for `permissions:` to grant). A task that needs one is not
+  loop work — route it to `needs-triage`/`ready-for-human`.

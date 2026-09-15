@@ -405,11 +405,10 @@ export function planPush(t, push, repo) {
  * only" switch: no apply, no GitHub writes.
  *
  * `push` is the agent's PR proposal (`{ branch, base, title, body }`), read from
- * `<runId>.result.json`. It only matters for `pr-opened`: under L2c the agent
- * commits locally and the *host* pushes and opens the PR, so the label and the
- * comment are queued behind `pr-create` — `applyActions` aborts the chain when
- * the push or the PR creation fails, rather than labelling a PR that never
- * appeared.
+ * `<runId>.result.json`. It only matters for `pr-opened`: the agent commits locally
+ * and the *host* pushes and opens the PR, so the label and the comment are queued
+ * behind `pr-create` — `applyActions` aborts the chain when the push or the PR
+ * creation fails, rather than labelling a PR that never appeared.
  */
 export function planActions(t, outcome, { label, comment, note, push = null } = {}) {
   if (!t.url) return []; // a local synthetic task has no GitHub target
@@ -469,11 +468,12 @@ const redact = (s) => String(s ?? '')
  * warn; local state is never rolled back.
  *
  * This is the only place the loop writes to GitHub, and it runs in the host's own
- * process — the agent holds a read-only credential and cannot reach any of it.
- * `push` is the single action needing `Contents: write`, so it spends the host's
- * `GH_TOKEN` (the PAT); every `gh` call uses the same credential. A failed
- * `push`/`pr-create` aborts the rest of the chain instead of labelling a PR that
- * does not exist.
+ * process — a division of labour, not a permission boundary: host and agent share the
+ * job token, and what actually bounds the loop is the `Main branch` ruleset (every
+ * change through a reviewed PR). The host still owns the writes so that they come
+ * from the agent's *result file*, in one place that can enforce the branch-name,
+ * clean-tree and PR-marker rules. A failed `push`/`pr-create` aborts the rest of the
+ * chain instead of labelling a PR that does not exist.
  */
 export function applyActions(actions, {
   log = console.log, warn = console.warn, cwd = process.cwd(), exec = spawnSync,
@@ -488,15 +488,15 @@ export function applyActions(actions, {
     const gh = (args) => exec('gh', args, { encoding: 'utf8' });
     const sub = a.gh ?? 'issue'; // PRs go to gh pr, issues to gh issue
     if (a.kind === 'push') {
-      // The host's own credential — one PAT holding `Contents: write` plus the
-      // Issues/Pull-requests scopes `gh` needs. The agent never receives it
-      // (`agentEnv` strips it), so a push is only ever performed here, by trusted
-      // code, on a ref the check below has already constrained.
+      // The job token. It is the only credential in the system, and it is deliberately
+      // *not* what bounds the loop: the `Main branch` ruleset refuses any push to a
+      // protected ref that is not part of a reviewed pull request, whichever token
+      // performs it. This check stays because the host pushes exactly one ref shape.
       const token = process.env.GH_TOKEN;
       if (!token) {
         warn('[loop] warn: the host has no GitHub credential (GH_TOKEN unset) — cannot push.'
-          + ' On Actions, configure LOOP_GH_TOKEN with Contents write plus Issues/Pull requests'
-          + ' write; locally, export GH_TOKEN (e.g. `GH_TOKEN=$(gh auth token)`).');
+          + ' On Actions this is `github.token`; locally, export GH_TOKEN (e.g.'
+          + ' `GH_TOKEN=$(gh auth token)`).');
         aborted = 'push';
         continue;
       }
@@ -529,7 +529,15 @@ export function applyActions(actions, {
         'push', `https://github.com/${a.repo}.git`, `HEAD:refs/heads/${a.branch}`,
       ], { cwd, encoding: 'utf8' });
       if (r.status !== 0) {
-        warn(`[loop] warn: push ${a.branch} failed: ${redact(r.stderr)}`);
+        const err = redact(r.stderr);
+        warn(`[loop] warn: push ${a.branch} failed: ${err}`);
+        if (/workflow.*permission|refusing to allow/i.test(err)) {
+          warn('[loop] warn: the commit touches `.github/workflows/**`, which the job token'
+            + ' can never push (a `permissions:` block cannot grant the `workflows`'
+            + ' permission, and a PAT would carry the owner\'s ruleset bypass — see'
+            + ' "Branch protection is the gate" in scripts/loop/README.md). This task cannot'
+            + ' be completed by the loop: report it for a human instead of retrying.');
+        }
         aborted = 'push';
       } else { log(`[loop] git: pushed ${a.branch}`); applied.push(a); }
     } else if (a.kind === 'pr-create') {

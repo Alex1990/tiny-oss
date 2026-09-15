@@ -50,15 +50,16 @@ concurrency:
   group: loop
   cancel-in-progress: false
 
-# Least privilege: GitHub reads use GITHUB_TOKEN, the loop's writes use
-# LOOP_GH_TOKEN. The agent never receives the PAT — `agentEnv` strips it and hands
-# the child `github.token` instead — so `github.token` staying read-only is what
-# makes "the agent cannot write to GitHub at all" a platform guarantee. Granting the
-# job `contents: write` would hand the agent the merge permission.
+# The loop's writes use the job token, and the *ruleset* is what keeps it out of
+# `main`: `Main branch` requires every change to arrive through a pull request with
+# one approving review, and its only bypass actor is the repository owner in
+# `pull_request` mode — so an unapproved direct push is refused for every credential
+# including the loop's. `permissions:` carries no `administration`, so the loop
+# cannot weaken that ruleset either.
 permissions:
-  contents: read
-  issues: read
-  pull-requests: read
+  contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
   loop:
@@ -101,15 +102,10 @@ jobs:
       LOOP_SMOKE: ${{ github.event.inputs.smoke || 'false' }}
       LOOP_MODEL: ${{ github.event.inputs.model || 'deepseek/deepseek-v4-flash' }}
       LOOP_RUN_TIMEOUT_MS: '3300000' # 55min, leaving headroom for push (job timeout 60min)
-      # The loop's write credential — a PAT with Contents write plus Issues/Pull
-      # requests write. Held by the *host* process (applyActions); `agentEnv` deletes
-      # it from the child environment, so the agent reads with `github.token` below
-      # and cannot write to GitHub however it is prompted.
-      GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN || github.token }}
-      # Handed to the agent subprocess in place of GH_TOKEN. `github.token` here is
-      # capped at read by the `permissions:` block above, and the agent gets it in
-      # every mode — the loop's writes are the host's job, not the agent's.
-      GH_READ_TOKEN: ${{ github.token }}
+      # The loop's only GitHub credential: the job token. What it may do to `main`
+      # is decided by the `Main branch` ruleset, not by this file — see the
+      # `permissions:` block above. No PAT is involved anywhere in the loop.
+      GH_TOKEN: ${{ github.token }}
       # Credentials: secrets only
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -143,12 +139,11 @@ jobs:
       #                        pull_request_target.
       - uses: actions/checkout@v4
         with:
-          # L2c: its default is `true`, which writes the job token into the repository's
-          # git config so later steps can run authenticated git commands — including the
-          # agent's. That is the one credential the agent must never hold (it is the
-          # push/merge permission), and `agentEnv` cannot un-write a file. With this off,
-          # a `git push` from the agent has no credential at all; the host pushes through
-          # `http.extraheader` using its own GH_TOKEN.
+          # Its default is `true`, and it writes the job token into the repository's git
+          # config so that later `git` invocations pick it up implicitly — including the
+          # agent's. The loop does not need that: the host pushes through
+          # `http.extraheader` with an explicit token. Defence in depth, not the
+          # mechanism — what bounds the loop is the `Main branch` ruleset.
           persist-credentials: false
           ref: >-
             ${{
@@ -188,14 +183,13 @@ jobs:
           fi
           echo "model $want is available"
 
-      # Measure what the GitHub credential can actually do, before the agent can
-      # reach it. `GH_TOKEN` is `secrets.LOOP_GH_TOKEN || github.token`, so
-      # configuring a PAT silently changes every `gh` call in this job — it can
-      # narrow the read-only ones sweep depends on, or widen what the agent can
-      # write. Neither is visible from this file. Probes are side-effect free:
-      # they call write endpoints against an impossible id, so `403` means the
-      # scope is absent and `404`/`422` means it is present.
-      - name: Check GitHub credential
+      # Assert the loop's safety property before anything can act on it. The property
+      # is "nothing reaches `main` without a human", and it lives in repository
+      # configuration no file here can express — so it is measured, not restated:
+      # an idempotent write to `refs/heads/main` must be refused for a pull request,
+      # and the credential must not be able to edit the ruleset that refuses it.
+      # Side-effect free: the ref probe writes back the SHA it just read.
+      - name: Check the main-branch boundary
         run: node scripts/loop/gh-check.mjs
 
       - name: Pull state from R2

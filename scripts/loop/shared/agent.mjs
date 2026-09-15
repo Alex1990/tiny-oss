@@ -52,12 +52,20 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
   }
   L.push('');
   L.push(`## Write boundary: ${writeLevel}`);
-  L.push('### GitHub: you never write');
-  L.push('Your GitHub credential is read-only in **every** mode — `gh issue edit` /');
-  L.push('`gh issue comment` / `gh issue close` / `gh pr create` / `gh pr merge` /');
-  L.push('`git push` all answer 403. That is deliberate, not a misconfiguration: do not');
-  L.push('retry them, and do not look for another credential. Label/comment/close/PR');
-  L.push('actions belong to the host, which executes them from your result file.');
+  L.push('### GitHub: the host writes, you do not');
+  L.push('Your `GH_TOKEN` is the job token and it *can* write — labels, comments,');
+  L.push('branches, pull requests. Do not use it for that. Every GitHub write in this');
+  L.push('system is executed by the host process from your result file: that is the');
+  L.push('division of labour, not a limitation you should work around. Do not run');
+  L.push('`gh issue edit|comment|close`, `gh pr create`, `gh pr merge`, `gh pr review` or');
+  L.push('`git push` yourself.');
+  L.push('');
+  L.push('It is also not the only line of defence, and deliberately so: `main` is');
+  L.push('protected by the `Main branch` ruleset — every change must arrive through a pull');
+  L.push('request carrying one approving review, the only bypass actor is the repository');
+  L.push('owner, and this job has no `administration` scope. A direct push to `main`, an');
+  L.push('unapproved merge, or an attempt to weaken the ruleset fails for *any* credential');
+  L.push('you could hold. Do not spend turns probing it.');
   L.push('');
   L.push('Allowed: reading GitHub, editing the working tree, running the repo gates,');
   L.push('reading and writing `state/`.');
@@ -80,6 +88,12 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
     L.push('   to push a dirty tree, since the branch would silently lose the uncommitted work.');
     L.push('3. Propose the PR in your result file (closing ritual below). The host pushes the');
     L.push('   branch, opens the PR and records the PR number it gets back.');
+    L.push('');
+    L.push('Note the consequence for your own work: `git push` here fails for any commit');
+    L.push('touching `.github/workflows/**` — the job token carries no `workflows`');
+    L.push('permission and no `permissions:` value can grant one. A task that requires a');
+    L.push('workflow-file change cannot be completed by this loop: report it and let a human');
+    L.push('do it, rather than producing a PR that cannot be pushed.');
   }
   if (mode === 'readonly') {
     L.push('');
@@ -157,36 +171,26 @@ export const SESSION_HINT = 'session files land under --session-dir (uploaded as
 /**
  * The environment handed to the agent subprocess.
  *
- * `{ ...process.env }` used to give the child everything the host holds, including a
- * push-capable token and the R2 keys. Now the agent holds **no write credential at
- * all**, at either write level:
+ * The agent holds the job token, because a job has exactly one and both the host and
+ * the agent run inside it. What keeps the loop out of `main` is therefore **not** the
+ * agent's credential — it is the `Main branch` ruleset: every change must arrive
+ * through a pull request with one approving review, the sole bypass is the repository
+ * owner, and this job's `permissions:` carry no `administration`, so the loop cannot
+ * weaken that ruleset either. See "Branch protection is the gate" in
+ * scripts/loop/README.md.
  *
- *   agent  → `GH_READ_TOKEN` (github.token, capped at read by the workflow's
- *            `permissions:` block — a platform guarantee, not a prompt one)
- *   host   → the PAT, used by `applyActions` in its own process
- *
- * The agent does not need write access: every GitHub write is the host's job
- * (`applyActions` executes the label/comment/close/push/PR actions that
- * `planActions` derives from the agent's result file). Restricting it to reads means
- * "the loop never self-merges" no longer depends on scoping one credential finely —
- * the agent simply cannot write, whichever mode is running.
- *
- * Everything that authenticates to something else is deleted too. Locally both
- * variables are unset, so no `GH_TOKEN` key survives and `gh` falls back to the
- * developer's own login — the correct behaviour for a local run.
+ * What is still worth removing here is everything the agent could reach that the
+ * ruleset does **not** cover: the R2 credentials address the state-layer bucket
+ * directly, and only the host's `r2-sync` steps need them.
  */
 export function agentEnv(writeLevel, base = process.env) {
   const env = { ...base };
   for (const k of [
-    'LOOP_GH_TOKEN', 'GH_READ_TOKEN', 'GITHUB_TOKEN',
     'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ACCOUNT_ID', 'R2_BUCKET',
   ]) delete env[k];
-  if (base.GH_READ_TOKEN) env.GH_TOKEN = base.GH_READ_TOKEN;
-  else delete env.GH_TOKEN;
   // Product stages commit the branch the host pushes, and the identity must not come
   // from the sandbox's global git config (there is none on a fresh runner). Set it
-  // here rather than making the agent discover it: a commit is a local operation, and
-  // these four variables are the only thing git needs for one.
+  // here rather than making the agent discover it: a commit is a local operation.
   if (writeLevel === 'auto') {
     env.GIT_AUTHOR_NAME = env.GIT_AUTHOR_NAME ?? 'tiny-oss loop';
     env.GIT_AUTHOR_EMAIL = env.GIT_AUTHOR_EMAIL ?? 'loop@users.noreply.github.com';
@@ -214,17 +218,12 @@ export function runPi({
     // another CLI or wrapper script).
     const engine = (process.env.LOOP_ENGINE_CMD || 'pi').split(/\s+/).filter(Boolean);
 
-    // The agent never inherits a credential by accident: see `agentEnv` above. It is
-    // read-only in every mode; the host's own writes (applyActions) use the real
-    // GH_TOKEN in the host's process.
+    // The agent holds the same job token the host does — a job has one. What keeps the
+    // loop out of `main` is the branch ruleset, not a credential difference; see
+    // `agentEnv` above and "Branch protection is the gate" in scripts/loop/README.md.
     const childEnv = agentEnv(writeLevel);
-    if (childEnv.GH_TOKEN) {
-      log('[loop] agent GitHub credential: read-only (github.token) — it cannot write to'
-        + ' GitHub in any mode');
-    } else {
-      log('[loop] agent GitHub credential: none — `gh` there would fall back to any local'
-        + ' login, so the run may not be able to read GitHub at all');
-    }
+    log('[loop] agent GitHub credential: the job token (its write reach is bounded by the'
+      + ' `Main branch` ruleset, not by this variable)');
 
     const child = spawn(engine[0], [...engine.slice(1), ...args], {
       cwd, env: childEnv, stdio: ['pipe', 'pipe', 'pipe'],
