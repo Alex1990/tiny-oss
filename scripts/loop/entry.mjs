@@ -31,7 +31,7 @@ import {
   makeState, ensureDirs, readJson, readJsonl, writeJson, saveTask, listTasks,
   appendAcceptance, markTaskTerminal, GATE_TRANSITIONS, renderStateSummary,
   beginRun, finishRun, lockExpired,
-  nowIso, outcomeAllowed, allowedOutcomes, describeActions,
+  nowIso, outcomeAllowed, allowedOutcomes, describeActions, LOOP_BRANCH_RE,
 } from './shared/state.mjs';
 import { route, eventKey } from './shared/route.mjs';
 import { buildPrompt, runPi, parseEvents, summarize, classify } from './shared/agent.mjs';
@@ -201,6 +201,40 @@ async function handleTaskTerminal({ decision }) {
 
 /* ------------------------------------------------------------------ run */
 
+/**
+ * A `pr-opened` outcome is a claim the host has to back with a push, so it is checked
+ * before it can move a task to `waiting-merge`. An unbacked claim is the D33 failure
+ * mode in a new place: the task would sit in the inbox forever waiting for a PR that
+ * never existed, and nothing in the loop could see that.
+ *
+ * The branch shape is enforced here as well as in `applyActions` (which re-checks it
+ * against the credential it is about to spend) because a mismatch is an agent error
+ * worth reporting as `failed`, not a silent no-op.
+ */
+function validatePush({ writeLevel, stage, taskId, push }) {
+  if (writeLevel !== 'auto') {
+    return { ok: false, reason:
+      `stage=${stage} cannot open a PR at writeLevel=${writeLevel}: the report boundary `
+      + 'forbids pushing a branch. The stage must report what it produced instead.' };
+  }
+  if (!push || typeof push !== 'object') {
+    return { ok: false, reason: 'no "push" proposal in the result file (branch/title missing)' };
+  }
+  const branch = String(push.branch ?? '');
+  if (!LOOP_BRANCH_RE.test(branch)) {
+    return { ok: false, reason:
+      `branch "${branch}" does not match loop/<issueNo>-<slug> (ops.md; `
+      + 'the host pushes nothing else)' };
+  }
+  if (!branch.startsWith(`loop/${taskId}-`)) {
+    return { ok: false, reason:
+      `branch "${branch}" does not carry this task's number — the router pairs the ref `
+      + `with the body marker, so it must start with loop/${taskId}-` };
+  }
+  if (!String(push.title ?? '').trim()) return { ok: false, reason: 'the PR title is empty' };
+  return { ok: true, push: { ...push, branch } };
+}
+
 async function doRun({ decision, ctx, repo, writeLevel }) {
   const stage = decision.stage;
   const isSystem = !decision.taskId;
@@ -253,7 +287,7 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
   const result = await readJson(path.join(S.reportsDir, `${rid}.result.json`));
   const cls = classify({ code: res.code, signal: res.signal, stderr: res.stderr, timedOut: res.timedOut, stopReason });
 
-  let outcome; let note;
+  let outcome; let note; let push = null;
   if (result?.outcome && outcomeAllowed(stage, result.outcome)) {
     outcome = result.outcome;
     note = result.note ?? `agent decision (exit=${res.code})`;
@@ -268,16 +302,31 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
     warn(`no ${rid}.result.json found — ${note}`);
   }
 
-  const { task: done, actions } = await finishRun(S, {
+  // `pr-opened` must be backed by a branch the host can actually push.
+  if (outcome === 'pr-opened') {
+    const v = validatePush({ writeLevel, stage, taskId: task.id, push: result.push });
+    if (v.ok) push = v.push;
+    else {
+      outcome = 'failed';
+      note = `pr-opened refused by the host: ${v.reason}`;
+      warn(note);
+    }
+  }
+
+  const { task: done, actions, outcome: finalOutcome } = await finishRun(S, {
     runId: rid, outcome, note,
     comment: result?.comment ?? null,
     decision: result?.decision ?? null,
     pr: result?.pr ?? null,
+    // The agent's PR proposal; only `pr-opened` uses it, and the host (not the agent)
+    // pushes the branch and opens the PR — see planActions/applyActions.
+    push,
     tokens: usage?.totalTokens ?? null,
-    writeLevel, log, warn,
+    writeLevel, cwd: ROOT, log, warn,
   });
 
-  log(`run ${rid} finished: outcome=${outcome} (exit ${cls.exit})`
+  log(`run ${rid} finished: outcome=${finalOutcome} (exit ${cls.exit})`
+    + `${finalOutcome !== outcome ? ` [agent said pr-opened, the host downgraded it]` : ''}`
     + `${usage?.totalTokens ? `, tokens=${usage.totalTokens}` : ''}`);
   if (actions.length) {
     log(writeLevel === 'auto'
@@ -288,9 +337,9 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
   if (done) log(`task #${done.id} → status=${done.status}${done.labels?.length ? `, label=${done.labels.join(',')}` : ''}`);
 
   return {
-    state: 'run', taskId: done?.id ?? decision.taskId ?? null, runId: rid, stage, outcome,
-    exit: cls.exit, actions, usage, toolCalls, turns, sessionDir, system: isSystem,
-    reportFile: path.join(S.reportsDir, `${rid}.md`),
+    state: 'run', taskId: done?.id ?? decision.taskId ?? null, runId: rid, stage,
+    outcome: finalOutcome, exit: cls.exit, actions, usage, toolCalls, turns, sessionDir,
+    system: isSystem, reportFile: path.join(S.reportsDir, `${rid}.md`),
   };
 }
 

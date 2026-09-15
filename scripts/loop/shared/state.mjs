@@ -357,13 +357,61 @@ export function ghRepoOf(url) {
 }
 
 /**
+ * The only branch shape the host will push (ops.md): `loop/<issueNo>-<slug>`. The
+ * host holds a `Contents: write` credential that the agent never sees, so this
+ * check is what keeps that credential from becoming a general push capability.
+ */
+export const LOOP_BRANCH_RE = /^loop\/\d+-[a-z0-9][a-z0-9._-]*$/;
+
+/**
+ * The loop-PR test lives in the router (`loopTaskOf`): head ref `loop/<n>-*` **and**
+ * a body carrying `loop-task: #<n>`, agreeing on `<n>`. A PR missing the marker is
+ * treated as a non-loop PR — it never enters the acceptance rate and its merge
+ * closes the task by the wrong path. That is a structural contract, so the host
+ * enforces it rather than trusting the model to remember it.
+ */
+export function ensureLoopPrBody(body, id) {
+  const b = String(body ?? '').trim();
+  const has = (re) => new RegExp(`(^|\\n)\\s*${re}\\b`, 'i').test(b);
+  const missing = [];
+  if (!has(`Closes\\s+#${id}`)) missing.push(`Closes #${id}`);
+  if (!has(`loop-task:\\s*#${id}`)) missing.push(`loop-task: #${id}`);
+  return [b, ...missing].filter(Boolean).join('\n\n');
+}
+
+/**
+ * The two actions that create the PR: the branch push and the PR itself. Split out
+ * because `finishRun` must execute exactly these *before* it decides the task's fate —
+ * a `pr-opened` whose push or PR creation fails is a task that would otherwise wait in
+ * `waiting-merge` for a PR that does not exist, which is the D33 failure mode in a new
+ * place.
+ */
+export function planPush(t, push, repo) {
+  return [
+    { kind: 'push', repo, branch: push.branch, base: push.base ?? null },
+    {
+      kind: 'pr-create', gh: 'pr', repo, number: t.id,
+      branch: push.branch, base: push.base ?? null, title: push.title,
+      body: ensureLoopPrBody(push.body, t.id),
+    },
+  ];
+}
+
+/**
  * Derive the GitHub write-action list from the outcome — **pure function, never
  * touches the network**.
  * report mode only calls this function and writes `describeActions` output into the
  * report; auto mode (L2+ / dry run) hands it to `applyActions` — the one "report
  * only" switch: no apply, no GitHub writes.
+ *
+ * `push` is the agent's PR proposal (`{ branch, base, title, body }`), read from
+ * `<runId>.result.json`. It only matters for `pr-opened`: under L2c the agent
+ * commits locally and the *host* pushes and opens the PR, so the label and the
+ * comment are queued behind `pr-create` — `applyActions` aborts the chain when
+ * the push or the PR creation fails, rather than labelling a PR that never
+ * appeared.
  */
-export function planActions(t, outcome, { label, comment, note } = {}) {
+export function planActions(t, outcome, { label, comment, note, push = null } = {}) {
   if (!t.url) return []; // a local synthetic task has no GitHub target
   if (outcome === 'retry') return []; // nothing actually ran (failure/draft), so no write actions
   const repo = ghRepoOf(t.url);
@@ -372,6 +420,19 @@ export function planActions(t, outcome, { label, comment, note } = {}) {
   const gh = t.kind === 'pr' ? 'pr' : 'issue';
   const acts = [];
   const l = label ?? OUTCOME_MAP[outcome]?.label ?? null;
+
+  if (outcome === 'pr-opened' && push) {
+    acts.push(...planPush(t, push, repo));
+  }
+  // `pr-opened` without a `push` proposal is the local/A0 shape: there the agent runs
+  // with the developer's own credentials, so it opened the PR itself and reported the
+  // number. Labelling still applies — the PR exists either way. (On Actions `entry.mjs`
+  // refuses that shape outright: the agent holds no `Contents`, so it cannot have
+  // pushed anything, and a task must not sit in `waiting-merge` waiting for a PR that
+  // was never created.)
+  //
+  // The label goes to the task's own item (`gh`'s issue and PR surfaces differ, and
+  // `gh issue edit <pr-number>` fails).
   if (l) acts.push({ kind: 'label', gh, repo, number: t.id, label: l, stripRoles: true });
   if (outcome === 'closed') {
     acts.push({ kind: 'close', gh, repo, number: t.id, body: comment ?? note ?? 'Closed by the loop.' });
@@ -387,6 +448,10 @@ export function describeActions(actions) {
     if (a.kind === 'label') {
       return `label #${a.number}: +${a.label}${a.stripRoles ? ' (remove other role labels)' : ''}`;
     }
+    if (a.kind === 'push') return `push branch ${a.branch}${a.base ? ` (base ${a.base})` : ''}`;
+    if (a.kind === 'pr-create') {
+      return `open PR: ${a.branch} → ${a.base ?? 'default'} — ${firstLine(a.title)}`;
+    }
     if (a.kind === 'close') return `close #${a.number} (comment: ${firstLine(a.body)})`;
     return `comment #${a.number}: ${firstLine(a.body)}`;
   });
@@ -394,16 +459,91 @@ export function describeActions(actions) {
 
 const firstLine = (s) => String(s ?? '').split('\n')[0].slice(0, 120);
 
+/** Never let a credential reach a log: git/gh stderr can echo what we passed them. */
+const redact = (s) => String(s ?? '')
+  .replace(/(x-access-token:)[A-Za-z0-9_-]+/g, '$1***')
+  .replace(/\b(gh[pousr]_)[A-Za-z0-9]{8,}/g, '$1***');
+
 /**
  * Execute write actions (only called on the auto / dry-run path). Failures only
  * warn; local state is never rolled back.
+ *
+ * The L2c credential split shows up here. `push` is the single action that needs
+ * `Contents: write`, and it spends `LOOP_PUSH_TOKEN` — a credential the agent
+ * never receives (`runPi` strips it from the child environment), which is what
+ * makes "the loop opens PRs but can never merge" a platform guarantee rather
+ * than a prompt instruction. Every `gh` call uses the host's `GH_TOKEN`, whose
+ * scopes carry no `Contents`. A failed `push`/`pr-create` aborts the rest of the
+ * chain instead of labelling a PR that does not exist.
  */
-export function applyActions(actions, { log = console.log, warn = console.warn } = {}) {
+export function applyActions(actions, {
+  log = console.log, warn = console.warn, cwd = process.cwd(), exec = spawnSync,
+} = {}) {
   const applied = [];
+  let aborted = null;
   for (const a of actions) {
-    const gh = (args) => spawnSync('gh', args, { encoding: 'utf8' });
+    if (aborted) {
+      warn(`[loop] warn: skipping ${a.kind} — ${aborted} failed`);
+      continue;
+    }
+    const gh = (args) => exec('gh', args, { encoding: 'utf8' });
     const sub = a.gh ?? 'issue'; // PRs go to gh pr, issues to gh issue
-    if (a.kind === 'label') {
+    if (a.kind === 'push') {
+      const token = process.env.LOOP_PUSH_TOKEN;
+      if (!token) {
+        warn('[loop] warn: LOOP_PUSH_TOKEN is not set — the host cannot push the branch.'
+          + " The agent's own credential deliberately has no Contents: write, so there is"
+          + ' no fallback that would not also hand the agent the merge permission.');
+        aborted = 'push';
+        continue;
+      }
+      if (!LOOP_BRANCH_RE.test(a.branch)) {
+        warn(`[loop] warn: refusing to push "${a.branch}" — the host only ever pushes`
+          + ' branches matching loop/<issueNo>-<slug> (ops.md)');
+        aborted = 'push';
+        continue;
+      }
+      const dirty = exec('git', ['status', '--porcelain'], { cwd, encoding: 'utf8' });
+      if (dirty.status !== 0) {
+        warn(`[loop] warn: git status failed in ${cwd}: ${redact(dirty.stderr)}`);
+        aborted = 'push';
+        continue;
+      }
+      if (dirty.stdout.trim()) {
+        warn('[loop] warn: the working tree is dirty — the agent left work uncommitted, so the'
+          + ' branch would not carry it and the PR would ship an incomplete diff; refusing to'
+          + ' push (the uncommitted work is lost with the checkout, which is why this fails'
+          + ' loudly instead of opening a hollow PR)');
+        aborted = 'push';
+        continue;
+      }
+      // `http.<url>.extraheader` keeps the token out of argv and out of any URL git
+      // might echo back in an error message.
+      const header = 'Authorization: Basic '
+        + Buffer.from(`x-access-token:${token}`).toString('base64');
+      const r = exec('git', [
+        '-c', `http.https://github.com/.extraheader=${header}`,
+        'push', `https://github.com/${a.repo}.git`, `HEAD:refs/heads/${a.branch}`,
+      ], { cwd, encoding: 'utf8' });
+      if (r.status !== 0) {
+        warn(`[loop] warn: push ${a.branch} failed: ${redact(r.stderr)}`);
+        aborted = 'push';
+      } else { log(`[loop] git: pushed ${a.branch}`); applied.push(a); }
+    } else if (a.kind === 'pr-create') {
+      const args = ['pr', 'create', '-R', a.repo, '--head', a.branch,
+        '--title', a.title, '--body', a.body];
+      if (a.base) args.push('--base', a.base);
+      const r = gh(args);
+      if (r.status !== 0) {
+        warn(`[loop] warn: opening a PR for ${a.branch} failed: ${redact(r.stderr)}`);
+        aborted = 'pr-create';
+      } else {
+        // `gh pr create` prints the new PR's URL (and does not support --json).
+        const n = Number((/\/pull\/(\d+)/.exec(r.stdout ?? '') ?? [])[1]);
+        log(`[loop] gh: opened PR${Number.isInteger(n) ? ` #${n}` : ''} from ${a.branch}`);
+        applied.push({ ...a, prNumber: Number.isInteger(n) ? n : null });
+      }
+    } else if (a.kind === 'label') {
       let stale = [];
       if (a.stripRoles) {
         const cur = gh([sub, 'view', String(a.number), '-R', a.repo, '--json', 'labels', '-q', '.labels[].name']);
@@ -466,7 +606,8 @@ export async function appendActionBlock(s, runId, actions) {
  */
 export async function finishRun(s, {
   runId, outcome, note = null, comment = null, label = null, decision = null, pr = null,
-  tokens = null, writeLevel = 'report', noGithub = false, log = () => {}, warn = () => {},
+  push = null, tokens = null, writeLevel = 'report', noGithub = false,
+  cwd = process.cwd(), exec = spawnSync, log = () => {}, warn = () => {},
 }) {
   if (!outcome) throw new Error('outcome is required');
   const rows = await readRunLines(s, runId);
@@ -496,6 +637,24 @@ export async function finishRun(s, {
   }
   const at = nowIso();
 
+  // `pr-opened` is only true if the PR actually exists, so the two actions that create it
+  // run *before* the outcome is recorded and the task moves. A failed push or PR creation
+  // downgrades the run to `failed`: the task goes to the inbox, where a human sees it,
+  // instead of `waiting-merge`, where nothing would ever resolve it.
+  let created = null;
+  if (t && !noGithub && writeLevel === 'auto' && outcome === 'pr-opened' && push) {
+    const done = applyActions(planPush(t, push, ghRepoOf(t.url)), { log, warn, cwd, exec });
+    created = done.find((a) => a.kind === 'pr-create' && a.prNumber) ?? null;
+    if (created) pr = created.prNumber;
+    else {
+      outcome = 'failed';
+      note = `${note ? `${note} — ` : ''}the host could not open the PR `
+        + '(see the push/pr-create warnings above); the task returns to the inbox '
+        + 'rather than waiting for a PR that does not exist';
+      warn(`[loop] ${note}`);
+    }
+  }
+
   await appendRunRow(s, runId, {
     runId, event: 'end', at, outcome,
     durationMs: Date.now() - Date.parse(start.at),
@@ -522,15 +681,30 @@ export async function finishRun(s, {
   await saveTask(s, t);
   await releaseLock(s, t, t.stage);
 
-  const actions = noGithub ? [] : planActions(t, outcome, { label: label ?? m.label, comment, note });
-  let applied = [];
+  const actions = noGithub ? [] : planActions(t, outcome, {
+    // The push/PR actions already ran above; passing `null` here would drop the label
+    // too, so pass them through only when they have not been executed.
+    label: label ?? m.label, comment, note, push: created ? null : push,
+  });
+  let applied = created ? [created] : [];
   if (actions.length) {
-    if (writeLevel === 'auto') applied = applyActions(actions, { log, warn });
+    if (writeLevel === 'auto') applied = [...applied, ...applyActions(actions, { log, warn, cwd, exec })];
     else await appendActionBlock(s, runId, actions);
   }
 
+  // A PR the host just opened exists on GitHub but not yet in the state layer: record
+  // its number right after the action ran, so the task file carries it without a second
+  // writer (`planActions` cannot know a number it does not create).
+  if (created) {
+    if (!t.prs.includes(created.prNumber)) t.prs.push(created.prNumber);
+    t.timeline.push({
+      at: nowIso(), event: 'pr-created', by: runId, detail: `pr #${created.prNumber}`,
+    });
+    await saveTask(s, t);
+  }
+
   await renderStateSummary(s);
-  return { task: t, actions, applied };
+  return { task: t, actions, applied, outcome };
 }
 
 /* ------------------------------------------------------------------ CLI */

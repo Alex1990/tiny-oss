@@ -50,9 +50,11 @@ concurrency:
   group: loop
   cancel-in-progress: false
 
-# Least privilege: GitHub reads use GITHUB_TOKEN; writes (only the
-# execute_writes=true rehearsal) go through LOOP_GH_TOKEN and exist only in
-# default-branch contexts — fork events carry no secrets (platform guarantee).
+# Least privilege: GitHub reads use GITHUB_TOKEN; the agent's own writes go through
+# LOOP_GH_TOKEN, and branch pushes through LOOP_PUSH_TOKEN — neither of which the
+# agent ever receives (see runPi/agentEnv). `github.token` stays read-only on
+# purpose: it is the credential the agent holds under the report boundary, so
+# granting the job `contents: write` would hand the agent the merge permission.
 permissions:
   contents: read
   issues: read
@@ -91,8 +93,11 @@ jobs:
       LOOP_EVENT_ACTION: ${{ github.event.action }}
       LOOP_EVENT_JSON: ${{ toJSON(github.event) }}
       LOOP_REPO: ${{ github.repository }}
-      # For non-dispatch events github.event.inputs is null → default to report (report-only)
-      LOOP_EXECUTE_WRITES: ${{ github.event.inputs.execute_writes || 'false' }}
+      # Write level for non-dispatch events. A1 shipped `false` (report-only); L2 flips
+      # it by setting the repository variable LOOP_EXECUTE_WRITES=true — no code change,
+      # and one place for a human to turn it back off. `workflow_dispatch` can still
+      # override per run (the rehearsal path).
+      LOOP_EXECUTE_WRITES: ${{ github.event.inputs.execute_writes || vars.LOOP_EXECUTE_WRITES || 'false' }}
       LOOP_SMOKE: ${{ github.event.inputs.smoke || 'false' }}
       LOOP_MODEL: ${{ github.event.inputs.model || 'deepseek/deepseek-v4-flash' }}
       LOOP_RUN_TIMEOUT_MS: '3300000' # 55min, leaving headroom for push (job timeout 60min)
@@ -103,6 +108,10 @@ jobs:
       # if LOOP_GH_TOKEN is a write-capable PAT. Host-side writes still use
       # GH_TOKEN, in the host's own process.
       GH_READ_TOKEN: ${{ github.token }}
+      # L2c's third role: the only credential with `Contents: write`, held by the host
+      # process and *removed* from the agent's environment by `agentEnv`. It exists to
+      # push `loop/<n>-*` and nothing else.
+      LOOP_PUSH_TOKEN: ${{ secrets.LOOP_PUSH_TOKEN }}
       # Credentials: secrets only
       DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -136,6 +145,13 @@ jobs:
       #                        pull_request_target.
       - uses: actions/checkout@v4
         with:
+          # L2c: its default is `true`, which writes the job token into the repository's
+          # git config so later steps can run authenticated git commands — including the
+          # agent's. That is the one credential the agent must never hold (it is the
+          # push/merge permission), and `agentEnv` cannot un-write a file. With this off,
+          # a `git push` from the agent has no credential at all; the host pushes through
+          # `http.extraheader` using LOOP_PUSH_TOKEN.
+          persist-credentials: false
           ref: >-
             ${{
               github.event_name == 'workflow_dispatch' && github.ref

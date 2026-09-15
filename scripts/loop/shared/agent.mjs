@@ -61,7 +61,23 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
     L.push('(labels, comments, closing, opening a PR) must be written into the report');
     L.push('as a proposal for a human to execute.');
   } else {
-    L.push('Write actions are permitted per ops.md (labels/comments/PR as the stage requires).');
+    L.push('You may write to GitHub through `gh` — **but only** labels, comments and');
+    L.push('closing (`gh issue edit|comment|close`, `gh pr edit|comment`).');
+    L.push('Two steps belong to the host, not to you:');
+    L.push('');
+    L.push('- **Pushing the branch.** Your credential carries no `Contents: write` (that is');
+    L.push('  also the merge permission, so by design you do not hold it; `git push` and');
+    L.push('  `gh pr merge` answer 403 — do not attempt them).');
+    L.push('- **Opening the PR.** You propose it; the host pushes and creates it.');
+    L.push('');
+    L.push('For a product stage (`bugfix`/`feature`/`deps`/`security`) that produces a change:');
+    L.push('1. Do the work in the working tree, then **commit it locally** on a branch named');
+    L.push('   `loop/<taskId>-<short-slug>` (e.g. `git switch -c loop/33-ci-workflow`). Commits');
+    L.push('   are local and need no network credential; set `user.name`/`user.email` if git asks.');
+    L.push('2. Leave the tree clean — `git status --porcelain` must be empty. The host refuses');
+    L.push('   to push a dirty tree, since the branch would silently lose the uncommitted work.');
+    L.push('3. Propose the PR in your result file (closing ritual below). The host pushes the');
+    L.push('   branch, opens the PR and records the PR number it gets back.');
   }
   if (mode === 'readonly') {
     L.push('');
@@ -81,6 +97,17 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
   L.push('   ```');
   L.push('   The orchestrator reads this file and performs the state transition — one writer');
   L.push('   keeps the state layer consistent. Do NOT run `pnpm loop end` yourself.');
+  if (writeLevel === 'auto') {
+    L.push('   For a product stage, add the PR proposal the host will execute:');
+    L.push('   ```json');
+    L.push('   "push": { "branch": "loop/<taskId>-<slug>", "base": "main",');
+    L.push('             "title": "<PR title>",');
+    L.push('             "body": "Closes #<n>\\n\\nloop-task: #<n>\\n\\n<what and why>" }');
+    L.push('   ```');
+    L.push('   The body must pass the loop-PR test in `docs/agents/ops.md` (`Closes #<n>` and');
+    L.push('   `loop-task: #<n>`). Omit `push` when the stage produced no branch — triage,');
+    L.push('   sweep, or a `needs-info`/`needs-triage` verdict never pushes anything.');
+  }
   if (task) {
     L.push(`   Allowed outcomes for stage \`${stage}\` are declared in \`scripts/loop/shared/state.mjs\``);
     L.push('   (STAGE_OUTCOMES). Never invent one.');
@@ -125,6 +152,47 @@ export function summarize(events) {
  */
 export const SESSION_HINT = 'session files land under --session-dir (uploaded as an artifact)';
 
+/**
+ * The environment handed to the agent subprocess.
+ *
+ * `{ ...process.env }` used to give the child everything the host holds, including
+ * the push credential and the R2 keys — neither of which any stage needs, and the
+ * push credential is exactly the one that carries `Contents: write` (i.e. merge).
+ * The agent reaches GitHub through `GH_TOKEN` only, set to the least credential the
+ * write level allows:
+ *
+ *   `report` → `GH_READ_TOKEN` (github.token, capped at read by the workflow's
+ *              `permissions:` block — a platform guarantee, not a prompt one)
+ *   `auto`   → `LOOP_GH_TOKEN` (the PAT: Issues + Pull requests write, **no
+ *              Contents**), so the L2c loop can label/comment but never push or
+ *              merge, even if it ignores its prompt
+ *
+ * Everything else that authenticates to something is deleted. Locally both tokens
+ * are unset, so no `GH_TOKEN` key survives and `gh` falls back to the developer's
+ * own login — which is the correct behaviour for a local run.
+ */
+export function agentEnv(writeLevel, base = process.env) {
+  const env = { ...base };
+  for (const k of [
+    'LOOP_PUSH_TOKEN', 'LOOP_GH_TOKEN', 'GH_READ_TOKEN', 'GITHUB_TOKEN',
+    'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ACCOUNT_ID', 'R2_BUCKET',
+  ]) delete env[k];
+  const token = writeLevel === 'auto' ? (base.LOOP_GH_TOKEN ?? base.GH_TOKEN) : base.GH_READ_TOKEN;
+  if (token) env.GH_TOKEN = token;
+  else delete env.GH_TOKEN;
+  // Product stages commit the branch the host pushes, and the identity must not come
+  // from the sandbox's global git config (there is none on a fresh runner). Set it
+  // here rather than making the agent discover it: a commit is a local operation, and
+  // these four variables are the only thing git needs for one.
+  if (writeLevel === 'auto') {
+    env.GIT_AUTHOR_NAME = env.GIT_AUTHOR_NAME ?? 'tiny-oss loop';
+    env.GIT_AUTHOR_EMAIL = env.GIT_AUTHOR_EMAIL ?? 'loop@users.noreply.github.com';
+    env.GIT_COMMITTER_NAME = env.GIT_COMMITTER_NAME ?? env.GIT_AUTHOR_NAME;
+    env.GIT_COMMITTER_EMAIL = env.GIT_COMMITTER_EMAIL ?? env.GIT_AUTHOR_EMAIL;
+  }
+  return env;
+}
+
 export function runPi({
   prompt, cwd, sessionDir, model, timeoutMs = 3600000, writeLevel = 'report', log = () => {},
 }) {
@@ -143,19 +211,18 @@ export function runPi({
     // another CLI or wrapper script).
     const engine = (process.env.LOOP_ENGINE_CMD || 'pi').split(/\s+/).filter(Boolean);
 
-    // `env: process.env` hands the agent everything the host sees, including
-    // `GH_TOKEN` — which is `secrets.LOOP_GH_TOKEN || github.token`, so as soon
-    // as a PAT is configured the agent inherits whatever that PAT can do. Under
-    // the report boundary nothing the agent does is supposed to reach GitHub,
-    // and that must not rest on the prompt alone: hand it the job token instead,
-    // which the workflow caps at `read-only` via `permissions:`. Writes by the
-    // *host* (applyActions) still use the real GH_TOKEN in its own process.
-    const childEnv = { ...process.env };
-    if (writeLevel !== 'auto' && process.env.GH_READ_TOKEN) {
-      childEnv.GH_TOKEN = process.env.GH_READ_TOKEN;
-      log('[loop] agent is given a read-only GitHub token (report boundary)');
-    } else if (writeLevel === 'auto') {
-      log('[loop] agent is given the write-capable GitHub token (auto mode)');
+    // The agent never inherits a credential by accident: see `agentEnv` above for
+    // what it holds at each write level and why the push credential is absent from
+    // both. Host-side writes (applyActions) still use the real GH_TOKEN in the
+    // host's own process.
+    const childEnv = agentEnv(writeLevel);
+    if (childEnv.GH_TOKEN) {
+      log(writeLevel === 'auto'
+        ? '[loop] agent GitHub credential: the PAT (Issues/Pull requests write, no Contents)'
+        : '[loop] agent GitHub credential: the read-only job token (report boundary)');
+    } else {
+      log('[loop] agent GitHub credential: none at this write level — `gh` there would fall'
+        + ' back to any local login, so the run may not be able to read GitHub at all');
     }
 
     const child = spawn(engine[0], [...engine.slice(1), ...args], {
