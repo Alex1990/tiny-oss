@@ -60,9 +60,15 @@ function gh(args, { token = null } = {}) {
 /** A scope the credential lacks entirely answers `403`; anything else is "has some access". */
 const hasAnyScope = (status) => status !== null && status !== 403 && status !== 401;
 
+/**
+ * `GET /user` is the decisive probe for *what kind of* credential this is:
+ * a user token (PAT/OAuth) answers with a login; a GitHub App installation token —
+ * i.e. `github.token` — is refused there entirely, which is exactly the signal we
+ * want. `ok: false` therefore means "App token", not "broken credential".
+ */
 function identity(token) {
   const r = gh(['api', 'user', '--jq', '.login'], { token });
-  return r.ok ? r.out : null;
+  return { login: r.ok ? r.out : null, ok: r.ok, status: r.status };
 }
 
 /**
@@ -115,19 +121,28 @@ if (!repo) {
 
 const token = process.env.GH_TOKEN || null;
 const who = identity(token);
-const isJob = who === 'github-actions[bot]';
+// A token that cannot answer `GET /user` is an installation token — the job token. A
+// 401 means the credential itself is unusable, which is worth saying rather than
+// mislabelling; a 403/404 is `github.token` being refused there, as designed.
+const isUserToken = Boolean(token) && who.ok;
+const isAppToken = Boolean(token) && !who.ok && who.status !== 401;
 const source = !token
-  ? '(GH_TOKEN unset — gh used its own local login; the ruleset still applies)'
-  : isJob ? 'github.token (the job token — the loop\'s only credential)'
-    : `a user token for ${who} (PAT/OAuth — the loop should not use one: it carries the`
-      + ' owner\'s ruleset bypass)';
+  ? '(GH_TOKEN unset — gh used its own local login; the ruleset applies to it all the same)'
+  : isUserToken
+    ? `a user token for ${who.login} (PAT/OAuth)`
+    : isAppToken
+      ? 'github.token (the job token — the loop\'s only credential)'
+      : `an unusable credential (GET /user answered ${who.status ?? 'nothing'})`;
 
 console.log(`[loop:gh] repo: ${repo}`);
 console.log(`[loop:gh] credential: ${source}`);
-if (who && !isJob && token) {
-  console.log('  WARNING: a user token is present. On Actions the loop must authenticate as'
-    + ' `github-actions[bot]`; a PAT acts as its owner, who *is* the ruleset bypass actor —'
-    + ' so the loop could merge an unapproved PR and the gate would be gone.');
+if (isUserToken) {
+  console.log('  WARNING: the loop is authenticating with a *user* token. On Actions it must'
+    + ' be `github.token`: a PAT acts as its owner, who is the ruleset bypass actor, so the'
+    + ' loop could merge an unapproved PR and the gate would be gone.');
+} else if (token && !isUserToken && !isAppToken) {
+  console.log('  WARNING: the credential is not usable — every probe below will report'
+    + ' UNKNOWN or absent scopes, and the loop cannot read GitHub either.');
 }
 
 /* ------------------------------------------------- 1. is main really protected? */
