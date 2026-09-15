@@ -198,6 +198,13 @@ to merge a PR they authored themselves.
 `dismiss_stale_reviews_on_push: true` means a push to a PR branch invalidates its
 approval: approving a diff approves that diff, not whatever arrives next.
 
+GitHub also sets `require_extra_approval_for_unattributed_changes: true` on rulesets
+carrying a `pull_request` rule (a public-preview default, not something set here).
+It applies to Copilot-authored PRs and asks for one approval beyond the configured
+count. It does not change the loop's path — its PRs come from `github-actions[bot]`,
+and the owner's bypass allows the merge regardless of the count — but it is the
+reason a future reader may see the parameter and wonder where it came from.
+
 #### What the loop relies on, piece by piece
 
 | Piece | Where | Behaviour |
