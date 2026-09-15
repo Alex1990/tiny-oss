@@ -653,9 +653,10 @@ export async function finishRun(s, {
   // downgrades the run to `failed`: the task goes to the inbox, where a human sees it,
   // instead of `waiting-merge`, where nothing would ever resolve it.
   let created = null;
+  let executed = [];
   if (t && !noGithub && writeLevel === 'auto' && outcome === 'pr-opened' && push) {
-    const done = applyActions(planPush(t, push, ghRepoOf(t.url)), { log, warn, cwd, exec });
-    created = done.find((a) => a.kind === 'pr-create' && a.prNumber) ?? null;
+    executed = applyActions(planPush(t, push, ghRepoOf(t.url)), { log, warn, cwd, exec });
+    created = executed.find((a) => a.kind === 'pr-create' && a.prNumber) ?? null;
     if (created) pr = created.prNumber;
     else {
       outcome = 'failed';
@@ -692,15 +693,19 @@ export async function finishRun(s, {
   await saveTask(s, t);
   await releaseLock(s, t, t.stage);
 
-  const actions = noGithub ? [] : planActions(t, outcome, {
-    // The push/PR actions already ran above; passing `null` here would drop the label
-    // too, so pass them through only when they have not been executed.
+  // What the run reports as its GitHub actions. The two that create the PR already ran
+  // above and are prepended, so the Step Summary and the log count them: reporting only
+  // the label and comment would hide the two writes that matter most.
+  const rest = noGithub ? [] : planActions(t, outcome, {
+    // Passing the push proposal again would re-plan actions that have already executed;
+    // `null` here drops their replanning while keeping the label and the comment.
     label: label ?? m.label, comment, note, push: created ? null : push,
   });
-  let applied = created ? [created] : [];
-  if (actions.length) {
-    if (writeLevel === 'auto') applied = [...applied, ...applyActions(actions, { log, warn, cwd, exec })];
-    else await appendActionBlock(s, runId, actions);
+  const actions = [...executed, ...rest];
+  let applied = [...executed];
+  if (rest.length) {
+    if (writeLevel === 'auto') applied = [...applied, ...applyActions(rest, { log, warn, cwd, exec })];
+    else await appendActionBlock(s, runId, rest);
   }
 
   // A PR the host just opened exists on GitHub but not yet in the state layer: record
