@@ -19,6 +19,7 @@ the relevant skill in `skills/`.
 | Event | Stage |
 | --- | --- |
 | issue opened/reopened/edited | `triage` → `bugfix`/`feature`/close/`needs-info` |
+| issue labeled `ready-for-agent` | `bugfix` (`bug` label) / `feature` — the claim signal |
 | loop PR opened/synchronize/review | `pr-review` |
 | external PR opened | read-only analysis + `needs-triage` |
 | PR merged (loop PR) | acceptance record (dispatcher) |
@@ -26,6 +27,25 @@ the relevant skill in `skills/`.
 | schedule weekly | `retro-scheduled` |
 | rejection / review failure | `retro-immediate` |
 | dependency/security | `deps`/`security` → bugfix template or `needs-triage` |
+
+### The claim signal
+
+Triage's `ready-for-agent` verdict is the hand-off: it means "classified, high or
+medium confidence, the loop may implement this". The task then runs `bugfix` when the
+issue also carries `bug`, and `feature` otherwise.
+
+Two ways it fires, and they are deliberately different mechanisms:
+
+- **A human applies `ready-for-agent`** → the `issues.labeled` event runs the stage
+  directly. This is also how a maintainer claims any issue for the loop by hand.
+- **The loop applies it** (the ordinary triage verdict) → GitHub suppresses runs for
+  events raised by `GITHUB_TOKEN`, so no `labeled` run exists. `entry.mjs` therefore
+  dispatches the next stage with `gh workflow run`, which is the documented exception
+  to that suppression. This is what the loop's `actions: write` scope is for.
+
+Consequence to keep in mind when auditing scopes: the loop can start its own
+workflows. It still cannot change `main` (ruleset) and cannot edit workflow files
+(no `workflows` permission exists to grant).
 
 ## Run ritual
 

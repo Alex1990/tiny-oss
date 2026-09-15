@@ -46,6 +46,26 @@ export const isDependabotPr = (pr) =>
 export const isExternalPr = (pr) => !OWNER_ROLES.includes(pr?.author_association ?? '');
 
 /**
+ * The claim signal: the label that says "the loop may implement this".
+ *
+ * It is `ready-for-agent` because triage already applies exactly that on a
+ * `bug`/`feature` verdict of high or medium confidence (`skills/triage/SKILL.md`
+ * step 5), so the hand-off needs no new vocabulary. Applied by a *human* it also
+ * works as a manual trigger for any issue, which is why the route exists.
+ */
+export const CLAIM_LABEL = 'ready-for-agent';
+
+/** Labels that pick `bugfix` over `feature`. `bug` is the only signal the repo carries. */
+const BUG_LABELS = ['bug'];
+
+/** Label names, from either `string[]` or the API's `{ name }[]` shape. */
+const labelNames = (labels = []) => labels.map((l) => (typeof l === 'string' ? l : l?.name));
+
+/** Which implementation stage a claimed task starts. */
+export const stageForIssue = (labels = []) =>
+  labelNames(labels).some((n) => BUG_LABELS.includes(n)) ? 'bugfix' : 'feature';
+
+/**
  * Idempotency key: skip an event whose key has already been consumed.
  * Prefer immutable identifiers (PR head sha / comment id), falling back to the
  * issue's updated_at revision.
@@ -76,6 +96,25 @@ export function route({ eventName, action, event = {} }) {
       // task state whether a catch-up run is needed (05 §3 decision order)
       if (action === 'edited') {
         return inbox({ taskId: n, kind: 'issue', stage: 'triage', reason: 'issues.edited' });
+      }
+      // Claim signal: someone decided this is loop work and said so on the issue.
+      // Only `ready-for-agent` qualifies — the other four role labels are states, not
+      // requests, and reacting to them would make the loop chase its own writing.
+      //
+      // Note this branch fires only for labels a *human* applies: GitHub suppresses
+      // runs for events raised by `GITHUB_TOKEN`, so the loop's own label is invisible
+      // here and the automatic hand-off is a dispatch from entry.mjs instead.
+      if (action === 'labeled') {
+        const label = event.label?.name;
+        if (label !== CLAIM_LABEL) {
+          return noop(`issues.labeled (${label ?? 'unknown'}) is not a claim signal`);
+        }
+        return run({
+          taskId: n,
+          kind: 'issue',
+          stage: stageForIssue(event.issue?.labels),
+          reason: `issues.labeled ${CLAIM_LABEL}`,
+        });
       }
       return noop(`issues.${action} has no Loop action`);
     }

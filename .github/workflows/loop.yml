@@ -5,7 +5,9 @@ name: Loop
 # lock (R2 has no concurrent writes).
 on:
   issues:
-    types: [opened, reopened, edited]
+    # `labeled` carries the claim signal (`ready-for-agent`): triage's verdict when the
+    # loop applied it, or a human claiming an issue for the loop by hand.
+    types: [opened, reopened, edited, labeled]
   issue_comment:
     types: [created]
   pull_request:
@@ -55,10 +57,17 @@ concurrency:
 # `pull_request` mode — so an unapproved direct push is refused for every credential
 # including the loop's. `permissions:` carries no `administration`, so the loop
 # cannot weaken that ruleset either.
+#
+# `actions: write` is the newest scope and the narrowest justified one: triage hands a
+# claimed task to the implementing stage with `gh workflow run`, because a label the
+# loop applies with `GITHUB_TOKEN` raises an event GitHub deliberately does not turn
+# into a run. It lets the loop start workflows — not change `main`, not edit workflow
+# files (that needs `workflows`, which `permissions:` cannot grant).
 permissions:
   contents: write
   issues: write
   pull-requests: write
+  actions: write
 
 jobs:
   loop:

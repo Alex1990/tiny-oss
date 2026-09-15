@@ -235,15 +235,16 @@ const canPushBranches = probeBranch
   }, token)
   : null;
 
+// The hand-off needs `actions: write`. Probe an *impossible* workflow id: a scope the
+// credential lacks entirely answers `403`, while `404` means it has the scope and the
+// id simply does not exist. Nothing is dispatched either way.
+const dispatchProbe = gh(['api', '--method', 'POST',
+  `repos/${repo}/actions/workflows/${IMPOSSIBLE}/dispatches`, '-f', 'ref=main'], { token });
+const canDispatch = hasAnyScope(dispatchProbe.status);
+console.log(`  ${canDispatch ? 'present' : 'ABSENT '}  Actions: write       (dispatch the next stage) `
+  + `(HTTP ${dispatchProbe.status ?? 'n/a'})`);
+
 console.log('\n[loop:gh] scopes the loop should NOT have:');
-const dangerous = [
-  ['Actions: write       (trigger/disable workflows)', ['api', '--method', 'POST',
-    `repos/${repo}/actions/workflows/${IMPOSSIBLE}/dispatches`, '-f', 'ref=main']],
-];
-for (const [label, args] of dangerous) {
-  const r = gh(args, { token });
-  console.log(`  ${hasAnyScope(r.status) ? 'present' : 'ABSENT '}  ${label} (HTTP ${r.status ?? 'n/a'})`);
-}
 // Read-only probe: listing secret *names* requires the Secrets permission. The
 // listing itself is never printed — only whether the permission is present.
 const secrets = gh(['api', `repos/${repo}/actions/secrets`], { token });
@@ -265,6 +266,9 @@ console.log(`[loop:gh] label/comment/close: ${canLabel ? 'available'
   : 'NOT available — the loop cannot do its job'}`);
 console.log(`[loop:gh] branch push:     ${canPushBranches ? 'available' : 'NOT available'}`
   + ' (product stages need it; `main` is excluded by the ruleset, not by missing scope)');
+console.log(`[loop:gh] stage hand-off:  ${canDispatch ? 'available — triage can start the'
+  + ' implementing stage' : 'NOT available — triage will leave the task claimable instead'
+  + ' of starting it (needs `actions: write`)'}`);
 console.log(`[loop:gh] reads: ${brokenReads.length
   ? `${brokenReads.length} FAILED — the host's sweep will break: ${brokenReads.map((r) => r.label.trim().split(/\s+/)[0]).join(', ')}`
   : 'all OK'}`);
