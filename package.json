@@ -59,8 +59,8 @@
     "test": "vitest",
     "test:azure-oracle": "tsx test/azure-oracle.node.ts",
     "test:coverage": "vitest --coverage",
-    "test:ci": "vitest run --browser.headless",
-    "test:ci:coverage": "vitest run  --browser.headless --coverage",
+    "test:ci": "pnpm test:azure-oracle && vitest run --browser.headless",
+    "test:ci:coverage": "pnpm test:azure-oracle && vitest run --browser.headless --coverage",
     "prepare": "husky"
   },
   "repository": {
