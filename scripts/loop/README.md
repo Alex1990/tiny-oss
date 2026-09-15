@@ -214,7 +214,7 @@ reason a future reader may see the parameter and wonder where it came from.
 | `GH_TOKEN` | job env | `github.token`. No PAT exists in the system, so no credential carries the owner's bypass. |
 | `agentEnv(writeLevel)` | `shared/agent.mjs` | Builds the child environment from scratch: strips the R2 keys (the state bucket is the host's business, not the agent's) and injects a git identity under `auto`. It does **not** hand the agent a weaker token — a job has only one. |
 | `persist-credentials: false` | the `actions/checkout` step | Keeps the job token out of the repo's git config, where every later `git` invocation would pick it up. Defence in depth, not the mechanism. |
-| `vars.LOOP_EXECUTE_WRITES` | job env | `workflow_dispatch` still overrides per run, so the A1 rehearsal entry point is unchanged. |
+| `vars.LOOP_EXECUTE_WRITES` | job env | The switch. `workflow_dispatch` can override it per run: leave the input empty to follow the variable, or pass `true`/`false` to force one run. (The input has no `default:` on purpose — a non-empty default like `'false'` short-circuits the `github.event.inputs.x \|\| vars.x` fallback and makes the variable unreachable from the one entry point a human uses to test it, which is exactly what happened before this was fixed.) |
 | `push` action | `planActions` | `pr-opened` plans `push` → `pr-create` → label/comment. A failure in either of the first two **aborts the chain**, so a PR that never appeared is never labelled. |
 | branch check | `applyActions` | `loop/<issueNo>-<slug>` only — no other ref is pushed, whatever the branch field says. |
 | dirty-tree check | `applyActions` | A dirty tree is refused: the commit would silently stay behind and the PR would ship an empty diff. |
