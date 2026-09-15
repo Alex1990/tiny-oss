@@ -33,7 +33,7 @@ import {
   beginRun, finishRun, lockExpired,
   nowIso, outcomeAllowed, allowedOutcomes, describeActions, LOOP_BRANCH_RE,
 } from './shared/state.mjs';
-import { route, eventKey } from './shared/route.mjs';
+import { route, eventKey, stageForIssue } from './shared/route.mjs';
 import { buildPrompt, runPi, parseEvents, summarize, classify } from './shared/agent.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -235,6 +235,34 @@ function validatePush({ writeLevel, stage, taskId, push }) {
   return { ok: true, push: { ...push, branch } };
 }
 
+/**
+ * Hand a triaged task to the stage that implements it.
+ *
+ * The obvious mechanism — let triage's `ready-for-agent` label raise an
+ * `issues.labeled` run — cannot work when the loop applies that label itself:
+ * GitHub suppresses workflow runs for events raised by `GITHUB_TOKEN`, precisely so
+ * a workflow cannot call itself in a loop. `workflow_dispatch` is the documented
+ * exception (it *always* creates a run), so the host asks for the next stage
+ * explicitly. One run stays one stage; the cost is `actions: write`.
+ *
+ * Not dispatching is not a failure of this run: the task is `ready` and the label is
+ * on the issue, so a human can start it by hand or a later sweep can pick it up. It
+ * is worth a warning because it stalls the claim silently otherwise.
+ */
+function dispatchStage({ repo, taskId, stage, log, warn }) {
+  const r = spawnSync('gh', ['workflow', 'run', 'loop.yml', '-R', repo,
+    '-f', `task=${taskId}`, '-f', `stage=${stage}`], { encoding: 'utf8' });
+  if (r.status !== 0) {
+    warn(`stage=${stage} not dispatched for task #${taskId}: `
+      + `${(r.stderr || '').trim()} — the task is claimable, start it by hand or let a`
+      + ' sweep pick it up');
+    return false;
+  }
+  log(`dispatched stage=${stage} for task #${taskId} (the loop cannot trigger itself`
+    + ' with a label, so it asks explicitly)');
+  return true;
+}
+
 async function doRun({ decision, ctx, repo, writeLevel }) {
   const stage = decision.stage;
   const isSystem = !decision.taskId;
@@ -336,10 +364,24 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
   }
   if (done) log(`task #${done.id} → status=${done.status}${done.labels?.length ? `, label=${done.labels.join(',')}` : ''}`);
 
+  // Triage decided this is loop work → start the stage that implements it. Only
+  // issues: a triaged *PR* would have the loop push a branch and label the PR it is
+  // supposed to be reviewing.
+  let handedOff = null;
+  if (finalOutcome === 'triaged' && done?.kind === 'issue') {
+    try {
+      const cur = ghJson(['issue', 'view', String(done.id), '-R', repo, '--json', 'labels']);
+      const next = stageForIssue(cur.labels);
+      if (dispatchStage({ repo, taskId: done.id, stage: next, log, warn })) handedOff = next;
+    } catch (e) {
+      warn(`could not read task #${done.id} labels to start the next stage: ${e.message}`);
+    }
+  }
+
   return {
     state: 'run', taskId: done?.id ?? decision.taskId ?? null, runId: rid, stage,
     outcome: finalOutcome, exit: cls.exit, actions, usage, toolCalls, turns, sessionDir,
-    system: isSystem, reportFile: path.join(S.reportsDir, `${rid}.md`),
+    system: isSystem, handedOff, reportFile: path.join(S.reportsDir, `${rid}.md`),
   };
 }
 
@@ -380,6 +422,10 @@ function renderStepSummary({ decision, result, writeLevel }) {
     const head = writeLevel === 'auto' ? '### GitHub actions executed' : '### Proposed GitHub actions (report boundary — NOT executed)';
     L.push('', head, '');
     for (const d of describeActions(result.actions)) L.push(`- [${writeLevel === 'auto' ? 'x' : ' '}] ${d}`);
+  }
+  if (result?.handedOff) {
+    L.push('', `- handed off to \`${result.handedOff}\` (dispatched; the loop cannot trigger`
+      + ' itself with a label)');
   }
   return L.join('\n');
 }
