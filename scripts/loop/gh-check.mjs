@@ -158,26 +158,9 @@ if (hostPerm.ok) {
   console.log(`  (info) repo .permissions = ${hostPerm.out.replace(/\s+/g, ' ')}`
     + ' — the *user\'s* role, not this token\'s scopes; do not read it as a scope report');
 }
-// The credential `GH_TOKEN` resolves to is also the agent's under `auto` (agentEnv
-// hands the child `LOOP_GH_TOKEN`), so a PAT with Contents here is the one
-// configuration that would let the agent merge: measure it, do not assume it.
-
-// L2c's third role. This is the *only* credential that may hold Contents, it belongs
-// to the host process (applyActions' push), and `agentEnv` deletes it from the child
-// environment — a push is the one write that cannot be delegated to the agent, because
-// the same scope that creates a branch also merges one.
-console.log('\n[loop:gh] push credential (LOOP_PUSH_TOKEN — host only, absent from the agent env):');
-const pushToken = process.env.LOOP_PUSH_TOKEN || null;
-let canPushBranch = null;
-if (!pushToken) {
-  console.log('  (not set — the host cannot push, so no product stage can reach `pr-opened`;'
-    + ' set it from a PAT with Contents: Read and write, or set LOOP_EXECUTE_WRITES=true only'
-    + ' after it exists)');
-} else {
-  canPushBranch = idempotentWrite(
-    'Contents: write      (branch push — the host\'s job)', refProbe, pushToken,
-  );
-}
+// `canPush` above is the host's ability to push `loop/<n>-*` **and** to merge: one
+// scope covers both, which is exactly why it must not exist on any credential the
+// agent can reach. The agent check at the end of this script confirms it does not.
 
 console.log('\n[loop:gh] scopes reached by a credential that lacks them entirely:');
 const absent = [
@@ -198,16 +181,15 @@ const writeLevel = process.env.LOOP_WRITE_LEVEL
   ?? (process.env.LOOP_EXECUTE_WRITES === 'true' ? 'auto' : 'report');
 console.log('');
 if (canPush) {
-  console.log('[loop:gh] WARNING: the host credential holds Contents:write, and under `auto`'
-    + ' the agent is handed that same credential — so the agent could merge (PUT'
-    + ' /pulls/{n}/merge), push branches and cut releases. L2c keeps that scope out of the'
-    + ' agent\'s reach: the host pushes with LOOP_PUSH_TOKEN, and LOOP_GH_TOKEN is scoped to'
-    + ' Issues + Pull requests only. See "GitHub write credential" in scripts/loop/README.md;'
-    + ' recreate the PAT with Issues Read and write, Pull requests Read and write, Contents'
-    + ' Read-only, and Nothing for Actions/Secrets/Administration/Workflows.');
+  console.log('[loop:gh] host credential holds Contents:write — branch pushes and PR creation are'
+    + ' possible. This is required for L2c, and it is also the merge permission, which is why'
+    + ' the agent is never given this credential (see the check at the end). One fine-grained'
+    + ' PAT with Contents + Issues + Pull requests write, scoped to this repository, is the'
+    + ' whole configuration.');
 } else if (canPush === false) {
-  console.log('[loop:gh] host credential holds no Contents:write — merging, branch pushes and'
-    + ' releases are impossible for it, which is the L2c invariant.');
+  console.log('[loop:gh] host credential holds no Contents:write — the loop cannot push a branch,'
+    + ' so no product stage can ever reach `pr-opened`. Keep LOOP_EXECUTE_WRITES=false until'
+    + ' LOOP_GH_TOKEN carries Contents: Read and write on this repository.');
 }
 console.log(`[loop:gh] label/comment/close: ${canLabel ? 'available' : 'NOT available — the loop cannot do its job'}`);
 console.log(`[loop:gh] reads: ${brokenReads.length
@@ -218,48 +200,23 @@ if (writeLevel === 'auto' && !canLabel) {
   console.log('  WARNING: `auto` is switched on but the credential cannot label/comment — the loop'
     + ' will run, propose, and silently fail to write. Configure LOOP_GH_TOKEN first.');
 }
-if (writeLevel === 'auto' && !pushToken) {
-  console.log('  WARNING: `auto` is switched on but LOOP_PUSH_TOKEN is unset — no product stage can'
-    + ' produce a PR. Either set it, or keep LOOP_EXECUTE_WRITES=false until it exists.');
-} else if (writeLevel === 'auto' && canPushBranch === false) {
-  console.log('  WARNING: LOOP_PUSH_TOKEN lacks Contents:write — every product stage will fail at'
-    + ' the host\'s push. That credential needs Contents: Read and write on this repository only.');
+if (writeLevel === 'auto' && canPush === false) {
+  console.log('  WARNING: `auto` is switched on but the host cannot push — every product stage will'
+    + ' fail at the push and land in the human inbox. Either grant LOOP_GH_TOKEN Contents:'
+    + ' Read and write, or keep LOOP_EXECUTE_WRITES=false.');
 }
 
-// What the agent actually holds is decided by `agentEnv(writeLevel)`, and it is worth
-// measuring rather than reading off the workflow file, because `GH_TOKEN` is
-// `secrets.LOOP_GH_TOKEN || github.token` — which one resolves is invisible here.
+// What the agent actually holds, after `agentEnv` has built the child environment. The
+// agent is read-only in **every** mode, so this check is not conditional on the write
+// level: the loop's writes are the host's job, and a credential that could write here
+// would be a configuration error, not a mode.
 //
 // Identity cannot be read from `GET /user` for `github.token`: it is a GitHub App
 // installation token and is refused there entirely, which is why these checks combine
 // two signals that *are* observable — whether the credential can read the repository,
 // and whether a write is refused.
-console.log('\n[loop:gh] credential handed to the agent:');
-if (writeLevel === 'auto') {
-  if (!hostToken) {
-    console.log('  (no LOOP_GH_TOKEN and no GH_TOKEN — gh in the agent would use its own login.)');
-  } else {
-    const canRead = gh(['api', `repos/${repo}`, '--jq', '.full_name'], { token: hostToken });
-    const asUser = gh(['api', 'user', '--jq', '.login'], { token: hostToken });
-    console.log(`  can read the repo:          ${canRead.ok ? 'yes' : `NO — the agent cannot read GitHub (${canRead.status})`}`);
-    console.log(`  acts as a user:             ${asUser.ok ? `yes (${asUser.out}) — a PAT` : 'no — an App token (github.token)'}`);
-    const agentWrite = idempotentWrite('Issues: write      (labels/comments)', issueProbe, hostToken);
-    idempotentWrite('Pull requests: write', prProbe, hostToken);
-    const agentPush = idempotentWrite('Contents: write    (must be ABSENT)', refProbe, hostToken);
-    if (!canRead.ok) {
-      console.log('  WARNING: the agent cannot read GitHub, so triage/sweep will find nothing.');
-    } else if (agentPush) {
-      console.log('  WARNING: the agent holds Contents:write — it can push AND merge, so "no'
-        + ' self-merge" is a prompt instruction only. L2c requires a PAT without Contents.');
-    } else if (!agentWrite) {
-      console.log('  WARNING: the agent holds no Issues:write — it cannot label or comment, so every'
-        + ' `auto` write will fail. `auto` needs the PAT (LOOP_GH_TOKEN); github.token is read-only.');
-    } else {
-      console.log('  OK: the agent can label/comment/open PRs but holds no Contents — it cannot push'
-        + ' or merge even if it ignores its prompt.');
-    }
-  }
-} else if (!agentToken) {
+console.log('\n[loop:gh] credential handed to the agent (agentEnv: read-only in every mode):');
+if (!agentToken) {
   console.log('  (GH_READ_TOKEN is not set, so agentEnv leaves the child without GH_TOKEN — `gh`'
     + ' there would fall back to any local login. On Actions this variable is always set.)');
 } else {
@@ -272,15 +229,13 @@ if (writeLevel === 'auto') {
 
   if (!canRead.ok) {
     console.log('  WARNING: the agent cannot read GitHub, so triage/sweep will find nothing.');
-  } else if (asUser.ok) {
-    console.log(`  WARNING: the agent holds a *user* token (${asUser.out}) — it inherits that`
-      + ' user\'s reach, so the report boundary is a prompt instruction only.');
   } else if (agentWrite || agentPush) {
-    console.log('  WARNING: the agent can write (github.token is not capped to read — check the'
-      + " workflow's `permissions:` block).");
+    console.log('  WARNING: the agent CAN WRITE. It should hold `github.token` capped at read by'
+      + " the workflow's `permissions:` block, so check that block — and check that GH_READ_TOKEN"
+      + ' is `github.token`, not a PAT.');
   } else {
-    console.log('  OK: github.token, read-only by the workflow\'s `permissions:` block — the agent'
-      + ' reaches GitHub read-only even if it ignores its prompt. The report boundary is a'
-      + ' platform guarantee.');
+    console.log('  OK: the agent can read GitHub and cannot write anything (no Issues, no Contents)'
+      + ' — so it cannot label, comment, push or merge, whatever its prompt says. Every write is'
+      + ' the host\'s, executed from the agent\'s result file.');
   }
 }

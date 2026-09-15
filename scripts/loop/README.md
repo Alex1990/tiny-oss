@@ -53,45 +53,48 @@ In `report` mode the pending actions are appended to `state/reports/<runId>.md`
 as a checklist and surfaced in the Actions Step Summary, so a human can execute
 them by hand.
 
-### GitHub write credentials (three roles)
+### GitHub write credentials (two roles)
 
 `GH_TOKEN: ${{ secrets.LOOP_GH_TOKEN || github.token }}`. Until L2 the secret was
 deliberately unset, so `github.token` — capped read-only by the workflow's
 `permissions:` block — was the only credential a run could reach, and a run that
-ignored its prompt got a 403 from `gh pr merge`. That is the *report boundary*
-credential; configuring the secret replaces it for every `gh` call in the job,
-which is why `gh-check.mjs` measures rather than assumes.
+ignored its prompt got a 403 from `gh pr merge`. Configuring the secret replaces it
+for every `gh` call in the job, which is why `gh-check.mjs` measures rather than
+assumes.
 
-There are now three credentials, and the loop's central guarantee — it opens PRs
-and can never merge — rests on which process holds which:
+There are two credentials, split by **who runs the code**, not by scope list:
 
 | Credential | Held by | Scopes | Used for |
 | --- | --- | --- | --- |
-| `github.token` (`GH_READ_TOKEN`) | the agent, under `report` | read-only (`permissions:`) | reading GitHub: triage, sweep, review |
-| `LOOP_GH_TOKEN` (PAT) | the agent under `auto`; the host otherwise | `Issues: RW`, `Pull requests: RW` — **no Contents** | labels, comments, closing, opening the PR |
-| `LOOP_PUSH_TOKEN` (PAT) | the host process only | `Contents: RW` | pushing `loop/<n>-*` — nothing else |
+| `github.token` (`GH_READ_TOKEN`) | the agent, in every mode | read-only (`permissions:`) | reading GitHub: triage, sweep, review |
+| `LOOP_GH_TOKEN` (PAT) | the host process only | `Contents: RW` + `Issues: RW` + `Pull requests: RW` | every loop write: labels, comments, closing, branch push, opening the PR |
+
+The agent gets **no write credential at all**, in either mode. It does not need one:
+`applyActions` derives the write list from the agent's `result.json` and executes it
+in the host's process. That is why the guarantee does not depend on scoping one
+token finely — a read-only agent cannot merge, push or relabel regardless of what
+its prompt says, and the scope the host needs (`Contents: write`, which is also the
+merge permission) exists only where the untrusted party cannot reach it.
 
 Configuring `LOOP_GH_TOKEN` lifts only the platform lock — `writeLevel` still
-gates `applyActions` in `state.mjs`, and its default is `report`, so ordinary
-runs keep reporting.
+gates `applyActions` in `state.mjs`, and its default is `report`, so ordinary runs
+keep reporting.
 
-It must not also lift the **agent's** lock. `agentEnv` in `shared/agent.mjs` builds
-the child environment from scratch: it deletes `LOOP_PUSH_TOKEN`, `LOOP_GH_TOKEN`,
-`GH_READ_TOKEN` and the R2 keys, and sets `GH_TOKEN` to the least credential the
-write level allows — `GH_READ_TOKEN` (i.e. `github.token`, capped at read by
-`permissions:`) under `report`, and `LOOP_GH_TOKEN` under `auto`. The agent
-therefore reaches GitHub read-only under the report boundary even if it ignores
-its prompt, while host-side writes keep using the real `GH_TOKEN` in the host's
-own process.
+The agent's side is enforced in code, not in prose: `agentEnv` in
+`shared/agent.mjs` builds the child environment from scratch — it deletes
+`LOOP_GH_TOKEN`, `GH_READ_TOKEN`, `GITHUB_TOKEN` and the R2 keys, then sets
+`GH_TOKEN` to `GH_READ_TOKEN` (`github.token`, capped at read by `permissions:`).
+`persist-credentials: false` on the checkout step closes the other half: without it
+git's config would carry the job token, which no environment variable can revoke.
 
 Both are measurable without spending a token:
 `node scripts/loop/gh-check.mjs` probes each credential's scopes side-effect
 free (write endpoints against an impossible id — `403` means absent, `404`/`422`
-means present) and reports what the host holds and what the agent will hold.
+means present, plus an idempotent write that restores the value it read) and
+reports what the host holds and what the agent will hold.
 
-**Do not grant the agent's credential `Contents: write`.** Merging a PR is not
-under "Pull requests" — it is under "Contents" (GitHub's endpoint→permission
-table):
+**The agent must never hold `Contents: write`.** Merging a PR is not under
+"Pull requests" — it is under "Contents" (GitHub's endpoint→permission table):
 
 | Action | gh command | Permission required |
 | --- | --- | --- |
@@ -112,7 +115,7 @@ Two consequences that are easy to get wrong:
 2. **"Can open a PR" and "can merge a PR" are the same permission** — within a
    single credential. Opening a PR needs a head branch; creating one needs
    `Contents: write`; and that is the merge permission. Separating them means
-   splitting the *roles*, which is what L2c below does.
+   separating the *processes*, which is what L2c below does.
 
 So the L2 step has three sizes rather than two. Two are pure scope choices; the
 third is the one that satisfies "loop may open PRs but must never merge them",
@@ -177,12 +180,13 @@ has to come from the credential split.
 
 #### L2c as implemented
 
-The three roles above are now wired end to end. What a human has to configure is
-two secrets; everything else is code that fails closed.
+The split above is wired end to end. What a human has to configure is **one
+secret**; everything else is code that fails closed.
 
 | Piece | Where | Behaviour |
 | --- | --- | --- |
-| `LOOP_PUSH_TOKEN` env | `.github/workflows/loop.yml` | The only `Contents: write` credential. Deleted from the agent's environment by `agentEnv`. |
+| `LOOP_GH_TOKEN` secret | `.github/workflows/loop.yml` | The host's PAT: `Contents: RW` + `Issues: RW` + `Pull requests: RW`, scoped to this repository. The only write credential in the system. |
+| `agentEnv(writeLevel)` | `shared/agent.mjs` | Builds the child environment from scratch: strips the PAT, `GITHUB_TOKEN` and the R2 keys; the agent's `GH_TOKEN` is `github.token` in **both** modes. |
 | `persist-credentials: false` | the `actions/checkout` step | Without it the job token is written into the repo's git config, where the agent's `git push` would find it; `agentEnv` cannot un-write a file. |
 | `vars.LOOP_EXECUTE_WRITES` | job env | `workflow_dispatch` still overrides per run, so the A1 rehearsal entry point is unchanged. |
 | `push` action | `planActions` | `pr-opened` plans `push` → `pr-create` → label/comment. A failure in either of the first two **aborts the chain**, so a PR that never appeared is never labelled. |
@@ -193,11 +197,11 @@ two secrets; everything else is code that fails closed.
 | PR number recorded | `finishRun` | The number comes back from `gh pr create` and lands in `task.prs` + a `pr-created` timeline row. |
 | git identity | `agentEnv` | `GIT_AUTHOR_*`/`GIT_COMMITTER_*` are injected under `auto`; a fresh runner has no global git config, and the commit itself is local (no credential involved). |
 
-The failure that remains possible is deliberate: with `auto` on and
-`LOOP_PUSH_TOKEN` unset, every product stage fails at the push and the task goes
-to the inbox. The alternative — falling back to the agent's credential — would
-also hand the agent the merge permission, which is the one thing L2c exists to
-prevent.
+The failure that remains possible is deliberate: with `auto` on and no PAT
+configured, `GH_TOKEN` falls back to `github.token`, every product stage fails at
+the push, and the task goes to the inbox. Withdrawing the host's write access is
+exactly how you turn the loop back into a reporting one — the agent's side never
+changes, because it never had write access to begin with.
 
 ## A1 architecture (Actions + R2)
 
@@ -217,9 +221,10 @@ GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single w
   project-local resources.
 - **pi has no built-in permission gating** (verified), so the boundary is built
   from the environment instead: the job's `permissions:` block, the absence of
-  secrets in fork contexts, and `agentEnv` (which strips `LOOP_PUSH_TOKEN`, the
-  PAT and the R2 keys from the child). Do not add write credentials to a job
-  that touches untrusted input, and do not rely on the prompt for any of it.
+  secrets in fork contexts, and `agentEnv` (which strips the PAT, `GH_READ_TOKEN`
+  and the R2 keys from the child, then hands it the read-only job token). Do not
+  add write credentials to a job that touches untrusted input, and do not rely on
+  the prompt for any of it.
 - **One writer for closing:** the agent writes `state/reports/<runId>.result.json`;
   `entry.mjs` performs the transition via `finishRun`. Agents never run
   `pnpm loop end` themselves.
@@ -516,14 +521,14 @@ sample once `auto` is switched on.
       — see the failure-classification item above. (Distinction worth keeping:
       21 workflow executions, 18 run records.)
 - [x] No drift **and** no incorrect proposal for a week → **owner decided L2c**
-      (2026-09-14): the loop opens PRs but can never merge. The split is
-      implemented — the host pushes branches with `LOOP_PUSH_TOKEN` and opens the
-      PR, the agent's PAT carries no `Contents`, and `persist-credentials: false`
-      keeps the job token out of the agent's reach; see "L2c as implemented" and
-      the endpoint-level evidence under "GitHub write credentials". What remains
-      is configuration, not code: the two secrets above must exist before
-      `LOOP_EXECUTE_WRITES=true`, and the unchecked boxes in this list become
-      sampleable only then.
+      (2026-09-14): the loop opens PRs but can never merge. Implemented as a
+      two-credential split — the host alone holds a PAT with `Contents: write` and
+      does every write, while the agent gets `github.token`, read-only, in both
+      modes; `persist-credentials: false` closes the git-config path. See "L2c as
+      implemented" and the endpoint-level evidence under "GitHub write
+      credentials". What remains is configuration, not code: one secret must exist
+      before `LOOP_EXECUTE_WRITES=true`, and the unchecked boxes in this list
+      become sampleable only then.
 
 ### Not reachable under A1 (structural — decide before the L2 switchover)
 

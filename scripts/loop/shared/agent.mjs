@@ -52,24 +52,26 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
   }
   L.push('');
   L.push(`## Write boundary: ${writeLevel}`);
+  L.push('### GitHub: you never write');
+  L.push('Your GitHub credential is read-only in **every** mode — `gh issue edit` /');
+  L.push('`gh issue comment` / `gh issue close` / `gh pr create` / `gh pr merge` /');
+  L.push('`git push` all answer 403. That is deliberate, not a misconfiguration: do not');
+  L.push('retry them, and do not look for another credential. Label/comment/close/PR');
+  L.push('actions belong to the host, which executes them from your result file.');
+  L.push('');
+  L.push('Allowed: reading GitHub, editing the working tree, running the repo gates,');
+  L.push('reading and writing `state/`.');
   if (writeLevel === 'report') {
-    L.push('**Read-only with respect to GitHub.** Do NOT run any of:');
-    L.push('`gh issue edit` / `gh issue comment` / `gh issue close` / `gh pr create` /');
-    L.push('`gh pr merge` / `git push` / any other command that mutates GitHub.');
-    L.push('Allowed: reading GitHub, editing the working tree, running the repo gates,');
-    L.push('reading and writing `state/`. Any GitHub action you conclude is needed');
-    L.push('(labels, comments, closing, opening a PR) must be written into the report');
-    L.push('as a proposal for a human to execute.');
+    L.push('');
+    L.push('### `report` mode: the host writes nothing either');
+    L.push('**Do not commit.** No branch will be pushed — a commit would be discarded with');
+    L.push('the checkout. Deliver the change as a patch inside your report (the diff, or the');
+    L.push('exact edits), and say what a human must do. Any GitHub action you conclude is');
+    L.push('needed (labels, comments, closing, opening a PR) goes into the report as a');
+    L.push('proposal.');
   } else {
-    L.push('You may write to GitHub through `gh` — **but only** labels, comments and');
-    L.push('closing (`gh issue edit|comment|close`, `gh pr edit|comment`).');
-    L.push('Two steps belong to the host, not to you:');
     L.push('');
-    L.push('- **Pushing the branch.** Your credential carries no `Contents: write` (that is');
-    L.push('  also the merge permission, so by design you do not hold it; `git push` and');
-    L.push('  `gh pr merge` answer 403 — do not attempt them).');
-    L.push('- **Opening the PR.** You propose it; the host pushes and creates it.');
-    L.push('');
+    L.push('### `auto` mode: the host pushes the branch and opens the PR');
     L.push('For a product stage (`bugfix`/`feature`/`deps`/`security`) that produces a change:');
     L.push('1. Do the work in the working tree, then **commit it locally** on a branch named');
     L.push('   `loop/<taskId>-<short-slug>` (e.g. `git switch -c loop/33-ci-workflow`). Commits');
@@ -155,30 +157,31 @@ export const SESSION_HINT = 'session files land under --session-dir (uploaded as
 /**
  * The environment handed to the agent subprocess.
  *
- * `{ ...process.env }` used to give the child everything the host holds, including
- * the push credential and the R2 keys — neither of which any stage needs, and the
- * push credential is exactly the one that carries `Contents: write` (i.e. merge).
- * The agent reaches GitHub through `GH_TOKEN` only, set to the least credential the
- * write level allows:
+ * `{ ...process.env }` used to give the child everything the host holds, including a
+ * push-capable token and the R2 keys. Now the agent holds **no write credential at
+ * all**, at either write level:
  *
- *   `report` → `GH_READ_TOKEN` (github.token, capped at read by the workflow's
- *              `permissions:` block — a platform guarantee, not a prompt one)
- *   `auto`   → `LOOP_GH_TOKEN` (the PAT: Issues + Pull requests write, **no
- *              Contents**), so the L2c loop can label/comment but never push or
- *              merge, even if it ignores its prompt
+ *   agent  → `GH_READ_TOKEN` (github.token, capped at read by the workflow's
+ *            `permissions:` block — a platform guarantee, not a prompt one)
+ *   host   → the PAT, used by `applyActions` in its own process
  *
- * Everything else that authenticates to something is deleted. Locally both tokens
- * are unset, so no `GH_TOKEN` key survives and `gh` falls back to the developer's
- * own login — which is the correct behaviour for a local run.
+ * The agent does not need write access: every GitHub write is the host's job
+ * (`applyActions` executes the label/comment/close/push/PR actions that
+ * `planActions` derives from the agent's result file). Restricting it to reads means
+ * "the loop never self-merges" no longer depends on scoping one credential finely —
+ * the agent simply cannot write, whichever mode is running.
+ *
+ * Everything that authenticates to something else is deleted too. Locally both
+ * variables are unset, so no `GH_TOKEN` key survives and `gh` falls back to the
+ * developer's own login — the correct behaviour for a local run.
  */
 export function agentEnv(writeLevel, base = process.env) {
   const env = { ...base };
   for (const k of [
-    'LOOP_PUSH_TOKEN', 'LOOP_GH_TOKEN', 'GH_READ_TOKEN', 'GITHUB_TOKEN',
+    'LOOP_GH_TOKEN', 'GH_READ_TOKEN', 'GITHUB_TOKEN',
     'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_ACCOUNT_ID', 'R2_BUCKET',
   ]) delete env[k];
-  const token = writeLevel === 'auto' ? (base.LOOP_GH_TOKEN ?? base.GH_TOKEN) : base.GH_READ_TOKEN;
-  if (token) env.GH_TOKEN = token;
+  if (base.GH_READ_TOKEN) env.GH_TOKEN = base.GH_READ_TOKEN;
   else delete env.GH_TOKEN;
   // Product stages commit the branch the host pushes, and the identity must not come
   // from the sandbox's global git config (there is none on a fresh runner). Set it
@@ -211,18 +214,16 @@ export function runPi({
     // another CLI or wrapper script).
     const engine = (process.env.LOOP_ENGINE_CMD || 'pi').split(/\s+/).filter(Boolean);
 
-    // The agent never inherits a credential by accident: see `agentEnv` above for
-    // what it holds at each write level and why the push credential is absent from
-    // both. Host-side writes (applyActions) still use the real GH_TOKEN in the
-    // host's own process.
+    // The agent never inherits a credential by accident: see `agentEnv` above. It is
+    // read-only in every mode; the host's own writes (applyActions) use the real
+    // GH_TOKEN in the host's process.
     const childEnv = agentEnv(writeLevel);
     if (childEnv.GH_TOKEN) {
-      log(writeLevel === 'auto'
-        ? '[loop] agent GitHub credential: the PAT (Issues/Pull requests write, no Contents)'
-        : '[loop] agent GitHub credential: the read-only job token (report boundary)');
+      log('[loop] agent GitHub credential: read-only (github.token) — it cannot write to'
+        + ' GitHub in any mode');
     } else {
-      log('[loop] agent GitHub credential: none at this write level — `gh` there would fall'
-        + ' back to any local login, so the run may not be able to read GitHub at all');
+      log('[loop] agent GitHub credential: none — `gh` there would fall back to any local'
+        + ' login, so the run may not be able to read GitHub at all');
     }
 
     const child = spawn(engine[0], [...engine.slice(1), ...args], {

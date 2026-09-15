@@ -468,13 +468,12 @@ const redact = (s) => String(s ?? '')
  * Execute write actions (only called on the auto / dry-run path). Failures only
  * warn; local state is never rolled back.
  *
- * The L2c credential split shows up here. `push` is the single action that needs
- * `Contents: write`, and it spends `LOOP_PUSH_TOKEN` — a credential the agent
- * never receives (`runPi` strips it from the child environment), which is what
- * makes "the loop opens PRs but can never merge" a platform guarantee rather
- * than a prompt instruction. Every `gh` call uses the host's `GH_TOKEN`, whose
- * scopes carry no `Contents`. A failed `push`/`pr-create` aborts the rest of the
- * chain instead of labelling a PR that does not exist.
+ * This is the only place the loop writes to GitHub, and it runs in the host's own
+ * process — the agent holds a read-only credential and cannot reach any of it.
+ * `push` is the single action needing `Contents: write`, so it spends the host's
+ * `GH_TOKEN` (the PAT); every `gh` call uses the same credential. A failed
+ * `push`/`pr-create` aborts the rest of the chain instead of labelling a PR that
+ * does not exist.
  */
 export function applyActions(actions, {
   log = console.log, warn = console.warn, cwd = process.cwd(), exec = spawnSync,
@@ -489,11 +488,15 @@ export function applyActions(actions, {
     const gh = (args) => exec('gh', args, { encoding: 'utf8' });
     const sub = a.gh ?? 'issue'; // PRs go to gh pr, issues to gh issue
     if (a.kind === 'push') {
-      const token = process.env.LOOP_PUSH_TOKEN;
+      // The host's own credential — one PAT holding `Contents: write` plus the
+      // Issues/Pull-requests scopes `gh` needs. The agent never receives it
+      // (`agentEnv` strips it), so a push is only ever performed here, by trusted
+      // code, on a ref the check below has already constrained.
+      const token = process.env.GH_TOKEN;
       if (!token) {
-        warn('[loop] warn: LOOP_PUSH_TOKEN is not set — the host cannot push the branch.'
-          + " The agent's own credential deliberately has no Contents: write, so there is"
-          + ' no fallback that would not also hand the agent the merge permission.');
+        warn('[loop] warn: the host has no GitHub credential (GH_TOKEN unset) — cannot push.'
+          + ' On Actions, configure LOOP_GH_TOKEN with Contents write plus Issues/Pull requests'
+          + ' write; locally, export GH_TOKEN (e.g. `GH_TOKEN=$(gh auth token)`).');
         aborted = 'push';
         continue;
       }
