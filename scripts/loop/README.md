@@ -91,6 +91,26 @@ Two consequences worth stating plainly:
 `permissions:` cannot grant `administration`, so the loop cannot delete or weaken
 that ruleset. `gh-check.mjs` asserts exactly that pair of properties (see below).
 
+**A loop PR starts with its workflows unrun.** GitHub suppresses workflow runs for
+events raised by `GITHUB_TOKEN` — the same recursion guard that stops the loop
+triggering itself with a label — with one exception: a `pull_request` opened or
+updated by `GITHUB_TOKEN` does create runs, but in an **approval-required** state.
+Nothing runs until a human clicks *Approve workflows to run* in the PR's merge box.
+
+That has a consequence worth knowing before it confuses you: **a loop PR shows no
+checks at all**, which reads like a broken workflow. It is not — CI is waiting for
+the click. In order:
+
+1. `gh pr view <n>` → review the diff.
+2. Click *Approve workflows to run* (or `gh workflow run` the CI job at that ref).
+3. CI runs; then approve/merge as usual — merging is your bypass.
+
+This is deliberately left in place rather than worked around. Switching the push and
+the PR creation to a PAT would make CI start by itself, and would also hand the loop
+the owner's ruleset bypass — see the table above. One human click is the cheaper
+half of that trade. The same click also removes any chance of the loop reviewing its
+own PR: `pr-review` cannot fire on it until someone approves the run.
+
 What bounds the loop beyond `main` is therefore *not* a credential: the host owns
 every write (`applyActions` derives them from the agent's `result.json`) as a division
 of labour, and the agent is asked not to write — but if it did, the ruleset would
