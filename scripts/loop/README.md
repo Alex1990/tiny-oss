@@ -95,21 +95,31 @@ that ruleset. `gh-check.mjs` asserts exactly that pair of properties (see below)
 events raised by `GITHUB_TOKEN` — the same recursion guard that stops the loop
 triggering itself with a label — with one exception: a `pull_request` opened or
 updated by `GITHUB_TOKEN` does create runs, but in an **approval-required** state.
-Nothing runs until a human clicks *Approve workflows to run* in the PR's merge box.
+Nothing runs until a human approves.
 
 That has a consequence worth knowing before it confuses you: **a loop PR shows no
-checks at all**, which reads like a broken workflow. It is not — CI is waiting for
-the click. In order:
+checks at all**, which reads like a broken workflow. It is not — CI is waiting.
 
-1. `gh pr view <n>` → review the diff.
-2. Click *Approve workflows to run* (or `gh workflow run` the CI job at that ref).
-3. CI runs; then approve/merge as usual — merging is your bypass.
+Approval is per run, which is the useful part. A loop PR creates two: `CI` and
+`Loop` (the latter because the PR is loop-produced, so it routes to `pr-review`).
+Approving both makes the loop review its own work; approving only the first gives you
+the thing you actually want:
 
-This is deliberately left in place rather than worked around. Switching the push and
-the PR creation to a PAT would make CI start by itself, and would also hand the loop
-the owner's ruleset bypass — see the table above. One human click is the cheaper
-half of that trade. The same click also removes any chance of the loop reviewing its
-own PR: `pr-review` cannot fire on it until someone approves the run.
+```bash
+gh api 'repos/Alex1990/tiny-oss/actions/runs?status=action_required' \
+  --jq '.workflow_runs[] | "\(.id) \(.name)"'
+gh api --method POST repos/Alex1990/tiny-oss/actions/runs/<ci-id>/approve
+```
+
+The UI's *Approve workflows to run* button approves every pending run for that PR,
+so use it when you do not mind the self-review, and the API when you do. Verified on
+PR #50: approving only the `CI` run left `Loop` at `completed/action_required` while
+CI ran and passed.
+
+This is deliberately worked around no further than a click. Switching the push and
+the PR creation to a PAT would start CI by itself, and would also hand the loop the
+owner's ruleset bypass — see the table above. One click is the cheaper half of that
+trade.
 
 What bounds the loop beyond `main` is therefore *not* a credential: the host owns
 every write (`applyActions` derives them from the agent's `result.json`) as a division
