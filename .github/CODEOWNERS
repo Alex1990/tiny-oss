@@ -1,0 +1,19 @@
+# Every change to the default branch needs an approving review from the repository
+# owner. Combined with `require_code_owner_review` in the `Main branch` ruleset, this
+# is what keeps the loop from merging its own work: the loop may open a pull request
+# against any path — including `scripts/loop/**`, the host it runs on — but it cannot
+# approve it (GitHub forbids approving your own PR) and a bot approval never
+# satisfies this rule, so a human has to say yes.
+#
+# Pull requests are evaluated against the CODEOWNERS of their *base* branch, so a PR
+# cannot rewrite the ownership it is subject to. The GitHub docs also recommend
+# owning this file and the directory it lives in explicitly, which is why they are
+# listed below: a silent edit to them would otherwise be a way to shed review.
+#
+# Note for dependabot PRs: they are covered by `*` too, so they need the owner's
+# approval before merging (the owner's ruleset bypass still allows merging them
+# without a second reviewer).
+
+*                       @Alex1990
+/.github/               @Alex1990
+/scripts/               @Alex1990

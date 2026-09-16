@@ -93,6 +93,15 @@ Never do work outside the declared stage; never modify norms-layer files
   `loop-task: #<n>`.
 - Don't claim a task whose lock is live; don't fight a live lock.
 - No self-merge; no norms-layer edits without a PR; no npm publish by the loop.
+- Host changes (`scripts/loop/**`) may arrive as loop PRs like any other change: the
+  loop may be the maker and the owner's review is the checker, so a host change is
+  not by itself a reason to route a task to `needs-triage`. Review the diff rather
+  than the run log — the same PR can edit `gh-check.mjs` and the agent prompts, i.e.
+  the machinery that would otherwise corroborate it. What keeps this honest is the
+  ruleset, not the loop's restraint: `require_code_owner_review` with
+  `.github/CODEOWNERS` owning `*` means only the owner's approval meets the review
+  requirement, so the loop cannot merge its own work. `.github/workflows/**` stays
+  human-only (next item).
 - **`main` is protected by the `Main branch` ruleset**, and that — not a credential
   — is what makes the line above true: every change to `main` must arrive through a
   pull request carrying one approving review, the only bypass actor is the repository
