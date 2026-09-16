@@ -72,7 +72,7 @@ Main branch (ruleset, active, target ~DEFAULT_BRANCH)
 | Actor | direct push to `main` | merge a PR without an approval |
 | --- | --- | --- |
 | the owner (you) | ❌ refused | ✅ (bypass, `pull_request` mode) — **merging *is* the consent** |
-| the loop (`github.token`) | ❌ refused — not a bypass actor | ❌ refused — and it cannot approve its own PR |
+| the loop (`github.token`) | ❌ refused — not a bypass actor | ❌ refused — it cannot approve its own PR, and a bot approval does not satisfy `require_code_owner_review` |
 
 Two consequences worth stating plainly:
 
@@ -203,8 +203,8 @@ This is the part a human owns, and the only part no file in this repo can expres
     { "type": "pull_request", "parameters": {
         "required_approving_review_count": 1,
         "dismiss_stale_reviews_on_push": true,
-        "require_code_owner_review": false,
-        "require_last_push_approval": false,
+        "require_code_owner_review": true,
+        "require_last_push_approval": true,
         "required_review_thread_resolution": false,
         "allowed_merge_methods": ["merge", "squash", "rebase"]
     } }
@@ -227,6 +227,17 @@ to merge a PR they authored themselves.
 
 `dismiss_stale_reviews_on_push: true` means a push to a PR branch invalidates its
 approval: approving a diff approves that diff, not whatever arrives next.
+
+`require_code_owner_review: true`, with `.github/CODEOWNERS` owning `*`, closes the
+one path the approval count left open. The loop holds `pull-requests: write`, so
+without a code-owner requirement it could approve a PR it did not author — one the
+owner opened, or a dependabot PR — and then merge it with the same `Contents: write`
+it needs to push branches. Under a code-owner requirement the bot's approval does not
+count, so only the owner can satisfy the gate.
+
+`require_last_push_approval: true` is the second half of the same idea: the person who
+pushed the most recent reviewable commit cannot be the one who approves it, so a push
+that rewrites a PR branch cannot then be self-approved.
 
 GitHub also sets `require_extra_approval_for_unattributed_changes: true` on rulesets
 carrying a `pull_request` rule (a public-preview default, not something set here).
