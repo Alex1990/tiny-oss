@@ -264,7 +264,7 @@ reason a future reader may see the parameter and wonder where it came from.
 | `validatePush` | `entry.mjs` | `pr-opened` without a valid proposal (wrong branch, empty title, another task's number, or `writeLevel=report`) is downgraded to `failed`, so a task can never sit in `waiting-merge` waiting for a PR nobody opened. |
 | `ensureLoopPrBody` | `planActions` | Repairs the PR body's `Closes #<n>` / `loop-task: #<n>` markers. The router requires both, and a missing marker would make the loop's own PR look external — no acceptance row, and its merge would close the task by the wrong path. |
 | PR number recorded | `finishRun` | The number comes back from `gh pr create` and lands in `task.prs` + a `pr-created` timeline row. |
-| git identity | `agentEnv` | `GIT_AUTHOR_*`/`GIT_COMMITTER_*` are injected under `auto`; a fresh runner has no global git config, and the commit itself is local (no credential involved). |
+| git identity | `agentEnv` | `GIT_AUTHOR_*`/`GIT_COMMITTER_*` are injected under `auto` as GitHub Actions' own bot, `github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>` — the same identity the host's PR comes from. A fresh runner has no global git config, and the commit itself is local (no credential involved). The earlier `loop@users.noreply.github.com` belonged to the real, unrelated user `@loop`, so every loop commit was falsely attributed to them (#52, #56). |
 
 Note what is **not** load-bearing: the host-versus-agent split. It exists because the
 writes must be derived from the agent's result file in one place that can enforce the
