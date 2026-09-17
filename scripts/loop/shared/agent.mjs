@@ -191,9 +191,17 @@ export function agentEnv(writeLevel, base = process.env) {
   // Product stages commit the branch the host pushes, and the identity must not come
   // from the sandbox's global git config (there is none on a fresh runner). Set it
   // here rather than making the agent discover it: a commit is a local operation.
+  //
+  // The identity is GitHub Actions' own bot (`github-actions[bot]`), matching the PR
+  // author the host opens with the job token. The previous
+  // `loop@users.noreply.github.com` resolved to the real, unrelated account @loop
+  // (id 1519971), so every loop commit was falsely attributed to a stranger (#52,
+  // #56). A bot noreply address is not a user account, so it cannot be squatted the
+  // way a bare login can.
   if (writeLevel === 'auto') {
-    env.GIT_AUTHOR_NAME = env.GIT_AUTHOR_NAME ?? 'tiny-oss loop';
-    env.GIT_AUTHOR_EMAIL = env.GIT_AUTHOR_EMAIL ?? 'loop@users.noreply.github.com';
+    env.GIT_AUTHOR_NAME = env.GIT_AUTHOR_NAME ?? 'github-actions[bot]';
+    env.GIT_AUTHOR_EMAIL = env.GIT_AUTHOR_EMAIL
+      ?? '41898282+github-actions[bot]@users.noreply.github.com';
     env.GIT_COMMITTER_NAME = env.GIT_COMMITTER_NAME ?? env.GIT_AUTHOR_NAME;
     env.GIT_COMMITTER_EMAIL = env.GIT_COMMITTER_EMAIL ?? env.GIT_AUTHOR_EMAIL;
   }
