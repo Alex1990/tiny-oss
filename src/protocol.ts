@@ -29,8 +29,15 @@ export interface Protocol {
   copySourceRangeHeader: string
   /** listUploads marker query key: OSS 'marker', COS 'key-marker'. */
   listUploadsMarkerKey: string
-  /** Whether the provider has a symlink API (only OSS does). */
+  /** Whether the provider has a symlink API (OSS and TOS do). */
   supportsSymlink: boolean
+  /**
+   * Serialize a symlink target into request headers. OSS and TOS both put
+   * the target in an `x-...-symlink-target` header but encode it
+   * differently, so the provider supplies the header. When absent the OSS
+   * header (`x-oss-symlink-target`, encodeURI'd target) is used.
+   */
+  symlinkHeaders?: (targetObjectName: string) => Record<string, string>
   /**
    * Serialize a structured upload callback into provider request
    * headers (OSS: x-oss-callback / x-oss-callback-var; OBS:

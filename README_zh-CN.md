@@ -7,7 +7,7 @@
 [![bundle size](https://img.shields.io/bundlephobia/minzip/tiny-oss)](https://bundlephobia.com/package/tiny-oss)
 [![node](https://img.shields.io/node/v/tiny-oss)](https://www.npmjs.com/package/tiny-oss)
 
-专注于上传的极简对象存储 SDK：同一套核心 API 覆盖阿里云 OSS、腾讯云 COS、华为云 OBS、AWS S3（含 S3 兼容存储）与 Azure Blob Storage；支持浏览器、Node.js、Service Worker 与微信小程序；可通过自定义 provider 扩展。完整入口约 10kb (min+gzipped)——按需导入时 tree-shaking 会剔除未使用的操作，产物更小。
+专注于上传的极简对象存储 SDK：同一套核心 API 覆盖阿里云 OSS、腾讯云 COS、华为云 OBS、火山引擎 TOS、AWS S3（含 S3 兼容存储）与 Azure Blob Storage；支持浏览器、Node.js、Service Worker 与微信小程序；可通过自定义 provider 扩展。完整入口约 10kb (min+gzipped)——按需导入时 tree-shaking 会剔除未使用的操作，产物更小。
 
 **[English](README.md) | 简体中文**
 
@@ -26,6 +26,7 @@
   - [AWS S3](#aws-s3)
   - [腾讯云 COS](#腾讯云-cos)
   - [华为云 OBS](#华为云-obs)
+  - [火山引擎 TOS](#火山引擎-tos)
   - [Azure Blob Storage](#azure-blob-storage)
 - [扩展](#扩展)
   - [组装自定义 provider](#组装自定义-provider)
@@ -138,6 +139,7 @@ put(
 | 阿里云 OSS | ✅ 结构化 `callback`（在 complete 阶段触发） | `x-oss-callback` / `x-oss-callback-var` 请求头，base64 JSON，与 ali-oss 一致 |
 | 华为云 OBS | ✅ 结构化 `callback`（在 complete 阶段触发） | `x-obs-callback` 请求头，base64 JSON，与 esdk-obs-browserjs 一致；不支持 `customValue` |
 | 腾讯云 COS | 仅通过 `headers` | 官方 SDK 将回调头原样透传，请自行传 `headers`，如 `{ 'x-cos-callback': '…' }`；值格式由 COS 服务端 API 定义 |
+| 火山引擎 TOS | 仅通过 `headers` | 请自行传 `headers`，如 `{ 'x-tos-callback': '…' }`（以及 `x-tos-callback-var`）；值格式由 TOS 服务端 API 定义 |
 | AWS S3 / Azure Blob | ❌ | 无回调能力 |
 
 ```js
@@ -170,6 +172,7 @@ put(options, 'avatar.jpg', blob, {
 | `copySourceHeader` / `copySourceRangeHeader` | `uploadPartCopy` 用的拷贝源头名 |
 | `listUploadsMarkerKey` | 分页 marker 的 query 键（OSS 风格 `'marker'`、S3 风格 `'key-marker'`） |
 | `supportsSymlink` | 是否导出 `putSymlink`（无软链接接口时置 `false`） |
+| `symlinkHeaders` | 可选：把 `putSymlink` 的目标序列化为请求头（缺省为 OSS 的 `x-oss-symlink-target`，目标值经 encodeURI） |
 
 `request` 收到 `{ verb, objectName, contentMd5, headers, subResource, data, timeout, onprogress }`；`subResource` 是操作拼好的 query 参数表（如 `{ uploads: '' }`、`{ partNumber, uploadId }`）——哪些参数参与签名由 request 实现决定。
 
@@ -401,6 +404,49 @@ OBS 入口导出与 OSS 入口相同的全部函数，唯独没有 `putSymlink`�
 - OBS 签名器使用 OBS 的 "obs" 签名方案，与官方 `esdk-obs-browserjs` 逐字节一致。
 - OBS 端点仅支持 HTTPS，因此 SDK 默认将 `secure` 设为 `true`；除非连接自定义 HTTP 端点，否则请保持默认。
 
+### 火山引擎 TOS
+
+同一套操作通过独立入口支持火山引擎对象存储 TOS（`tiny-oss/tos`）。每个入口自包含：按需导入即可让 OSS 产物不携带 COS/OBS/TOS 签名代码（反之亦然）。
+
+```js
+import { put, multipartUpload, signatureUrl } from 'tiny-oss/tos';
+
+put(
+  {
+    accessKeyId: '你的 Access Key ID',
+    accessKeySecret: '你的 Secret Access Key',
+    // 推荐在浏览器端使用 stsToken 参数
+    stsToken: 'security token',
+    region: 'cn-beijing',
+    bucket: 'your-bucket'
+  },
+  'hello-world',
+  blob
+);
+```
+
+TOS 入口导出与 OSS 入口相同的全部函数，包含 `putSymlink`（TOS 有软链接接口）。options：
+
+| option | 类型 | 说明 |
+|---|---|---|
+| `accessKeyId` | `string` | 火山引擎 Access Key ID |
+| `accessKeySecret` | `string` | 火山引擎 Secret Access Key |
+| `stsToken` | `string` | 临时密钥 SecurityToken（`x-tos-security-token`） |
+| `region` | `string` | 如 `cn-beijing`、`ap-southeast-1`；始终必填——TOS4 的凭证作用域会带上它 |
+| `bucket` | `string` | 普通 bucket 名 |
+| `endpoint` | `string` | bucket 前缀所在的**端点域名**（`<bucket>.<endpoint>`），如 `tos-cn-beijing.volces.com`；与其他入口不同，它不是完整 host，因为 TOS 仅支持虚拟主机（virtual-hosted）寻址 |
+| `internal` | `boolean` | 使用火山引擎内网域名（`tos-<region>.ivolces.com`），默认 `false` |
+| `secure` | `boolean` | 使用 HTTPS（`true`）还是 HTTP（`false`），默认 `true` |
+| `timeout` | `string \| number` | 所有操作的实例级超时，默认 60s |
+
+注意事项：
+
+- 签名器实现 `TOS4-HMAC-SHA256`（service `tos`，签 `host` 与 `x-tos-*` 头，body 为 `UNSIGNED-PAYLOAD`），与官方 `@volcengine/tos-sdk` 逐字节一致；`test/tos-oracle.node.ts`（`pnpm test:tos-oracle`）持续钉死。
+- TOS 原生端点仅支持虚拟主机寻址、拒绝路径样式，因此没有 `pathStyle` 选项。TOS 的 S3 兼容端点（`tos-s3-<region>.volces.com`）需要 AWS Signature V4 加虚拟主机寻址，本包未实现——请使用上面的原生端点。
+- `signatureUrl` 返回 `TOS4-HMAC-SHA256` query 签名 URL（`X-Tos-*` 参数，有效期用 `X-Tos-Expires`）。凭证作用域使用 `region`；官方 JS SDK 的 `getPreSignedUrl` 在此填的是 endpoint，与官方 Go SDK 不一致。
+- 回调：像 COS 一样通过 `headers` 传 `x-tos-callback` / `x-tos-callback-var`；结构化 `callback` 选项仅 OSS/OBS 支持。
+- 浏览器上传 TOS 需要在存储桶配置跨域规则（允许你的站点并暴露 `ETag` 响应头以支持分片上传），推荐使用临时密钥（STS）而非永久密钥。
+
 ### Azure Blob Storage
 
 Azure Blob Storage 不使用 SigV4，也不使用以上任何签名方案：它使用自成一派的 **SharedKey** 授权，分片模型也不同（Block Blob）。专用入口（`tiny-oss/azure`）实现了这两点，API 保持一致：
@@ -443,7 +489,7 @@ Azure 入口导出 `put`、`signatureUrl`、`initMultipartUpload`、`uploadPart`
 
 ## 扩展
 
-每个操作都是基于 `Protocol` 的工厂——这就是扩展点。接入一个新存储只需要实现两个函数（`request`、`signUrl`）并填写五个常量，所有操作（上传、分片、列举、拷贝……）即全部可用。内置实现是最佳参考配方：`src/cos/`、`src/obs/`、`src/aws/`（S3 形态，各自带签名器）与 `src/azure/`（非 S3 形态——接口见[协议](#协议)章节）。
+每个操作都是基于 `Protocol` 的工厂——这就是扩展点。接入一个新存储只需要实现两个函数（`request`、`signUrl`）并填写五个常量，所有操作（上传、分片、列举、拷贝……）即全部可用。内置实现是最佳参考配方：`src/cos/`、`src/obs/`、`src/tos/`、`src/aws/`（S3 形态，各自带签名器）与 `src/azure/`（非 S3 形态——接口见[协议](#协议)章节）。
 
 ### 组装自定义 provider
 
@@ -488,7 +534,7 @@ export { put, multipartUpload, signatureUrl: myProtocol.signUrl };
 
 ### 向仓库贡献 provider
 
-参照 `src/aws/` 布局：`src/<provider>/{signature,host,request,signatureUrl,index}.ts`，然后在 `tsup.config.ts` 加一个入口（一次构建同时产出 `.es.js` 产物与配套的 `.es.d.ts`），并补 `package.json` 的 `exports` 条目。签名必须与官方 SDK 对齐——`test/cos-signature.spec.ts`、`test/obs-signature.spec.ts`、`test/aws-signature.spec.ts` 用各自官方 SDK 作 oracle 钉死签名器。
+参照 `src/aws/` 布局：`src/<provider>/{signature,host,request,signatureUrl,index}.ts`，然后在 `tsup.config.ts` 加一个入口（一次构建同时产出 `.es.js` 产物与配套的 `.es.d.ts`），并补 `package.json` 的 `exports` 条目。签名必须与官方 SDK 对齐——`test/cos-signature.spec.ts`、`test/obs-signature.spec.ts`、`test/aws-signature.spec.ts` 用各自官方 SDK 作 oracle 钉死签名器（TOS 同理：`pnpm test:tos-oracle` 用 `@volcengine/tos-sdk` 作 oracle）。
 
 如果目标存储的分片接口不是 S3 形态（如 Azure 的 Block Blob），不要强行套 `createInitMultipartUpload`/`createUploadPart`/`createCompleteMultipartUpload`：写同签名的 provider 专用原语，经 `createMultipartUpload` 注入（见 `src/azure/multipart.ts`）。没有对应 API 的操作（如 Azure 的 `listUploads`）直接从入口省略。
 

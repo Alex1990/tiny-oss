@@ -19,6 +19,7 @@ export default defineConfig({
     'tiny-oss.es': 'src/index.ts',
     'tiny-oss.cos.es': 'src/cos/index.ts',
     'tiny-oss.obs.es': 'src/obs/index.ts',
+    'tiny-oss.tos.es': 'src/tos/index.ts',
     'tiny-oss.aws.es': 'src/aws/index.ts',
     'tiny-oss.azure.es': 'src/azure/index.ts',
     'tiny-oss.protocol.es': 'src/provider.ts',

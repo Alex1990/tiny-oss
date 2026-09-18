@@ -69,7 +69,7 @@ export function resolveCallbackHeaders(
   if (!callback) return undefined
   if (!protocol.callbackHeaders) {
     throw new Error(
-      'upload callback is not supported by this provider (Aliyun OSS and Huawei OBS support it; COS: pass x-cos-callback headers manually)',
+      'upload callback is not supported by this provider (Aliyun OSS and Huawei OBS support the structured callback option; for COS/TOS pass the callback header through headers)',
     )
   }
   const headers = protocol.callbackHeaders(callback)
