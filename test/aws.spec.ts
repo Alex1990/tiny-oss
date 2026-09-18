@@ -185,7 +185,6 @@ describe('AWS entry point', () => {
   it('multipartUpload meta uses the x-amz-meta- prefix', async () => {
     const calls: any[] = []
     setTransport(async (url: string, opts: any) => {
-      const headers: Record<string, string> = {}
       if (url.indexOf('?uploads') > -1) {
         calls.push({ url, opts })
         return {

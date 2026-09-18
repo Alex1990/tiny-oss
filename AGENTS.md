@@ -16,7 +16,7 @@ tiny-oss is a tiny object storage SDK focused on uploading, with a functional AP
 
 ## Quick notes
 
-- Commands live in `package.json`; formatting/lint are handled by `.editorconfig` and `oxlint.json`.
+- Commands live in `package.json`; formatting/lint are handled by `.editorconfig` and `.oxlintrc.json`.
 - Integration specs (`test/*-integration.spec.ts`) need `npm run serve` first (Hono server on :8080, credentials from `.env`); signature/unit specs don't.
 - Input data is `Blob | ArrayBuffer | Uint8Array | string`; mini programs pass `ArrayBuffer`.
 

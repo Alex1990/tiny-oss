@@ -122,8 +122,6 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
 
     // Calculate parts to upload
     for (let i = 1; i <= numParts; i++) {
-      const start = (i - 1) * actualPartSize
-      const end = Math.min(i * actualPartSize, fileSize)
       const isDone = doneParts.some((p) => p.number === i)
       if (!isDone) {
         currentCheckpoint.parts.push({ number: i, etag: '' })
@@ -160,7 +158,7 @@ export function createMultipartUpload(protocol: Protocol, deps: MultipartUploadD
       let result: UploadPartResult
       try {
         result = await uploadOnce()
-      } catch (err) {
+      } catch {
         // Retry once on error
         result = await uploadOnce()
       }

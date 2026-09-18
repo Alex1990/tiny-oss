@@ -1,0 +1,21 @@
+{
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2021": true
+  },
+  "ignorePatterns": ["vendor", "dist", "node_modules"],
+  "rules": {
+    "no-cond-assign": "off",
+    "no-plusplus": "off",
+    "no-bitwise": "off"
+  },
+  "overrides": [
+    {
+      "files": ["test/test-types*.ts"],
+      "rules": {
+        "no-unused-vars": "off"
+      }
+    }
+  ]
+}
