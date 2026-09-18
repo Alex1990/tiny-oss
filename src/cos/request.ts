@@ -1,5 +1,4 @@
 import { getTransport } from '../transport'
-import { encodeUtf8 } from '../utils'
 import { normalizeOptions, resolveTimeout, dataSize } from '../ops/request'
 import { getCosAuth } from './signature'
 import { resolveCosHost } from './host'
