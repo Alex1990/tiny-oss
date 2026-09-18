@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/tiny-oss)](https://www.npmjs.com/package/tiny-oss)
 [![license](https://img.shields.io/npm/l/tiny-oss)](https://github.com/Alex1990/tiny-oss/blob/main/LICENSE)
 [![CI](https://github.com/Alex1990/tiny-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex1990/tiny-oss/actions/workflows/ci.yml)
-[![bundle size](https://img.shields.io/bundlephobia/minzip/tiny-oss)](https://bundlephobia.com/package/tiny-oss)
+[![bundle size](https://img.shields.io/bundlejs/size/tiny-oss)](https://bundlejs.com/?q=tiny-oss)
 [![node](https://img.shields.io/node/v/tiny-oss)](https://www.npmjs.com/package/tiny-oss)
 
 **English | [简体中文](README_zh-CN.md)**
