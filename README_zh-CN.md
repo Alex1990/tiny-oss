@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/tiny-oss)](https://www.npmjs.com/package/tiny-oss)
 [![license](https://img.shields.io/npm/l/tiny-oss)](https://github.com/Alex1990/tiny-oss/blob/main/LICENSE)
 [![CI](https://github.com/Alex1990/tiny-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/Alex1990/tiny-oss/actions/workflows/ci.yml)
-[![bundle size](https://img.shields.io/bundlephobia/minzip/tiny-oss)](https://bundlephobia.com/package/tiny-oss)
+[![bundle size](https://img.shields.io/bundlejs/size/tiny-oss)](https://bundlejs.com/?q=tiny-oss)
 [![node](https://img.shields.io/node/v/tiny-oss)](https://www.npmjs.com/package/tiny-oss)
 
 专注于上传的极简对象存储 SDK：同一套核心 API 覆盖阿里云 OSS、腾讯云 COS、华为云 OBS、火山引擎 TOS、AWS S3（含 S3 兼容存储）与 Azure Blob Storage；支持浏览器、Node.js、Service Worker 与微信小程序；可通过自定义 provider 扩展。完整入口约 10kb (min+gzipped)——按需导入时 tree-shaking 会剔除未使用的操作，产物更小。
