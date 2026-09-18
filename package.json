@@ -18,6 +18,10 @@
       "types": "./dist/tiny-oss.obs.es.d.ts",
       "import": "./dist/tiny-oss.obs.es.js"
     },
+    "./tos": {
+      "types": "./dist/tiny-oss.tos.es.d.ts",
+      "import": "./dist/tiny-oss.tos.es.js"
+    },
     "./aws": {
       "types": "./dist/tiny-oss.aws.es.d.ts",
       "import": "./dist/tiny-oss.aws.es.js"
@@ -43,14 +47,15 @@
     "lint": "oxlint src test",
     "fmt": "oxfmt src test",
     "fmt:check": "oxfmt --check src test",
-    "build": "tsup && npm run build:types:default && npm run build:types:cos && npm run build:types:obs && npm run build:types:aws && npm run build:types:azure && npm run build:types:protocol",
+    "build": "tsup && npm run build:types:default && npm run build:types:cos && npm run build:types:obs && npm run build:types:tos && npm run build:types:aws && npm run build:types:azure && npm run build:types:protocol",
     "build:types:default": "dts-bundle-generator src/index.ts -o dist/tiny-oss.es.d.ts --project tsconfig.json --sort",
     "build:types:cos": "dts-bundle-generator src/cos/index.ts -o dist/tiny-oss.cos.es.d.ts --project tsconfig.json --sort",
     "build:types:obs": "dts-bundle-generator src/obs/index.ts -o dist/tiny-oss.obs.es.d.ts --project tsconfig.json --sort",
+    "build:types:tos": "dts-bundle-generator src/tos/index.ts -o dist/tiny-oss.tos.es.d.ts --project tsconfig.json --sort",
     "build:types:aws": "dts-bundle-generator src/aws/index.ts -o dist/tiny-oss.aws.es.d.ts --project tsconfig.json --sort",
     "build:types:azure": "dts-bundle-generator src/azure/index.ts -o dist/tiny-oss.azure.es.d.ts --project tsconfig.json --sort",
     "build:types:protocol": "dts-bundle-generator src/provider.ts -o dist/tiny-oss.protocol.es.d.ts --project tsconfig.json --sort",
-    "check:types": "tsc --noEmit --skipLibCheck test/test-types.ts && tsc --noEmit --skipLibCheck test/test-types-cos.ts && tsc --noEmit --skipLibCheck test/test-types-obs.ts && tsc --noEmit --skipLibCheck test/test-types-aws.ts && tsc --noEmit --skipLibCheck test/test-types-azure.ts && tsc --noEmit --skipLibCheck test/test-types-protocol.ts",
+    "check:types": "tsc --noEmit --skipLibCheck test/test-types.ts && tsc --noEmit --skipLibCheck test/test-types-cos.ts && tsc --noEmit --skipLibCheck test/test-types-obs.ts && tsc --noEmit --skipLibCheck test/test-types-tos.ts && tsc --noEmit --skipLibCheck test/test-types-aws.ts && tsc --noEmit --skipLibCheck test/test-types-azure.ts && tsc --noEmit --skipLibCheck test/test-types-protocol.ts",
     "changelog": "changelogen",
     "release": "bumpp",
     "dev": "vite",
@@ -58,9 +63,10 @@
     "serve": "tsx test/server.ts",
     "test": "vitest",
     "test:azure-oracle": "tsx test/azure-oracle.node.ts",
+    "test:tos-oracle": "tsx test/tos-oracle.node.ts",
     "test:coverage": "vitest --coverage",
-    "test:ci": "pnpm test:azure-oracle && vitest run --browser.headless",
-    "test:ci:coverage": "pnpm test:azure-oracle && vitest run --browser.headless --coverage",
+    "test:ci": "pnpm test:azure-oracle && pnpm test:tos-oracle && vitest run --browser.headless",
+    "test:ci:coverage": "pnpm test:azure-oracle && pnpm test:tos-oracle && vitest run --browser.headless --coverage",
     "prepare": "husky"
   },
   "repository": {
@@ -78,6 +84,8 @@
     "oss",
     "cos",
     "obs",
+    "tos",
+    "volcengine",
     "s3",
     "aws",
     "azure",
@@ -99,6 +107,7 @@
     "@types/node": "^25.0.9",
     "@vitest/browser-playwright": "^4.1.11",
     "@vitest/coverage-v8": "4.1.11",
+    "@volcengine/tos-sdk": "2.9.1",
     "ali-oss": "^6.23.0",
     "aws-sdk": "2.1693.0",
     "bumpp": "^12.2.2",

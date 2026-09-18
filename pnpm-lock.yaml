@@ -47,6 +47,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(@vitest/browser@4.1.11)(vitest@4.1.11)
+      '@volcengine/tos-sdk':
+        specifier: 2.9.1
+        version: 2.9.1(supports-color@7.2.0)
       ali-oss:
         specifier: ^6.23.0
         version: 6.23.0(supports-color@7.2.0)
@@ -752,6 +755,9 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
+  '@types/http-proxy@1.17.17':
+    resolution: {integrity: sha512-ED6LB+Z1AVylNTu7hdzuBqOgMnvG/ld6wGCG8wFnAzKX5uyW2K3WD52v0gnLCTK/VLpXtKckgWuyScYK6cSPaw==}
+
   '@types/node@25.0.9':
     resolution: {integrity: sha512-/rpCXHlCWeqClNBwUhDcusJxXYDjZTyE8v5oTO7WbL8eij2nKhUeU89/6xgjU7N4/Vh3He0BtyhJdQbDyhiXAw==}
 
@@ -807,6 +813,10 @@ packages:
 
   '@vitest/utils@4.1.11':
     resolution: {integrity: sha512-zTCVGpyFsGWBhllOyKlTw/vnr6D9qxsfSDyfbyZmTyjHw5N/VuvzHpHoQjm2ZJzn4RJgx5w4r7V0er69CmLgPQ==}
+
+  '@volcengine/tos-sdk@2.9.1':
+    resolution: {integrity: sha512-hmrBzl7/LpJYezGWytPg6CZk5lvFgmDKUVZJLM3vwZgp3UKSZwgxFA7V0QmLnerPDRpLPAqh0bP8qUBSVHfmhA==}
+    engines: {node: '>=10'}
 
   acorn@8.18.0:
     resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
@@ -876,6 +886,9 @@ packages:
     resolution: {integrity: sha512-cJmb8xEnVLT+R6fBS5sn/EFJiX7tUnDaPtOPZ1vFbOJtd0fnZn/Ky2XGgsvvoeliWeH7mL3TWSX5zXXGSQV6gQ==}
     engines: {node: '>= 10.0.0'}
     deprecated: The AWS SDK for JavaScript (v2) has reached end-of-support, and no longer receives updates. Please migrate your code to use AWS SDK for JavaScript (v3). More info https://a.co/cUPnyil
+
+  axios-adapter-uniapp@0.1.4:
+    resolution: {integrity: sha512-4je5JcWGrrTjPEJXVXJZnOkv+BsnYn/fKbQmjxzdCGFyoQw1gq3tfQ4/WhLzy+Gi9cQJl3K8EH26G7U0BK3wcw==}
 
   axios@0.33.0:
     resolution: {integrity: sha512-juz19g7B3UWT9r3+tgRFQf2Bdy6IKDVroiyuVOUrkILVKHpqHL++K1l8ybvfdEP9B/VE72vk8vllbnedVCm/og==}
@@ -1180,6 +1193,9 @@ packages:
   estree-walker@3.0.3:
     resolution: {integrity: sha512-7RUKfXgSMMkzt6ZuXmqapOurLGPPfgj6l9uRZ7lRGolvk0y2yocc35LdcxKC5PQZdn2DMqioAQ2NoWcrTKmm6g==}
 
+  eventemitter3@4.0.7:
+    resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
+
   eventemitter3@5.0.4:
     resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
 
@@ -1315,10 +1331,6 @@ packages:
     resolution: {integrity: sha512-NqADB8VjPFLM2V0VvHUewwwsw0ZWBaIdgo+ieHtK3hasLz4qeCRjYcqfB6AQrBggRKppKF8L52/VqdVsO47Dlw==}
     engines: {node: '>= 0.4'}
 
-  hasown@2.0.2:
-    resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
-    engines: {node: '>= 0.4'}
-
   hasown@2.0.4:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
@@ -1337,6 +1349,19 @@ packages:
   http-proxy-agent@7.0.2:
     resolution: {integrity: sha512-T1gkAiYYDWYx3V5Bmyu7HcfcvL7mUrTWiM6yOfa3PIphViJ/gFPbvidQ+veqSOHci/PxBcDabeUNCzpOODJZig==}
     engines: {node: '>= 14'}
+
+  http-proxy-middleware@2.0.10:
+    resolution: {integrity: sha512-RKzRWNPxUZqbuk3BC5mGVJbBnWgr+diEnjJexIOytFbBzDy88Fbh/YvBr3DsNrl1jYAfjWfpATEv0NO35FDuPQ==}
+    engines: {node: '>=12.0.0'}
+    peerDependencies:
+      '@types/express': ^4.17.13
+    peerDependenciesMeta:
+      '@types/express':
+        optional: true
+
+  http-proxy@1.18.1:
+    resolution: {integrity: sha512-7mz/721AbnJwIVbnaSv1Cz3Am0ZLT/UBwkC92VlxhXv/k/BBQfM2fXElQNC27BVGr0uwUpplYPQM9LnaBMR5NQ==}
+    engines: {node: '>=8.0.0'}
 
   https-proxy-agent@7.0.6:
     resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
@@ -1380,6 +1405,10 @@ packages:
     resolution: {integrity: sha512-5BMULNob1vgFX6EjQw5izWDxrecWK9AM72rugNr0TFldMOi0fj6Jk+zeKIt0xGj4cEfQIJth4w3OKWOJ4f+AFw==}
     engines: {node: '>=0.10.0'}
 
+  is-extglob@2.1.1:
+    resolution: {integrity: sha512-SbKbANkN603Vi4jEZv49LeVJMn4yGwsbzZworEoyEiutsN3nJYdbO36zfhGJ6QEDpOZIFkDtnq5JRxmvl3jsoQ==}
+    engines: {node: '>=0.10.0'}
+
   is-fullwidth-code-point@3.0.0:
     resolution: {integrity: sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg==}
     engines: {node: '>=8'}
@@ -1392,6 +1421,10 @@ packages:
     resolution: {integrity: sha512-upqt1SkGkODW9tsGNG5mtXTXtECizwtS2kA161M+gJPc1xdb/Ax629af6YrTwcOeQHbewrPNlE5Dx7kzvXTizA==}
     engines: {node: '>= 0.4'}
 
+  is-glob@4.0.3:
+    resolution: {integrity: sha512-xelSayHH36ZgE7ZWhli7pW34hNbNl8Ojv5KVmkJD4hBdD3th8Tfk9vYasLM+mXWOZhFkgZfxhLSnrwRr4elSSg==}
+    engines: {node: '>=0.10.0'}
+
   is-inside-container@1.0.0:
     resolution: {integrity: sha512-KIYLCCJghfHZxqjYBE7rEy0OBuTd5xCHS7tHVgvCLkx7StIoaxwNW3hCALgEUjFfeRk+MG/Qxmp/vtETEF3tRA==}
     engines: {node: '>=14.16'}
@@ -1400,6 +1433,10 @@ packages:
   is-number@7.0.0:
     resolution: {integrity: sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng==}
     engines: {node: '>=0.12.0'}
+
+  is-plain-obj@3.0.0:
+    resolution: {integrity: sha512-gwsOE28k+23GP1B6vFl1oVh/WOzmawBrKwo5Ev6wMKzPkaXaCDIQKzLnvsA42DRlbVTWorkgTKIviAKCWkfUwA==}
+    engines: {node: '>=10'}
 
   is-potential-custom-element-name@1.0.1:
     resolution: {integrity: sha512-bCYeRA2rVibKZd+s2625gGnGF/t7DSqDs4dP7CrLA1m7jKWz6pps0LpYLJN8Q64HtmPKJ1hrN3nzPNKFEKOUiQ==}
@@ -1805,6 +1842,9 @@ packages:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
 
+  requires-port@1.0.0:
+    resolution: {integrity: sha512-KigOCHcocU3XODJxsu8i/j8T9tzT4adHiecwORRQ0ZZFcp7ahwXuRU1m+yuO90C5ZUyGeGfocHDI14M3L3yDAQ==}
+
   resolve-from@5.0.0:
     resolution: {integrity: sha512-qYg9KP24dD5qka9J47d0aVky0N+b4fTU89LN9iDnjB5waksiC49rvMB0PrUJQGoTmH50XPiqOvAjDfaijGxYZw==}
     engines: {node: '>=8'}
@@ -2031,6 +2071,9 @@ packages:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
     engines: {node: '>=8.0'}
 
+  tos-crc64-js@0.0.1:
+    resolution: {integrity: sha512-l2Ndi9BaDH3gmAJ5VIS/1WeqFcucK41WCbw5dije24k2XtUCclYfvhntWIVHe+0S85QcED4vjqm3AO1izlQ30g==}
+
   totalist@3.0.1:
     resolution: {integrity: sha512-sf4i37nQ2LBx4m3wB74y+ubopq6W/dIzXg0FDGjsYnZHVa1Da8FH853wlL2gtUhg+xJXjfk3kUZS3BRoQeoQBQ==}
     engines: {node: '>=6'}
@@ -2076,6 +2119,10 @@ packages:
     resolution: {integrity: sha512-5C1sg4USs1lfG0GFb2RLXsdpXqBSEhAaA/0kPL01wxzpMqLILNxIxIOKiILz+cdg/pLnOUxFYOR5yhHU666wbw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
+
+  type-fest@1.4.0:
+    resolution: {integrity: sha512-yGSza74xk0UG8k+pLh5oeoYirvIiWo5t0/o3zHHAO2tRDiZcxWP7fywNlXhqb6/r6sWvwi+RsyQMWhVLe4BVuA==}
+    engines: {node: '>=10'}
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -2775,6 +2822,10 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
+  '@types/http-proxy@1.17.17':
+    dependencies:
+      '@types/node': 25.0.9
+
   '@types/node@25.0.9':
     dependencies:
       undici-types: 7.16.0
@@ -2874,6 +2925,21 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.1
 
+  '@volcengine/tos-sdk@2.9.1(supports-color@7.2.0)':
+    dependencies:
+      axios: 0.33.0(debug@4.4.3(supports-color@7.2.0))
+      axios-adapter-uniapp: 0.1.4(debug@4.4.3(supports-color@7.2.0))
+      crypto-js: 4.2.0
+      debug: 4.4.3(supports-color@7.2.0)
+      http-proxy-middleware: 2.0.10(debug@4.4.3(supports-color@7.2.0))
+      lodash: 4.18.1
+      qs: 6.16.0
+      tos-crc64-js: 0.0.1
+      type-fest: 1.4.0
+    transitivePeerDependencies:
+      - '@types/express'
+      - supports-color
+
   acorn@8.18.0: {}
 
   address@1.2.2: {}
@@ -2961,6 +3027,12 @@ snapshots:
       util: 0.12.5
       uuid: 11.1.1
       xml2js: 0.6.2
+
+  axios-adapter-uniapp@0.1.4(debug@4.4.3(supports-color@7.2.0)):
+    dependencies:
+      axios: 0.33.0(debug@4.4.3(supports-color@7.2.0))
+    transitivePeerDependencies:
+      - debug
 
   axios@0.33.0(debug@4.4.3(supports-color@7.2.0)):
     dependencies:
@@ -3296,6 +3368,8 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
+  eventemitter3@4.0.7: {}
+
   eventemitter3@5.0.4: {}
 
   events@1.1.1: {}
@@ -3389,7 +3463,7 @@ snapshots:
       get-proto: 1.0.1
       gopd: 1.2.0
       has-symbols: 1.1.0
-      hasown: 2.0.2
+      hasown: 2.0.4
       math-intrinsics: 1.1.0
 
   get-proto@1.0.1:
@@ -3425,10 +3499,6 @@ snapshots:
     dependencies:
       has-symbols: 1.1.0
 
-  hasown@2.0.2:
-    dependencies:
-      function-bind: 1.1.2
-
   hasown@2.0.4:
     dependencies:
       function-bind: 1.1.2
@@ -3450,6 +3520,24 @@ snapshots:
       debug: 4.4.3(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
+
+  http-proxy-middleware@2.0.10(debug@4.4.3(supports-color@7.2.0)):
+    dependencies:
+      '@types/http-proxy': 1.17.17
+      http-proxy: 1.18.1(debug@4.4.3(supports-color@7.2.0))
+      is-glob: 4.0.3
+      is-plain-obj: 3.0.0
+      micromatch: 4.0.8
+    transitivePeerDependencies:
+      - debug
+
+  http-proxy@1.18.1(debug@4.4.3(supports-color@7.2.0)):
+    dependencies:
+      eventemitter3: 4.0.7
+      follow-redirects: 1.16.0(debug@4.4.3(supports-color@7.2.0))
+      requires-port: 1.0.0
+    transitivePeerDependencies:
+      - debug
 
   https-proxy-agent@7.0.6(supports-color@7.2.0):
     dependencies:
@@ -3485,6 +3573,8 @@ snapshots:
 
   is-extendable@0.1.1: {}
 
+  is-extglob@2.1.1: {}
+
   is-fullwidth-code-point@3.0.0: {}
 
   is-fullwidth-code-point@5.1.0:
@@ -3499,11 +3589,17 @@ snapshots:
       has-tostringtag: 1.0.2
       safe-regex-test: 1.1.0
 
+  is-glob@4.0.3:
+    dependencies:
+      is-extglob: 2.1.1
+
   is-inside-container@1.0.0:
     dependencies:
       is-docker: 3.0.0
 
   is-number@7.0.0: {}
+
+  is-plain-obj@3.0.0: {}
 
   is-potential-custom-element-name@1.0.1:
     optional: true
@@ -3513,7 +3609,7 @@ snapshots:
       call-bound: 1.0.4
       gopd: 1.2.0
       has-tostringtag: 1.0.2
-      hasown: 2.0.2
+      hasown: 2.0.4
 
   is-type-of@1.4.0:
     dependencies:
@@ -3902,6 +3998,8 @@ snapshots:
   require-from-string@2.0.2:
     optional: true
 
+  requires-port@1.0.0: {}
+
   resolve-from@5.0.0: {}
 
   resolve-pkg-maps@1.0.0: {}
@@ -4155,6 +4253,8 @@ snapshots:
     dependencies:
       is-number: 7.0.0
 
+  tos-crc64-js@0.0.1: {}
+
   totalist@3.0.1: {}
 
   tough-cookie@6.0.0:
@@ -4207,6 +4307,8 @@ snapshots:
       get-tsconfig: 4.13.0
     optionalDependencies:
       fsevents: 2.3.3
+
+  type-fest@1.4.0: {}
 
   typescript@5.9.3: {}
 

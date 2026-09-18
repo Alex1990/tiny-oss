@@ -9,7 +9,7 @@
 
 **English | [简体中文](README_zh-CN.md)**
 
-A tiny object storage SDK focused on uploading: Aliyun OSS, Tencent Cloud COS, Huawei Cloud OBS, AWS S3 (plus S3-compatible stores) and Azure Blob Storage under one core API; runs in browsers, Node.js, Service Workers and WeChat mini programs; extensible with custom providers. About 10kb (min+gzipped) for the full entry — tree-shaking drops the operations you don't import, so a bundle that only calls `put` is smaller.
+A tiny object storage SDK focused on uploading: Aliyun OSS, Tencent Cloud COS, Huawei Cloud OBS, Volcano Engine TOS, AWS S3 (plus S3-compatible stores) and Azure Blob Storage under one core API; runs in browsers, Node.js, Service Workers and WeChat mini programs; extensible with custom providers. About 10kb (min+gzipped) for the full entry — tree-shaking drops the operations you don't import, so a bundle that only calls `put` is smaller.
 
 **Upgrading from 0.x? See the [upgrade guide](UPGRADING.md).**
 
@@ -28,6 +28,7 @@ A tiny object storage SDK focused on uploading: Aliyun OSS, Tencent Cloud COS, H
   - [AWS S3](#aws-s3)
   - [Tencent Cloud COS](#tencent-cloud-cos)
   - [Huawei Cloud OBS](#huawei-cloud-obs)
+  - [Volcano Engine TOS](#volcano-engine-tos)
   - [Azure Blob Storage](#azure-blob-storage)
 - [Extension](#extension)
   - [Composing a custom provider](#composing-a-custom-provider)
@@ -141,6 +142,7 @@ Some providers can call back your server after an object is stored, then relay t
 | Aliyun OSS | ✅ `callback` (fired on complete) | `x-oss-callback` / `x-oss-callback-var` headers, base64 JSON — ali-oss compatible |
 | Huawei OBS | ✅ `callback` (fired on complete) | `x-obs-callback` header, base64 JSON — esdk-obs-browserjs compatible; `customValue` is not supported |
 | Tencent COS | via `headers` only | official SDK passes the callback header value through verbatim, so pass `headers` such as `{ 'x-cos-callback': '…' }` yourself; the value format is defined by the COS server API |
+| Volcano Engine TOS | via `headers` only | pass `headers` such as `{ 'x-tos-callback': '…' }` (and `x-tos-callback-var`); the value format is defined by the TOS server API |
 | AWS S3 / Azure Blob | ❌ | no callback API |
 
 ```js
@@ -173,6 +175,7 @@ The `Protocol` interface (`tiny-oss/protocol`):
 | `copySourceHeader` / `copySourceRangeHeader` | Header names for `uploadPartCopy` |
 | `listUploadsMarkerKey` | Query key for the list-uploads marker (`'marker'` OSS-style, `'key-marker'` S3-style) |
 | `supportsSymlink` | Whether `putSymlink` is exported (`false` when the provider has no symlink API) |
+| `symlinkHeaders` | Optional: serialize the `putSymlink` target into headers (defaults to OSS's `x-oss-symlink-target` with an encodeURI'd target) |
 
 `request` receives `{ verb, objectName, contentMd5, headers, subResource, data, timeout, onprogress }`; `subResource` is the query-parameter map the operations build (`{ uploads: '' }`, `{ partNumber, uploadId }`, …) — the request implementation decides which of them participate in the signature.
 
@@ -413,6 +416,49 @@ Notes:
 - The OBS signer uses the OBS "obs" signature scheme, matching the official `esdk-obs-browserjs` byte for byte.
 - OBS endpoints only serve HTTPS, so the SDK defaults `secure` to `true`; keep the default unless you connect to a custom HTTP endpoint.
 
+### Volcano Engine TOS
+
+The same operations are also available for Volcano Engine Torch Object Storage (TOS) through a dedicated entry point (`tiny-oss/tos`). Each entry is self-contained: importing only what you use keeps the OSS bundle free of COS/OBS/TOS signing code and vice versa.
+
+```js
+import { put, multipartUpload, signatureUrl } from 'tiny-oss/tos';
+
+put(
+  {
+    accessKeyId: 'your Access Key ID',
+    accessKeySecret: 'your Secret Access Key',
+    // Recommend to use the stsToken option in browser
+    stsToken: 'security token',
+    region: 'cn-beijing',
+    bucket: 'your-bucket'
+  },
+  'hello-world',
+  blob
+);
+```
+
+The TOS entry exports everything the OSS entry does, including `putSymlink` (TOS has a symlink API). Options:
+
+| option | type | description |
+|---|---|---|
+| `accessKeyId` | `string` | Volcano Engine Access Key ID |
+| `accessKeySecret` | `string` | Volcano Engine Secret Access Key |
+| `stsToken` | `string` | temporary-credential SecurityToken (`x-tos-security-token`) |
+| `region` | `string` | e.g. `cn-beijing`, `ap-southeast-1`; always required — the TOS4 credential scope embeds it |
+| `bucket` | `string` | plain bucket name |
+| `endpoint` | `string` | endpoint **domain** the bucket is prefixed to (`<bucket>.<endpoint>`), e.g. `tos-cn-beijing.volces.com`; unlike the other entries it is not the full host, because TOS only supports virtual-hosted addressing |
+| `internal` | `boolean` | use the Volcengine internal network domain (`tos-<region>.ivolces.com`), default `false` |
+| `secure` | `boolean` | use HTTPS (`true`) or HTTP (`false`), default `true` |
+| `timeout` | `string \| number` | instance-level timeout for all operations, default 60s |
+
+Notes:
+
+- The signer implements `TOS4-HMAC-SHA256` (service `tos`, `host` + `x-tos-*` signed headers, `UNSIGNED-PAYLOAD` body), byte-identical to `@volcengine/tos-sdk`; `test/tos-oracle.node.ts` pins it.
+- TOS native endpoints are virtual-hosted only and reject path-style addressing, so there is no `pathStyle` option. TOS's S3-compatible endpoints (`tos-s3-<region>.volces.com`) need AWS Signature V4 with virtual-hosted addressing, which this package does not implement — use the native endpoints above.
+- `signatureUrl` returns a `TOS4-HMAC-SHA256` query-signed URL (`X-Tos-*` parameters, TTL `X-Tos-Expires`). The credential scope uses `region`; the official JS SDK's `getPreSignedUrl` substitutes the endpoint there, which disagrees with the official Go SDK.
+- Callbacks: pass `x-tos-callback` / `x-tos-callback-var` through `headers` (like COS); the structured `callback` option is OSS/OBS-only.
+- Browser uploads to TOS require the bucket's CORS rule to allow your origin and expose the `ETag` response header for multipart uploads; temporary credentials (STS) are recommended over permanent keys.
+
 ### Azure Blob Storage
 
 Azure Blob Storage speaks neither SigV4 nor any of the other schemes above: it uses its own **SharedKey** authorization and a different multipart model (block blobs). A dedicated entry point (`tiny-oss/azure`) implements both, so the API stays the same:
@@ -455,7 +501,7 @@ Notes:
 
 ## Extension
 
-Every operation is a factory over a `Protocol` — the extension point. A provider only has to implement two functions (`request`, `signUrl`) and fill in five constants; all operations (`put`, multipart, list, copy, …) then work unchanged. The built-in providers are the reference recipes: `src/cos/`, `src/obs/`, `src/aws/` (S3-shaped, each with its own signer) and `src/azure/` (non-S3-shaped — see the [Protocol](#protocol) section for the interface).
+Every operation is a factory over a `Protocol` — the extension point. A provider only has to implement two functions (`request`, `signUrl`) and fill in five constants; all operations (`put`, multipart, list, copy, …) then work unchanged. The built-in providers are the reference recipes: `src/cos/`, `src/obs/`, `src/tos/`, `src/aws/` (S3-shaped, each with its own signer) and `src/azure/` (non-S3-shaped — see the [Protocol](#protocol) section for the interface).
 
 ### Composing a custom provider
 
@@ -500,7 +546,7 @@ export { put, multipartUpload, signatureUrl: myProtocol.signUrl };
 
 ### Contributing a provider to the repo
 
-Follow the `src/aws/` layout: `src/<provider>/{signature,host,request,signatureUrl,index}.ts`, then add an entry to `tsup.config.ts` (the one build emits both the `.es.js` bundle and the matching `.es.d.ts`) and a `package.json` `exports` entry. Signing must match the official SDK — the tests in `test/cos-signature.spec.ts`, `test/obs-signature.spec.ts` and `test/aws-signature.spec.ts` pin each signer against its official SDK as an oracle.
+Follow the `src/aws/` layout: `src/<provider>/{signature,host,request,signatureUrl,index}.ts`, then add an entry to `tsup.config.ts` (the one build emits both the `.es.js` bundle and the matching `.es.d.ts`) and a `package.json` `exports` entry. Signing must match the official SDK — the tests in `test/cos-signature.spec.ts`, `test/obs-signature.spec.ts` and `test/aws-signature.spec.ts` pin each signer against its official SDK as an oracle (`test/tos-oracle.node.ts`, run by `pnpm test:tos-oracle`, does the same for TOS against `@volcengine/tos-sdk`).
 
 If the target storage's multipart API is not S3-shaped (e.g. Azure's block blobs), don't force it through `createInitMultipartUpload`/`createUploadPart`/`createCompleteMultipartUpload`: write provider-specific primitives with the same signatures and inject them via `createMultipartUpload` (see `src/azure/multipart.ts`). Operations that have no counterpart — like `listUploads` for Azure — are simply omitted from the entry.
 
