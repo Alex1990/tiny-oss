@@ -15,7 +15,7 @@ Classify one GitHub issue (or external PR) before any deeper work.
 ## Steps
 1. Read the task state file; if `status` is not `new`/`waiting-info`, stop
    (another instance owns it) and exit.
-2. Read AGENTS.md conventions and `docs/agents/ops.md`; skim related docs the
+2. Read AGENTS.md conventions and `docs/norms/ops.md`; skim related docs the
    issue touches.
 3. Judge: what does the reporter want? Reproduce mentally from the report —
    if a bug, can it be reproduced from the report alone? If a feature, is the
