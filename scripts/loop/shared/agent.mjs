@@ -31,7 +31,7 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
   L.push('');
   L.push('## Opening ritual (read in order, do not skip)');
   L.push('1. `AGENTS.md`');
-  L.push('2. `docs/agents/ops.md`');
+  L.push('2. `docs/norms/ops.md`');
   L.push(`3. \`skills/${stage.replace(/-scheduled$/, '')}/SKILL.md\` (if missing, use the skills the stage calls for, e.g. verify/review)`);
   if (task) L.push(`4. \`state/tasks/${task.id}.json\``);
   L.push('');
@@ -120,7 +120,7 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
     L.push('             "title": "<PR title>",');
     L.push('             "body": "Closes #<n>\\n\\nloop-task: #<n>\\n\\n<what and why>" }');
     L.push('   ```');
-    L.push('   The body must pass the loop-PR test in `docs/agents/ops.md` (`Closes #<n>` and');
+    L.push('   The body must pass the loop-PR test in `docs/norms/ops.md` (`Closes #<n>` and');
     L.push('   `loop-task: #<n>`). Omit `push` when the stage produced no branch — triage,');
     L.push('   sweep, or a `needs-info`/`needs-triage` verdict never pushes anything.');
   }

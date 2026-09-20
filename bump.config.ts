@@ -13,7 +13,7 @@ import { defineConfig } from 'bumpp'
  * ruleset refuses every direct push to `main`, releases included: `422 Changes
  * must be made through a pull request`. The owner's bypass (`pull_request`
  * mode) covers merging a PR, not pushing one, so there is nothing to route
- * around — see `docs/agents/release.md`.
+ * around — see `docs/norms/release.md`.
  *
  * `pr.base` is pinned instead of detected: bumpp otherwise reads the base from
  * `origin/HEAD`, which still says `master` in clones that predate the rename.

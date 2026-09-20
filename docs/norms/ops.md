@@ -61,7 +61,7 @@ Closing (always, before exit):
 3. Refresh `state/SUMMARY.md`. Exit `0` on success.
 
 Never do work outside the declared stage; never modify norms-layer files
-(AGENTS.md, docs/agents/*, skills/*) except as a proposal PR.
+(AGENTS.md, docs/norms/*, skills/*) except as a proposal PR.
 
 ## Labels → task state
 

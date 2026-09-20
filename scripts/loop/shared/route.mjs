@@ -1,7 +1,7 @@
 /**
  * GitHub event → Loop decision (pure-function router).
  *
- * Authority: 05 host implementation spec §3 routing table / docs/agents/ops.md
+ * Authority: 05 host implementation spec §3 routing table / docs/norms/ops.md
  * "Trigger → loop map".
  * This module does no IO: the input is the event context injected by the workflow and
  * the output is a Decision, executed by entry.mjs.

@@ -29,7 +29,7 @@ Conventional commits, and the type drives the user-facing `CHANGELOG.md`
   package's behaviour.
 - `docs` — user-facing documentation (`README.md`, `UPGRADING.md`).
 - `chore(<area>)` — repository maintenance no consumer sees: the loop host
-  (`scripts/loop/`), CI workflows, the norms layer (this file, `docs/agents/`,
+  (`scripts/loop/`), CI workflows, the norms layer (this file, `docs/norms/`,
   `skills/`), tooling. Name the area: `chore(loop)`, `chore(ci)`,
   `chore(norms)`.
 
@@ -40,21 +40,21 @@ iteration would read to a user as a change to the package.
 ## References
 
 - Usage and per-provider options: `README.md`; building a custom provider: README "Extension" section and `src/provider.ts`.
-- Domain docs: `docs/agents/domain.md` (CONTEXT/ADR consumption, glossary usage).
+- Domain docs: `docs/norms/domain.md` (CONTEXT/ADR consumption, glossary usage).
 
 ## Operations (loop)
 
 This repo is operated by an autonomous loop system. If you are a loop run
-(launched by `.github/workflows/loop.yml`), follow `docs/agents/ops.md` first.
+(launched by `.github/workflows/loop.yml`), follow `docs/norms/ops.md` first.
 
 - Issue tracker: GitHub, via the `gh` CLI. Issues and PRs share one tracker and
-  one label system — PRs ARE a triage surface. See `docs/agents/issue-tracker.md`.
+  one label system — PRs ARE a triage surface. See `docs/norms/issue-tracker.md`.
 - Triage labels: five canonical roles — `needs-triage`, `needs-info`,
   `ready-for-agent`, `ready-for-human`, `wontfix`. Exact semantics:
-  `docs/agents/triage-labels.md`.
+  `docs/norms/triage-labels.md`.
 - Release: the loop prepares and verifies; a human cuts the release with
   `pnpm release` and publishes with `pnpm build && pnpm publish`. See
-  `docs/agents/release.md`.
+  `docs/norms/release.md`.
 - Skills: `skills/*/SKILL.md` (triage, research, verify, review, sweep, retro)
   fix how each stage is done. Invoke them per `ops.md`, never skip the
   opening/closing rituals.
@@ -62,6 +62,6 @@ This repo is operated by an autonomous loop system. If you are a loop run
   (synced into this checkout's `state/` dir for the duration of your run —
   authoritative JSON + `SUMMARY.md`). Never keep cross-run state in your
   context or in comments only.
-- Norms layer changes (this file, `docs/agents/*`, `skills/*`) are proposals:
+- Norms layer changes (this file, `docs/norms/*`, `skills/*`) are proposals:
   open a PR, never merge your own change.
 - You are the maker or the checker, never both for the same change.

@@ -5,7 +5,7 @@
  * so the two implementations cannot drift (#33 during A0 was manual drift).
  *
  * schema: task files / run rows / locks / SUMMARY — see scripts/loop/README.md;
- * state machine + dual metrics: docs/agents/ops.md, docs/agents/triage-labels.md.
+ * state machine + dual metrics: docs/norms/ops.md, docs/norms/triage-labels.md.
  */
 
 import { promises as fs } from 'node:fs';

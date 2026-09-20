@@ -183,7 +183,7 @@ async function cmdStart(args) {
   console.log(`[loop] run started: ${rid}`);
   console.log(`[loop] task #${t.id} (stage=${s}) claimed → ` +
     `${path.relative(ROOT, S.taskFile(t.id))}`);
-  console.log('[loop] opening ritual: read AGENTS.md → docs/agents/ops.md → the matching skill:');
+  console.log('[loop] opening ritual: read AGENTS.md → docs/norms/ops.md → the matching skill:');
   const skillFile = path.join(ROOT, 'skills', s, 'SKILL.md');
   const hasSkill = await fs.access(skillFile).then(() => true, () => false);
   console.log(hasSkill
