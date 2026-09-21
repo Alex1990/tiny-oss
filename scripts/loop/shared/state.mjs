@@ -364,11 +364,59 @@ export function ghRepoOf(url) {
 export const LOOP_BRANCH_RE = /^loop\/\d+-[a-z0-9][a-z0-9._-]*$/;
 
 /**
+ * The four sections every loop PR body must carry (#73). The identity markers
+ * (`Closes` / `loop-task`) say *which* task a PR belongs to; these say *what the
+ * author owes the reviewer*: an agent's reasoning is discarded with its context, so
+ * the reviewer must not have to reconstruct intent, proof, risk tier and review
+ * focus from the diff. Fixed headings on purpose — the host's check, the maker
+ * prompt and the reviewer's gate all find them mechanically, so the requirement is
+ * enforceable rather than aspirational.
+ */
+export const PR_CONTRACT_SECTIONS = [
+  'What/why',
+  'Proof it works',
+  'Risk tier + AI role',
+  'Review focus',
+];
+
+/** Markdown section heading — ATX (`## X`) or a bold-only line (`**X**`). */
+const PR_SECTION_HEADING_RE = /^(?:#{1,6}\s+(.+?)|(?:\*\*|__)(.+?)(?:\*\*|__))\s*:?\s*$/;
+
+/** Normalise a heading for comparison: case, markup and `/`-`+`-`&` spacing. */
+const normalizePrSection = (s) => String(s ?? '')
+  .toLowerCase()
+  .replace(/\s*([/+&])\s*/g, ' $1 ')
+  .replace(/[^a-z0-9 /+&-]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+/** Section names present in a PR body (markdown headings or bold lines). */
+export function prContractSections(body) {
+  const found = new Set();
+  for (const line of String(body ?? '').split('\n')) {
+    const m = PR_SECTION_HEADING_RE.exec(line.trim());
+    const text = (m?.[1] ?? m?.[2] ?? '').trim();
+    if (text) found.add(normalizePrSection(text));
+  }
+  return found;
+}
+
+/** The required sections a PR body is missing, in contract order. */
+export function missingPrContractSections(body) {
+  const present = prContractSections(body);
+  return PR_CONTRACT_SECTIONS.filter((s) => !present.has(normalizePrSection(s)));
+}
+
+/**
  * The loop-PR test lives in the router (`loopTaskOf`): head ref `loop/<n>-*` **and**
  * a body carrying `loop-task: #<n>`, agreeing on `<n>`. A PR missing the marker is
  * treated as a non-loop PR — it never enters the acceptance rate and its merge
  * closes the task by the wrong path. That is a structural contract, so the host
  * enforces it rather than trusting the model to remember it.
+ *
+ * This function only ever *repairs* the identity markers: they are bookkeeping the
+ * host owns. The four author sections are content the host cannot fabricate, so a
+ * missing one is a refusal (`entry.mjs` `validatePush`), never a placeholder.
  */
 export function ensureLoopPrBody(body, id) {
   const b = String(body ?? '').trim();

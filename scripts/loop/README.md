@@ -261,8 +261,8 @@ reason a future reader may see the parameter and wonder where it came from.
 | branch check | `applyActions` | `loop/<issueNo>-<slug>` only — no other ref is pushed, whatever the branch field says. |
 | dirty-tree check | `applyActions` | A dirty tree is refused: the commit would silently stay behind and the PR would ship an empty diff. |
 | workflow-file recognition | `applyActions` | A push rejected for touching `.github/workflows/**` is explained (see the cost above) instead of retried. |
-| `validatePush` | `entry.mjs` | `pr-opened` without a valid proposal (wrong branch, empty title, another task's number, or `writeLevel=report`) is downgraded to `failed`, so a task can never sit in `waiting-merge` waiting for a PR nobody opened. |
-| `ensureLoopPrBody` | `planActions` | Repairs the PR body's `Closes #<n>` / `loop-task: #<n>` markers. The router requires both, and a missing marker would make the loop's own PR look external — no acceptance row, and its merge would close the task by the wrong path. |
+| `validatePush` | `entry.mjs` | `pr-opened` without a valid proposal (wrong branch, empty title, another task's number, missing PR-contract section, or `writeLevel=report`) is downgraded to `failed`, so a task can never sit in `waiting-merge` waiting for a PR nobody opened, and no loop PR reaches a reviewer without intent, proof, risk and review focus. |
+| `ensureLoopPrBody` | `planActions` | Repairs the PR body's `Closes #<n>` / `loop-task: #<n>` markers. The router requires both, and a missing marker would make the loop's own PR look external — no acceptance row, and its merge would close the task by the wrong path. It only repairs those host-owned markers; the four author sections are validated by `validatePush` and never fabricated. |
 | PR number recorded | `finishRun` | The number comes back from `gh pr create` and lands in `task.prs` + a `pr-created` timeline row. |
 | git identity | `agentEnv` | `GIT_AUTHOR_*`/`GIT_COMMITTER_*` are injected under `auto` as GitHub Actions' own bot, `github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>` — the same identity the host's PR comes from. A fresh runner has no global git config, and the commit itself is local (no credential involved). The earlier `loop@users.noreply.github.com` belonged to the real, unrelated user `@loop`, so every loop commit was falsely attributed to them (#52, #56). |
 
@@ -897,6 +897,16 @@ the first `auto` run is a verification step rather than a milestone.
       sub-agents. Demonstrated with a fake-engine harness: two invocations, distinct
       session dirs and models, both carrying the allowlist, and the accept/reject/
       inconclusive merge paths.
+- [x] D36 (#73) A loop PR was defined by identity only (`loop/<n>-*` plus the
+      `Closes`/`loop-task` markers), so nothing an agent's discarded context had
+      held — intent, proof, risk tier, review focus — reached the reviewer, who was
+      the first human to read the change. The contract now requires four author
+      sections in the PR body (`docs/norms/ops.md` "The loop PR contract"):
+      `validatePush` refuses a `pr-opened` whose body is missing any of them, the
+      maker prompt renders the exact template, and `skills/review/SKILL.md` makes
+      absence a `request-changes` gate before line-level review. The four headings
+      live in `PR_CONTRACT_SECTIONS` (`shared/state.mjs`) and the maker prompt imports
+      them, so the check and the template cannot drift.
 
 ## Environment facts
 

@@ -20,6 +20,26 @@
  */
 
 import { spawn } from 'node:child_process';
+import { PR_CONTRACT_SECTIONS } from './state.mjs';
+
+/**
+ * What each PR-contract section must contain (#73), keyed by the canonical heading
+ * exported from `state.mjs`. Keeping the headings there and the hints here means the
+ * maker prompt and the host's `validatePush` check cannot drift.
+ */
+const PR_CONTRACT_HINTS = {
+  'What/why': 'intent in one or two sentences',
+  'Proof it works': 'the actual gate output / manual steps / logs — not "should work"',
+  'Risk tier + AI role': 'which parts the agent produced; what breaks if the change is wrong',
+  'Review focus': 'the one or two places human judgment is actually needed',
+};
+
+/** Render the contract as the PR-body lines an author should produce. */
+const prContractBodyLines = () => [
+  'Closes #<n>',
+  'loop-task: #<n>',
+  ...PR_CONTRACT_SECTIONS.flatMap((h) => [`## ${h}`, PR_CONTRACT_HINTS[h] ?? '']),
+];
 
 /**
  * Read-only tool allowlist for the two isolated reviewers (#71): no `edit`/`write`,
@@ -210,6 +230,10 @@ export function buildPrompt({
     L.push('other lens, do not spawn sub-agents, and do not read the other reviewer\'s files or');
     L.push('session. The host merges your two verdicts after both runs finish.');
     L.push('');
+    L.push('Both lenses share a PR-contract gate (step 0 in the skill): a loop PR body');
+    L.push(`missing any of ${PR_CONTRACT_SECTIONS.map((h) => `**${h}**`).join(', ')}`);
+    L.push('is `request-changes` before any line-level review.');
+    L.push('');
     L.push('You hold a **read-only tool set**: the allowlist is `read,grep,find,ls,bash` —');
     L.push('there is no `edit` or `write` tool. Write your report and result file with a `bash`');
     L.push('heredoc, and keep every other command read-only. Read-only here means no');
@@ -300,8 +324,13 @@ export function buildPrompt({
     L.push('   ```json');
     L.push('   "push": { "branch": "loop/<taskId>-<slug>", "base": "main",');
     L.push('             "title": "<PR title>",');
-    L.push('             "body": "Closes #<n>\\n\\nloop-task: #<n>\\n\\n<what and why>" }');
+    L.push(`             "body": "${prContractBodyLines().join('\\n\\n')}" }`);
     L.push('   ```');
+    L.push('   The PR body is part of the deliverable, not paperwork (docs/norms/ops.md');
+    L.push('   "The loop PR contract"). Besides the two identity markers it must carry all');
+    L.push(`   four author sections — ${PR_CONTRACT_SECTIONS.map((h) => `**${h}**`).join(', ')}.`);
+    L.push('   The host refuses a `pr-opened` whose body is missing any of them, so fill each');
+    L.push('   with what you actually did, not a placeholder.');
     L.push('   The body must pass the loop-PR test in `docs/norms/ops.md` (`Closes #<n>` and');
     L.push('   `loop-task: #<n>`). Omit `push` when the stage produced no branch — triage,');
     L.push('   sweep, or a `needs-info`/`needs-triage` verdict never pushes anything.');
