@@ -23,7 +23,14 @@ description: Run the repo's full check gates (lint, format, types, tests, build)
    skipping).
 3. Re-run all gates until green. Record outputs (trimmed) in the run log.
 4. Never claim verification success without the final command outputs.
+5. Collect the PR-contract evidence while the run is fresh (`docs/norms/ops.md`,
+   "The loop PR contract"): the gate outputs become the PR's **Proof it works**, and
+   note the **Risk tier + AI role** and **Review focus** alongside them. A product
+   stage that opens a PR carries all four in the PR body; the host refuses a
+   `pr-opened` whose body is missing any of them.
 
 ## Done when
 - All five gates pass with recorded output, or a gate failure is reported as a
   blocker with evidence.
+- For a product stage, the four contract sections exist for the PR body, with the
+  gate output as proof — or the run reports why it produced no PR.
