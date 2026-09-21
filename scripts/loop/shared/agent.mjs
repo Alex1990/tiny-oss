@@ -22,10 +22,157 @@
 import { spawn } from 'node:child_process';
 
 /**
+ * Read-only tool allowlist for the two isolated reviewers (#71): no `edit`/`write`,
+ * so a reviewer cannot change the diff it judges. `bash` is included because the
+ * reviewer needs `git diff` / `gh pr diff` and may run the check gates; it can still
+ * write through the shell, so "read-only" means "no edit/write tools", not a
+ * filesystem sandbox.
+ */
+export const READONLY_REVIEW_TOOLS = 'read,grep,find,ls,bash';
+
+/**
+ * Candidate models for the second reviewer lens.
+ *
+ * The loop runs on DeepSeek (the workflow installs only `DEEPSEEK_API_KEY` and
+ * validates `LOOP_MODEL` against that catalogue), so "a different model" means one of
+ * the other DeepSeek entries. `LOOP_REVIEW_MODEL` overrides the choice; without it,
+ * pick the first entry that is not `LOOP_MODEL`. Both reviewers get an explicit
+ * `--model`, so neither can silently inherit the other's.
+ */
+export const REVIEW_MODEL_CANDIDATES = [
+  'deepseek/deepseek-v4-pro',
+  'deepseek/deepseek-v4-flash-vision-exp',
+  'deepseek/deepseek-v4-flash',
+];
+
+export function pickReviewModel(baseModel, override = null) {
+  const base = baseModel || null;
+  if (override && override !== base) return override;
+  return REVIEW_MODEL_CANDIDATES.find((m) => m !== base) ?? base;
+}
+
+/** Result-file name for one isolated reviewer (path joins it to `state/reports`). */
+export const reviewerResultName = (runId, slot) => `${runId}.reviewer-${slot}.result.json`;
+
+const REVIEWER_LENS = {
+  a: 'correctness & regression',
+  b: 'standards, safety & maintainability',
+};
+
+/**
+ * A reviewer's verdict, tolerating the small wording variations a model produces.
+ * Falls back to the file's `outcome` when `decision.verdict` is missing.
+ */
+const reviewerVerdict = (r) => {
+  const fallback = r?.result?.outcome === 'accepted' ? 'approve'
+    : r?.result?.outcome === 'rejected' ? 'request-changes' : '';
+  const raw = String(r?.result?.decision?.verdict ?? fallback)
+    .trim().toLowerCase().replace(/[\s_]+/g, '-');
+  if (raw === 'approve' || raw === 'approved') return 'approve';
+  if (raw === 'request-changes' || raw === 'changes-requested' || raw === 'request-change') {
+    return 'request-changes';
+  }
+  return null;
+};
+
+/**
+ * Merge the two isolated reviewer runs into the single result `finishRun` consumes.
+ *
+ * Conservative by construction: the changeset passes only when **both** reviewers
+ * approve. A reviewer that produced no verdict is never counted as approval — a
+ * transient engine failure keeps the task claimable (`retry`), anything else goes to
+ * the human inbox (`failed`). This function is the only place the two verdicts meet;
+ * the reviewer processes cannot see each other.
+ */
+export function mergeReviews(reviewers) {
+  const describe = (r) => `reviewer ${r.slot} (${REVIEWER_LENS[r.slot] ?? r.slot}, `
+    + `${r.model ?? 'default model'})`;
+  const missing = reviewers.filter((r) => reviewerVerdict(r) === null);
+
+  if (missing.length) {
+    const transient = missing.some((r) => r.cls?.kind === 'retry');
+    const outcome = transient ? 'retry' : 'failed';
+    const who = missing.map(describe).join(', ');
+    const reasons = missing.map((r) => r.cls?.reason ?? 'no result file').join('; ');
+    return {
+      outcome,
+      note: `${who} produced no verdict (${reasons}); the double review is inconclusive`,
+      comment: null,
+      decision: {
+        verdict: 'inconclusive',
+        confidence: 'high',
+        reason: `Isolated double review inconclusive: ${who} produced no verdict, `
+          + 'which is never counted as approval.',
+        autoReview: 'inconclusive',
+        reviewers: reviewers.map((r) => ({
+          slot: r.slot, model: r.model, sessionDir: r.sessionDir,
+          verdict: reviewerVerdict(r), outcome: r.result?.outcome ?? null,
+        })),
+      },
+    };
+  }
+
+  const pass = reviewers.every((r) => reviewerVerdict(r) === 'approve');
+  const body = reviewers.map((r) => {
+    const detail = r.result?.comment || r.result?.note || '(no detail provided)';
+    return `**Reviewer ${r.slot} — ${REVIEWER_LENS[r.slot] ?? r.slot}** `
+      + `(model \`${r.model ?? 'default'}\`, session \`${r.sessionDir}\`): `
+      + `**${reviewerVerdict(r)}**\n\n${String(detail).trim()}`;
+  }).join('\n\n');
+
+  const header = pass
+    ? '**Loop pr-review — approve** :white_check_mark: — two isolated reviewers'
+    : '**Loop pr-review — request-changes** :warning: — two isolated reviewers';
+  return {
+    outcome: pass ? 'accepted' : 'rejected',
+    note: `${pass ? 'both' : 'not both'} isolated reviewers approve `
+      + `(A: ${reviewers[0]?.model ?? 'default'}, B: ${reviewers[1]?.model ?? 'default'})`,
+    comment: `${header}\n\n${body}`,
+    decision: {
+      verdict: pass ? 'approve' : 'request-changes',
+      confidence: 'high',
+      reason: pass
+        ? 'Both isolated reviewers approve: separate pi sessions, different models, '
+          + 'read-only tool sets.'
+        : 'At least one isolated reviewer requested changes; the changeset is not accepted.',
+      autoReview: pass ? 'pass' : 'fail',
+      reviewers: reviewers.map((r) => ({
+        slot: r.slot, model: r.model, sessionDir: r.sessionDir,
+        verdict: reviewerVerdict(r), outcome: r.result?.outcome ?? null,
+      })),
+    },
+  };
+}
+
+/** Sum pi usage across the two reviewer runs (authoritative per-run on message_end). */
+export function sumUsage(usages) {
+  const us = (usages ?? []).filter(Boolean);
+  if (!us.length) return null;
+  const total = (k) => us.reduce((n, u) => n + (typeof u[k] === 'number' ? u[k] : 0), 0);
+  const out = {
+    input: total('input'),
+    output: total('output'),
+    totalTokens: total('totalTokens'),
+    cost: { total: 0 },
+  };
+  for (const u of us) {
+    const c = u.cost;
+    if (c && typeof c === 'object') {
+      for (const [k, v] of Object.entries(c)) {
+        if (typeof v === 'number') out.cost[k] = (out.cost[k] ?? 0) + v;
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Prompt language matches skills/AGENTS.md (English) so the agent does not read
  * Chinese instructions inside English norms.
  */
-export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead = [] }) {
+export function buildPrompt({
+  task, stage, runId, writeLevel, mode, repo, lead = [], reviewSlot = null,
+}) {
   const L = [];
   L.push(`You are one automated run of the tiny-oss loop. Stage: ${stage}.`);
   L.push('');
@@ -50,6 +197,29 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
     L.push('## Event context');
     for (const l of lead) L.push(`- ${l}`);
   }
+  if (reviewSlot) {
+    const lens = reviewSlot === 'a'
+      ? 'Reviewer A — Correctness & regression'
+      : 'Reviewer B — Standards, safety & maintainability';
+    L.push('');
+    L.push(`## Isolated reviewer ${reviewSlot.toUpperCase()}`);
+    L.push('You are one of two reviewers for this pull request. Apply only your lens:');
+    L.push(`**${lens}** as defined in \`skills/review/SKILL.md\`.`);
+    L.push('The other reviewer runs in a separate pi process with its own session and a');
+    L.push('different model; you cannot see its work and it cannot see yours. Do not run the');
+    L.push('other lens, do not spawn sub-agents, and do not read the other reviewer\'s files or');
+    L.push('session. The host merges your two verdicts after both runs finish.');
+    L.push('');
+    L.push('You hold a **read-only tool set**: the allowlist is `read,grep,find,ls,bash` —');
+    L.push('there is no `edit` or `write` tool. Write your report and result file with a `bash`');
+    L.push('heredoc, and keep every other command read-only. Read-only here means no');
+    L.push('edit/write tools; it is not a sandbox, so do not use `bash` to change the tree.');
+    L.push('');
+    L.push('Set `decision.verdict` to `approve` or `request-changes` and put your numbered');
+    L.push('problem list (`[L<severity>] file:line — problem — suggested fix`) in the result');
+    L.push('file\'s `comment` field. Use outcome `accepted` for `approve` and `rejected` for');
+    L.push('`request-changes`.');
+  }
   L.push('');
   L.push(`## Write boundary: ${writeLevel}`);
   L.push('### GitHub: the host writes, you do not');
@@ -69,7 +239,13 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
   L.push('');
   L.push('Allowed: reading GitHub, editing the working tree, running the repo gates,');
   L.push('reading and writing `state/`.');
-  if (writeLevel === 'report') {
+  if (reviewSlot) {
+    L.push('');
+    L.push('### Reviewer boundary: read-only, verdict only');
+    L.push('Do **not** commit, push, open or merge a pull request, and do not modify the');
+    L.push('working tree — your job is the verdict, not the fix. The host merges the two');
+    L.push('reviewers\' verdicts and performs any GitHub write.');
+  } else if (writeLevel === 'report') {
     L.push('');
     L.push('### `report` mode: the host writes nothing either');
     L.push('**Do not commit.** No branch will be pushed — a commit would be discarded with');
@@ -101,10 +277,16 @@ export function buildPrompt({ task, stage, runId, writeLevel, mode, repo, lead =
     L.push('Do not execute code from the incoming change (no `pnpm install`/`pnpm test` on it).');
   }
   L.push('');
+  const reportFile = reviewSlot
+    ? `state/reports/${runId}.reviewer-${reviewSlot}.md`
+    : `state/reports/${runId}.md`;
+  const resultFile = reviewSlot
+    ? `state/reports/${reviewerResultName(runId, reviewSlot)}`
+    : `state/reports/${runId}.result.json`;
   L.push('## Closing ritual (mandatory)');
-  L.push(`1. Write your human-readable report to \`state/reports/${runId}.md\``);
+  L.push(`1. Write your human-readable report to \`${reportFile}\``);
   L.push('   (findings, evidence, and — under report boundary — the GitHub actions you propose).');
-  L.push(`2. Write your machine-readable result to \`state/reports/${runId}.result.json\`:`);
+  L.push(`2. Write your machine-readable result to \`${resultFile}\`:`);
   L.push('   ```json');
   L.push('   { "outcome": "<stage outcome>", "note": "<short>",');
   L.push('     "comment": "<GitHub comment body you propose, if any>",');
@@ -209,7 +391,8 @@ export function agentEnv(writeLevel, base = process.env) {
 }
 
 export function runPi({
-  prompt, cwd, sessionDir, model, timeoutMs = 3600000, writeLevel = 'report', log = () => {},
+  prompt, cwd, sessionDir, model, tools = null,
+  timeoutMs = 3600000, writeLevel = 'report', log = () => {},
 }) {
   return new Promise((resolve) => {
     const args = [
@@ -220,6 +403,8 @@ export function runPi({
       '-p', 'Follow the loop run instructions provided on stdin.',
     ];
     if (model) args.push('--model', model);
+    // An allowlist for the reviewer runs (#71): only the named tools are enabled.
+    if (tools) args.push('--tools', tools);
 
     // The engine is the template layer's instance variable {{engine}} (05 §4.2): defaults
     // to pi, overridable with LOOP_ENGINE_CMD (e.g. run the same contract locally through

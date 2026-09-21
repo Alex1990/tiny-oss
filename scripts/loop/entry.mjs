@@ -18,6 +18,7 @@
  *   LOOP_EVENT_NAME / LOOP_EVENT_ACTION / LOOP_EVENT_JSON / LOOP_REPO
  *   LOOP_WRITE_LEVEL (report|auto, default report)
  *   LOOP_MODEL (pi's --model, e.g. deepseek/deepseek-flash)
+ *   LOOP_REVIEW_MODEL (optional second-lens model; defaults to a different DeepSeek model)
  *   LOOP_RUN_TIMEOUT_MS, LOOP_SESSION_DIR, GITHUB_STEP_SUMMARY
  */
 
@@ -35,6 +36,7 @@ import {
 } from './shared/state.mjs';
 import { route, eventKey, stageForIssue } from './shared/route.mjs';
 import { buildPrompt, runPi, parseEvents, summarize, classify } from './shared/agent.mjs';
+import { runDoubleReview } from './shared/review.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const S = makeState(ROOT);
@@ -290,35 +292,69 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
     + `${task ? `task #${task.id}, ` : 'system-level, '}stage=${stage}`
     + `${decision.mode === 'readonly' ? ', readonly' : ''})`);
 
-  const prompt = buildPrompt({
-    task, stage, runId: rid, writeLevel, mode: decision.mode, repo,
-    lead: [
-      `trigger: ${ctx.eventName}.${ctx.action || '(none)'} — ${decision.reason}`,
-      decision.loopTask ? `linked issue: #${decision.loopTask}` : null,
-    ].filter(Boolean),
-  });
+  const lead = [
+    `trigger: ${ctx.eventName}.${ctx.action || '(none)'} — ${decision.reason}`,
+    decision.loopTask ? `linked issue: #${decision.loopTask}` : null,
+  ].filter(Boolean);
+  const promptOptions = { task, stage, runId: rid, writeLevel, mode: decision.mode, repo, lead };
 
   const sessionDir = process.env.LOOP_SESSION_DIR ?? path.join(os.tmpdir(), 'loop-pi', rid);
   const timeoutMs = Number(process.env.LOOP_RUN_TIMEOUT_MS ?? 55 * 60 * 1000);
 
-  const res = await runPi({
-    prompt, cwd: ROOT, sessionDir,
-    model: process.env.LOOP_MODEL,
-    timeoutMs,
-    writeLevel,
-    log,
-  });
-  const events = parseEvents(res.stdout);
-  const { usage, stopReason, toolCalls, turns } = summarize(events);
-
-  // the agent's result file (the orchestration layer is the single writer for finish)
-  const result = await readJson(path.join(S.reportsDir, `${rid}.result.json`));
-  const cls = classify({ code: res.code, signal: res.signal, stderr: res.stderr, timedOut: res.timedOut, stopReason });
+  let usage = null;
+  let toolCalls = 0;
+  let turns = 0;
+  let result;
+  let cls;
+  if (stage === 'pr-review') {
+    // Two isolated reviewer processes (#71): separate sessions, different models,
+    // read-only tools. `runDoubleReview` returns the merged verdict as `result`.
+    const review = await runDoubleReview({
+      promptOptions, reportsDir: S.reportsDir, sessionDir, timeoutMs, writeLevel,
+      cwd: ROOT, log, warn,
+    });
+    result = review.result;
+    usage = review.usage;
+    toolCalls = review.toolCalls;
+    turns = review.turns;
+    // Keep `cls` shaped like `classify()` so the shared logging below stays uniform;
+    // `mergeReviews` is the judge for this stage, not a single agent's exit code.
+    cls = {
+      exit: result.outcome === 'retry' ? 3 : result.outcome === 'failed' ? 1 : 0,
+      kind: 'review',
+      reason: result.note,
+    };
+  } else {
+    const prompt = buildPrompt(promptOptions);
+    const res = await runPi({
+      prompt, cwd: ROOT, sessionDir,
+      model: process.env.LOOP_MODEL,
+      timeoutMs,
+      writeLevel,
+      log,
+    });
+    const summary = summarize(parseEvents(res.stdout));
+    usage = summary.usage;
+    toolCalls = summary.toolCalls;
+    turns = summary.turns;
+    // the agent's result file (the orchestration layer is the single writer for finish)
+    result = await readJson(path.join(S.reportsDir, `${rid}.result.json`));
+    cls = classify({
+      code: res.code, signal: res.signal, stderr: res.stderr,
+      timedOut: res.timedOut, stopReason: summary.stopReason,
+    });
+  }
 
   let outcome; let note; let push = null;
-  if (result?.outcome && outcomeAllowed(stage, result.outcome)) {
+  if (stage === 'pr-review') {
+    // `mergeReviews` already collapsed the two isolated verdicts (accepted/rejected),
+    // or classified an inconclusive review (retry/failed). The single-agent
+    // `result.outcome` path must not apply here.
     outcome = result.outcome;
-    note = result.note ?? `agent decision (exit=${res.code})`;
+    note = result.note;
+  } else if (result?.outcome && outcomeAllowed(stage, result.outcome)) {
+    outcome = result.outcome;
+    note = result.note ?? `agent decision (exit=${cls.exit})`;
   } else if (result?.outcome) {
     outcome = 'failed';
     note = `agent returned outcome=${result.outcome}, but stage=${stage} does not allow it `
