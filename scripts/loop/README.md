@@ -300,6 +300,31 @@ GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single w
   `tokens`/`durationMs`/`model`/`outcome`); full transcripts go to the
   artifact store (90 days).
 
+### Isolated double review (`pr-review`)
+
+`skills/review/SKILL.md` requires two independent reviewers, but pi has no
+sub-agent mechanism — one process can only do two passes over one context. The host
+(`shared/review.mjs`) therefore runs **two `pi` processes** for the `pr-review`
+stage:
+
+| | Reviewer A | Reviewer B |
+| --- | --- | --- |
+| session | `<LOOP_SESSION_DIR>/reviewer-a` | `<LOOP_SESSION_DIR>/reviewer-b` |
+| model | `LOOP_MODEL` | `LOOP_REVIEW_MODEL`, else the first different DeepSeek model |
+| tools | `read,grep,find,ls,bash` | `read,grep,find,ls,bash` |
+| result | `<rid>.reviewer-a.result.json` / `.md` | `<rid>.reviewer-b.result.json` / `.md` |
+
+They run in sequence (one shared wall-clock budget) and cannot see each other's
+session or result file; `mergeReviews` is the only place their verdicts meet. The
+changeset passes only when **both** approve (`accepted`); otherwise `rejected`. A
+reviewer that produced no verdict is never counted as approval — a transient exit
+becomes `retry`, anything else `failed`. The read-only allowlist has no `edit`/`write`
+tool, so a reviewer writes its own result file with a `bash` heredoc; "read-only"
+means "no edit/write tools", not a filesystem sandbox.
+
+Each reviewer prompt carries its own lens and review slot, and the product-stage
+commit/push instructions are suppressed for it (the reviewer's job is the verdict).
+
 ### Trigger → action (workflow)
 
 | Event | Action |
@@ -860,8 +885,26 @@ the first `auto` run is a verification step rather than a milestone.
       `skipped` while step 6 stays `failure`, so the only red step is the one
       that actually failed.
 
+- [x] D35 (#71) The `pr-review` stage claimed two isolated reviewers but ran one
+      `pi` process in one session, so both lenses shared a context and a model —
+      the isolation `skills/review/SKILL.md` promised was nominal. pi has no
+      sub-agent mechanism, so the promise was unfulfillable as written. The host
+      now launches two `pi` processes for `pr-review` (`shared/review.mjs`): separate
+      `--session-dir`, a different `--model` for the second lens, and a read-only
+      `--tools read,grep,find,ls,bash` allowlist; `mergeReviews` accepts only when
+      both approve and never counts a missing verdict as approval. The skill was
+      reworded to describe the host mechanism instead of telling the agent to spawn
+      sub-agents. Demonstrated with a fake-engine harness: two invocations, distinct
+      session dirs and models, both carrying the allowlist, and the accept/reject/
+      inconclusive merge paths.
+
 ## Environment facts
 
+- **Double review (#71):** `pr-review` runs two isolated `pi` processes
+  (`shared/review.mjs`) — separate session dirs, different models, read-only tools —
+  and merges their verdicts. `LOOP_REVIEW_MODEL` overrides the second model;
+  without it the host picks the first DeepSeek catalogue entry that is not
+  `LOOP_MODEL` (default: `deepseek-v4-flash` → `deepseek-v4-pro`).
 - Phase (2026-09-10): **A1 implementation landed; A0 remains the running host
   until the 2026-09-15 switchover.** Write boundary in A1 = `report`.
 - Engine: pi (verified) for A1; A0 runs were driven by an interactive opencode
@@ -880,7 +923,8 @@ the first `auto` run is a verification step rather than a milestone.
     the agent wanted to do arrived as a proposal checklist in the report.
   - pi's built-in DeepSeek catalogue (credential-gated, printed per run):
     `deepseek-v4-flash`, `deepseek-v4-flash-vision-exp`, `deepseek-v4-pro`.
-    There is no `deepseek-flash` — see D19.
+    There is no `deepseek-flash` — see D19. `LOOP_REVIEW_MODEL` defaults to a
+    different entry from this catalogue so the second reviewer lens is heterogeneous.
 - **Infrastructure smoke**: `gh workflow run loop.yml -f smoke=true` exercises
   checkout → toolchain → pi install → R2 pull → push and **skips the agent
   entirely**, so "is the pipeline healthy?" is answerable without spending
