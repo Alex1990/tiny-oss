@@ -33,6 +33,7 @@ import {
   appendAcceptance, markTaskTerminal, GATE_TRANSITIONS, renderStateSummary,
   beginRun, finishRun, lockExpired,
   nowIso, outcomeAllowed, allowedOutcomes, describeActions, LOOP_BRANCH_RE,
+  missingPrContractSections,
 } from './shared/state.mjs';
 import { route, eventKey, stageForIssue } from './shared/route.mjs';
 import { buildPrompt, runPi, parseEvents, summarize, classify } from './shared/agent.mjs';
@@ -211,7 +212,10 @@ async function handleTaskTerminal({ decision }) {
  *
  * The branch shape is enforced here as well as in `applyActions` (which re-checks it
  * against the credential it is about to spend) because a mismatch is an agent error
- * worth reporting as `failed`, not a silent no-op.
+ * worth reporting as `failed`, not a silent no-op. The PR body is checked the same
+ * way (#73): the four author sections are the only place intent, proof, risk tier and
+ * review focus survive an agent's discarded context, so a body missing any of them is
+ * refused before the PR exists rather than handed to a reviewer to reconstruct.
  */
 function validatePush({ writeLevel, stage, taskId, push }) {
   if (writeLevel !== 'auto') {
@@ -234,6 +238,14 @@ function validatePush({ writeLevel, stage, taskId, push }) {
       + `with the body marker, so it must start with loop/${taskId}-` };
   }
   if (!String(push.title ?? '').trim()) return { ok: false, reason: 'the PR title is empty' };
+  const missingSections = missingPrContractSections(push.body);
+  if (missingSections.length) {
+    return { ok: false, reason:
+      `the PR body is missing the author contract section(s): ${missingSections.join(', ')}. `
+      + 'Every loop PR must carry all four (docs/norms/ops.md "The loop PR contract") so '
+      + 'the reviewer judges the change against stated intent, proof, risk and review '
+      + 'focus instead of reconstructing them from the diff' };
+  }
   return { ok: true, push: { ...push, branch } };
 }
 
