@@ -19,7 +19,17 @@ present because a reviewer needs `git`/`gh` and the check gates, and it can stil
 through the shell. A reviewer writes its report and result file with a `bash` heredoc
 and keeps every other command read-only.
 
-Review the diff, not the intent.
+## 0. PR-contract gate (both lenses, before line-level review)
+
+Read the PR body and confirm it carries the four author sections named in
+`docs/norms/ops.md` ("The loop PR contract"): **What/why**, **Proof it works**,
+**Risk tier + AI role**, **Review focus**. If any is missing or empty, the verdict is
+`request-changes`, recorded as an L1 problem naming the missing sections — do not
+reconstruct the intent from the diff and do not start line-level review. The author
+owes the reviewer intent, proof, risk and review focus; the reviewer's job is to judge
+whether they hold, not to guess them.
+
+Then review the diff against the author's stated intent and proof.
 
 ## Reviewer A — Correctness & regression
 - Does the change do what the task state says it should?
@@ -54,6 +64,8 @@ Review the diff, not the intent.
   must be recorded with a reason in the PR body.
 
 ## Done when
+- The PR-contract gate passed: the body carried all four author sections (a missing
+  one was a `request-changes` finding, never skipped in favour of line-level review).
 - Both reviewer runs issued a verdict into their own session and result file; all
   L1/L2 problems resolved or explicitly declined with reasons; `verify` gates green;
   verdict recorded in the run log.

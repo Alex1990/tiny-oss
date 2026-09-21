@@ -87,10 +87,34 @@ Never do work outside the declared stage; never modify norms-layer files
   events (sweep reconciles drift with `sweep-corrected`). You never write
   them; you only record runs, checkpoints, and task state.
 
+## The loop PR contract
+
+A loop PR is identified by its head branch `loop/<issueNo>-*` and a body carrying
+`Closes #<n>` and `loop-task: #<n>`; the router pairs the ref with the marker and
+requires both to agree on `<n>`.
+
+Identity is not enough. An agent's reasoning is discarded with its context, so the
+PR body is the only place the author's intent survives — and the reviewer must judge
+the change against it, not reconstruct it from the diff. Every loop PR body therefore
+carries four sections, under these headings:
+
+1. **What/why** — what changed and why, in one or two sentences.
+2. **Proof it works** — the actual evidence: gate/test output, manual steps, logs. A
+   claim that it should work is not proof.
+3. **Risk tier + AI role** — which parts the agent produced, and what breaks if the
+   change is wrong.
+4. **Review focus** — the one or two places human judgment is actually needed.
+
+The host enforces this at PR creation: a `pr-opened` whose body is missing any section
+is refused and downgraded to `failed` (`entry.mjs` `validatePush`), so a newly opened
+loop PR always carries all four. The same evidence is collected in the run record
+(`skills/verify/SKILL.md`). A reviewer that receives a loop PR missing a section
+returns `request-changes` before any line-level review (`skills/review/SKILL.md`).
+
 ## Quick rules
 
 - Loop PR = head branch `loop/<issueNo>-*`, body `Closes #<n>` and
-  `loop-task: #<n>`.
+  `loop-task: #<n>`, plus the four contract sections above.
 - Don't claim a task whose lock is live; don't fight a live lock.
 - No self-merge; no norms-layer edits without a PR; no npm publish by the loop.
 - Host changes (`scripts/loop/**`) may arrive as loop PRs like any other change: the
