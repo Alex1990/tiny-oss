@@ -31,10 +31,31 @@ whether they hold, not to guess them.
 
 Then review the diff against the author's stated intent and proof.
 
+## Test-integrity gate (both lenses, before line-level review)
+
+A green gate proves the tests passed, not that the change is right, and the cheapest
+path to green is to change the test. Before line-level review:
+
+- **Reviewer A reads the test changes before the code changes** — a test edit is the
+  fastest way to make a red change look green. Both lenses apply the same rule.
+- Treat a diff that rewrites, deletes or skips **many** tests as a red flag: read each
+  one, compare the new assertion with the old, and require the stated reason.
+- Never accept, as the way to a passing gate: a deleted or skipped test, a relaxed
+  lint/format/type/coverage or `tsconfig` setting, or an assertion edited to match the
+  new behaviour without a stated reason in the PR body. The signer oracles
+  (`AGENTS.md` "Hard constraints") are pinned; their expectations are never editable.
+- Coverage is not this check: it proves a line ran, not that a test would notice if the
+  line were wrong. Mutation testing is the check coverage cannot give.
+
+A changeset that reaches green by weakening the check instead of fixing the behaviour
+is `request-changes` (L1), citing this section and the exact rule broken — before
+approving the behaviour change it hides.
+
 ## Reviewer A — Correctness & regression
 - Does the change do what the task state says it should?
-- Tests: do new tests fail without the change (bug) or cover the feature
-  surface (feature)? Are oracle/signature tests still green?
+- Tests: read the test changes first (test-integrity gate); do new tests fail without
+  the change (bug) or cover the feature surface (feature)? Are oracle/signature tests
+  still green?
 - Edge cases: empty inputs, part boundary, resumable-upload checkpoint,
   non-browser transports, tree-shaking impact (no cross-provider references).
 
@@ -66,6 +87,9 @@ Then review the diff against the author's stated intent and proof.
 ## Done when
 - The PR-contract gate passed: the body carried all four author sections (a missing
   one was a `request-changes` finding, never skipped in favour of line-level review).
+- The test-integrity gate passed: the test diff was read before the code diff, and no
+  test was deleted/skipped and no assertion or gate config was weakened — or that was
+  the `request-changes` finding, with the rule cited in the review output.
 - Both reviewer runs issued a verdict into their own session and result file; all
   L1/L2 problems resolved or explicitly declined with reasons; `verify` gates green;
   verdict recorded in the run log.
