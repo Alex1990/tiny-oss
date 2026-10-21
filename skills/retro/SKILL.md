@@ -22,19 +22,33 @@ Trigger: a task the loop produced was rejected or badly failed.
    it yourself.
 
 ## Scheduled mode (timer, e.g. weekly)
+0. Read the session mining report for this run
+   (`state/reports/<runId>.sessions.md`), which `entry.mjs` produces from the last
+   `loop-sessions-*` artifacts before you start. It is the evidence base for this
+   stage: processed tokens, engine faults, failed tool calls by class, retry loops,
+   and skills the opening ritual names but the repo lacks. If the prompt says the
+   report is unavailable, try `pnpm loop:sessions --limit 50 --out /tmp/sessions.md`;
+   if that fails too, state in the report that the transcripts were not consumed —
+   never present an unread corpus as "no signals".
 1. Read `state/metrics/acceptance.jsonl` and end rows of `runs/*.jsonl`.
 2. Compute: auto-acceptance rate (merged+released / PR-producing tasks) and
    human-intervention rate (needs-triage/needs-info/ready-for-human / triaged),
-   plus token/duration medians per stage and per failure class.
+   plus token/duration medians per stage and per failure class. Use the mining
+   report's processed-token totals for cost: a run `end` row's `tokens` is the final
+   context size, not the tokens processed.
 3. Attribute each trend change to: spec-input quality, triage verdict accuracy,
-   verify/review misses, memory hygiene, or model behavior.
+   verify/review misses, memory hygiene, model behavior — and to a **session
+   signal**. Every signal the mining report lists must become a proposal or be
+   dismissed with a stated reason; a signal carried across two retros without either
+   is an unresolved escalation, not a finding.
 4. Apply the four levers (each as a proposal PR, one per topic):
    - failure postmortem → rule/skill amendments (as in immediate mode)
    - trend attribution → flow changes (route harder classes to needs-triage,
      change gate order, revise review lenses)
    - review-problem taxonomy → top-N problem types get dedicated checks
    - memory/token hygiene → prune state files, promote high-frequency
-     knowledge to the norms layer, shrink run context
+     knowledge to the norms layer, shrink run context; a repeated failing tool
+     command or a missing skill file is a tooling fix, not a prompt hint
 5. Report the metrics in the PR bodies and in SUMMARY.md.
 
 ## Done when
