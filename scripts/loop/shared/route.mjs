@@ -99,6 +99,25 @@ export function humanClaimOf({ eventName, action, event = {} }, status) {
 }
 
 /**
+ * A new commit on a loop PR re-opens its review (D26). `pr-review` leaves the task in
+ * `rejected` (request-changes) or `waiting-merge` (approved, awaiting a human), and
+ * both were terminal for the event: every later `synchronize` logged "not claimable",
+ * so a revised PR could never get a second look. That is the loop's only path back
+ * after a review, so it is not a nicety.
+ *
+ * Narrow on purpose — `pull_request.synchronize` only (opened is already claimable),
+ * and only those two states. `waiting-human` PR tasks keep D29's guard: they are in
+ * the inbox because a human has to decide, and a push must not silently claim them.
+ *
+ * @returns {number|null} the PR number whose task may be claimed for review.
+ */
+export function reviewReopenOf({ eventName, action, event = {} }, status) {
+  if (eventName !== 'pull_request' || action !== 'synchronize') return null;
+  if (!['rejected', 'waiting-merge'].includes(status)) return null;
+  return event.pull_request?.number ?? null;
+}
+
+/**
  * Idempotency key: skip an event whose key has already been consumed.
  * Prefer immutable identifiers (PR head sha / comment id), falling back to the
  * issue's updated_at revision.

@@ -35,7 +35,9 @@ import {
   nowIso, outcomeAllowed, allowedOutcomes, describeActions, LOOP_BRANCH_RE,
   missingPrContractSections,
 } from './shared/state.mjs';
-import { route, eventKey, stageForIssue, humanClaimOf, CLAIM_LABEL } from './shared/route.mjs';
+import {
+  route, eventKey, stageForIssue, humanClaimOf, reviewReopenOf, CLAIM_LABEL,
+} from './shared/route.mjs';
 import { buildPrompt, runPi, parseEvents, summarize, classify } from './shared/agent.mjs';
 import { runDoubleReview } from './shared/review.mjs';
 
@@ -303,6 +305,24 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
         by: claimedBy,
         detail: `applied ${CLAIM_LABEL} by hand: inbox (waiting-human) → claimable`,
       }];
+      task.updatedAt = nowIso();
+      await saveTask(S, task);
+    }
+    // A push on a loop PR re-opens the review (D26): both `rejected` and
+    // `waiting-merge` were terminal for `synchronize`, so a revised PR could never be
+    // reviewed again — the loop had no path back after its own review. Narrow: only
+    // those two states, only on a PR event.
+    const reopened = reviewReopenOf(ctx, task.status);
+    if (reopened) {
+      log(`review reopen: task #${task.id} ${task.status} → ready `
+        + `(synchronize on ${task.kind} #${reopened})`);
+      task.timeline = [...(task.timeline ?? []), {
+        at: nowIso(),
+        event: 'reopened-for-review',
+        by: ctx.event.sender?.login ?? 'github',
+        detail: 'new commit on the loop PR: review may run again',
+      }];
+      task.status = 'ready';
       task.updatedAt = nowIso();
       await saveTask(S, task);
     }
