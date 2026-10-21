@@ -298,7 +298,52 @@ GitHub event ─▶ loop.yml (concurrency group `loop` = platform-level single w
   `pnpm loop end` themselves.
 - **Sessions:** only the aggregate lands in the state layer (run `end` row:
   `tokens`/`durationMs`/`model`/`outcome`); full transcripts go to the
-  artifact store (90 days).
+  `loop-sessions-<run_id>` artifact store (90 days) and are mined by
+  `sessions.mjs` — see "Using the session transcripts".
+
+### Using the session transcripts (`sessions.mjs`)
+
+Until #77 the artifacts were write-only: `retro-scheduled` aggregated the run `end`
+rows, which carry tokens/duration/outcome but never the facts that explain a run. The
+transcripts were saved and then never read.
+
+`scripts/loop/sessions.mjs` closes that loop. It lists the unexpired
+`loop-sessions-<run_id>` artifacts through `gh` (the credential the job already holds —
+no new scope), reads every `.jsonl` in them, joins each session to its run `end` row by
+the `runId` in the prompt, and writes an evidence report:
+
+```bash
+node scripts/loop/sessions.mjs --limit 50 --out state/reports/sessions.md
+node scripts/loop/sessions.mjs --dir /tmp/sessions --json /tmp/sessions.json
+```
+
+`--dir` reads an already-downloaded tree (newest files first; `--limit` applies there
+too), so the miner also works offline and in the one-off audit that started this.
+Artifact listing is paginated, so a `--limit` above 100 is honoured instead of being
+silently truncated at one page. Every skipped artifact — download failure, or a zip
+above `LOOP_SESSION_ZIP_MAX_MB` (default 256) — is counted: the report states
+`read N/M artifacts (K skipped)` and the retro prompt repeats it, because a partial
+corpus must never read as "no signals". What the report contains:
+
+| Signal | Why it is there |
+| --- | --- |
+| processed tokens vs recorded `tokens` | the `end` row keeps the **last** assistant call's `totalTokens` (final context size), not the tokens processed; the report sums every call and shows the multiplier, so a cost attribution is not silently 20× wrong |
+| engine faults | assistant turns with `stopReason=error\|aborted` plus `errorMessage` (`terminated`, `Stream ended without finish_reason`) — invisible in the end row of a run that still exited `completed` |
+| tool-failure taxonomy | failed `toolResult`s classified as `missing-skill`, `edit-mismatch`, `gh-field`, `gh-flag`, `git`, `path-missing`, `command-failed` |
+| retry loops | the same (tool, command) failing more than once in one session |
+| missing skills | reads of `skills/<stage>/SKILL.md` for a stage that has no skill — the opening ritual names it on every such run |
+| per-stage cost/outcome | the same table the retro used to build by hand, with outcomes joined from the end rows |
+| credential redaction | tool errors echo env lines; before any text reaches the report or the prompt, `ghp_*` / `github_pat_*` / `AKIA*` / `sk-*` / private-key blocks and any `NAME=value` whose name contains `KEY`, `TOKEN`, `SECRET` or `PASSWORD` (also `*_ID`/`*_ACCOUNT` for R2/AWS/GH/DEEPSEEK) are replaced with `[redacted]` |
+
+The miner has no judgment: its final section lists the signals that still need an
+attribution. `entry.mjs` runs it before a `retro-scheduled` agent starts and puts the
+report path in the prompt (`LOOP_SESSION_ARTIFACTS`, default 50, bounds the download);
+the step is fail-open — a missing artifact store is logged and stated in the prompt, so
+"no report" is never read as "no signals". `skills/retro/SKILL.md` scheduled mode makes
+reading the report step 0.
+
+This is evidence, not enforcement: nothing in the miner writes to GitHub, and the
+proposals it feeds are still retro's (a human merges them).
 
 ### Isolated double review (`pr-review`)
 

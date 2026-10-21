@@ -39,6 +39,7 @@ import {
   route, eventKey, stageForIssue, humanClaimOf, reviewReopenOf, CLAIM_LABEL,
 } from './shared/route.mjs';
 import { buildPrompt, runPi, parseEvents, summarize, classify } from './shared/agent.mjs';
+import { mineSessions } from './sessions.mjs';
 import { runDoubleReview } from './shared/review.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -349,6 +350,36 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
     `trigger: ${ctx.eventName}.${ctx.action || '(none)'} — ${decision.reason}`,
     decision.loopTask ? `linked issue: #${decision.loopTask}` : null,
   ].filter(Boolean);
+
+  // The weekly retro exists to make the loop better from its own history, but the run
+  // `end` rows it used to read carry only tokens/duration/outcome — never the facts
+  // that explain a run. Mine the uploaded `loop-sessions-*` artifacts before the agent
+  // starts (#77) and hand it the report. Fail-open: an artifact store that is empty or
+  // unreachable must not turn the improvement stage red, but it must also never be
+  // read as "no signals", so the failure is stated in the prompt, not just the log.
+  if (stage === 'retro-scheduled') {
+    try {
+      const mined = await mineSessions({
+        repo,
+        out: path.join(S.reportsDir, `${rid}.sessions.md`),
+        jsonOut: path.join(S.reportsDir, `${rid}.sessions.json`),
+        runsDir: S.runsDir,
+        limit: Number(process.env.LOOP_SESSION_ARTIFACTS ?? 50),
+      });
+      const c = mined.aggregate.corpus;
+      const art = c.artifacts;
+      lead.push(`session mining report: \`${mined.outPath}\` — ${c.sessions} sessions, `
+        + `${c.engineFaults} engine faults, ${c.toolErrors} failed tool calls`
+        + (art ? `; artifacts read ${art.read}/${art.attempted}`
+          + (art.skipped ? ` (${art.skipped} skipped — a partial corpus, not "no signals")` : '') : '')
+        + '. It is the evidence base for scheduled-mode step 0; read it before the metrics.');
+    } catch (e) {
+      warn(`session mining skipped: ${e.message}`);
+      lead.push('session mining report: UNAVAILABLE this run (see the log warning). Do not '
+        + 'read its absence as "no signals"; say in the report that the transcripts were '
+        + 'not consumed.');
+    }
+  }
   const promptOptions = { task, stage, runId: rid, writeLevel, mode: decision.mode, repo, lead };
 
   const sessionDir = process.env.LOOP_SESSION_DIR ?? path.join(os.tmpdir(), 'loop-pi', rid);
