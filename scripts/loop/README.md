@@ -920,12 +920,21 @@ the first `auto` run is a verification step rather than a milestone.
       comment, then apply the claim label — were no-ops, and the only remaining
       entry was `workflow_dispatch`, which hits the same claim check.
       `humanClaimOf` (`shared/route.mjs`) now recognises exactly that event —
-      `issues.labeled`, the claim label, applied by an OWNER/MEMBER/COLLABORATOR,
-      out of `waiting-human` — and `doRun` moves the task to `ready` (timeline
+      `issues.labeled`, the claim label, out of `waiting-human`, applied by
+      anything that is not a bot — and `doRun` moves the task to `ready` (timeline
       `claimed`, labels refreshed from the event) before claiming it. Narrow on
       purpose: D29's repair path, `start --task` and PR `synchronize` still cannot
       convert an inbox item, so the cognitive guard is unchanged and only an
       explicit human act opens it.
+      **The first version of the predicate failed in production** on the very next
+      run: it gated on `event.sender.author_association`, but `author_association`
+      is a field of the issue, not of the sender (`simple-user` has no such field),
+      so the check was `undefined` and the run still logged
+      `skip: task #77 not claimable (status=waiting-human)`. Permissions need no
+      local test anyway — editing labels requires triage/write access, so the
+      event's mere existence is the maintainer's act; the predicate now excludes
+      only bots. Lesson recorded because the shape is easy to repeat: verify a
+      payload field against a real event payload, not against a hand-written one.
 
 ## Environment facts
 
