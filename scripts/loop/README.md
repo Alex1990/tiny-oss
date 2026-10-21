@@ -757,24 +757,31 @@ the first `auto` run is a verification step rather than a milestone.
       Summary, so the Actions log showed a route line and then nothing — a skip
       was indistinguishable from a silent failure. Every path (skip, inbox
       no-op, inbox-only, duplicate event, no-op route) now logs its reason.
-- [ ] D26 (A1, open) A `pull_request.synchronize` on a PR task is skipped whenever
-      its state is not claimable, so a PR that gains a commit is never re-analysed
-      or re-reviewed. Two faces, both observed on real PRs:
-      - `waiting-merge`: a loop PR that receives a new commit is skipped instead of
-        re-reviewed, so `review_requested`-style re-entry has no path back.
+- [x] D26 (A1) A `pull_request.synchronize` on a PR task was skipped whenever its
+      state was not claimable, so a PR that gained a commit was never re-analysed or
+      re-reviewed. Closed for the review path by `reviewReopenOf` (`shared/route.mjs`):
+      `synchronize` moves a `rejected` (request-changes) or `waiting-merge` (approved,
+      awaiting a human) task back to `ready` before the claim check, so a revised loop
+      PR is reviewed again — the only path back after the loop's own review, and the
+      one that let #82 receive fixes without a new task. The second face stays a
+      deliberate gap, recorded as D38.
       - `waiting-human`: **observed live on #39** — the first push opened the PR and
         triaged it to `waiting-human`; the second push logged
         `skip: task #39 not claimable (status=waiting-human)`. Every later push is
         skipped too, so the task's analysis is frozen at whatever the first
-        revision looked like.
+        revision looked like. Unchanged on purpose: that state is the inbox, and a
+        push must not silently claim it (D29).
 
-      This is a real consequence of running at the report boundary: `flows` §2a
-      describes request-changes → `processing` → re-review on `synchronize`, but a
-      report-boundary `pr-review` cannot comment or relabel, so it can only land in
-      `waiting-human` — where nothing re-enters. Left open deliberately: A1's week
-      should quantify how often this bites (it will have hit every loop PR by then),
-      and the fix is a design choice — re-open the task on `synchronize` for PR
-      kinds, or add a bounded re-triage — not a one-line guard.
+      The original note stands as the reason this took a design decision rather than a
+      guard exception: `flows` §2a describes request-changes → `processing` →
+      re-review on `synchronize`, but a report-boundary `pr-review` could only land in
+      a terminal state, where nothing re-entered.
+- [ ] D38 (follow-up to D26) A PR task triaged into `waiting-human` still has no
+      re-entry: `synchronize` refuses it (D29), `issues.labeled` does not fire for
+      PRs, and `workflow_dispatch` hits the same claim check. Closing it needs a
+      deliberate human act *on the PR* — a label the router treats as a claim, or a
+      command comment — which is a design choice about the claim vocabulary, not
+      another exception in `claimability`.
 - [x] D27 (A1) `run.mjs`'s subcommands did not catch errors thrown by the shared
       library, so `pnpm loop start --task <missing>` printed a full Node stack
       trace instead of a one-line reason — the library throws (correct for the
