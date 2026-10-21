@@ -317,9 +317,13 @@ node scripts/loop/sessions.mjs --limit 50 --out state/reports/sessions.md
 node scripts/loop/sessions.mjs --dir /tmp/sessions --json /tmp/sessions.json
 ```
 
-`--dir` reads an already-downloaded tree, so the miner also works offline and in the
-one-off audit that started this (`--limit` = artifacts, newest first; `--since` filters
-by artifact age). What the report contains:
+`--dir` reads an already-downloaded tree (newest files first; `--limit` applies there
+too), so the miner also works offline and in the one-off audit that started this.
+Artifact listing is paginated, so a `--limit` above 100 is honoured instead of being
+silently truncated at one page. Every skipped artifact — download failure, or a zip
+above `LOOP_SESSION_ZIP_MAX_MB` (default 256) — is counted: the report states
+`read N/M artifacts (K skipped)` and the retro prompt repeats it, because a partial
+corpus must never read as "no signals". What the report contains:
 
 | Signal | Why it is there |
 | --- | --- |
@@ -329,6 +333,7 @@ by artifact age). What the report contains:
 | retry loops | the same (tool, command) failing more than once in one session |
 | missing skills | reads of `skills/<stage>/SKILL.md` for a stage that has no skill — the opening ritual names it on every such run |
 | per-stage cost/outcome | the same table the retro used to build by hand, with outcomes joined from the end rows |
+| credential redaction | tool errors echo env lines; before any text reaches the report or the prompt, `ghp_*` / `github_pat_*` / `AKIA*` / `sk-*` / private-key blocks and `*_KEY|TOKEN|SECRET=PASSWORD` assignments are replaced with `[redacted]` |
 
 The miner has no judgment: its final section lists the signals that still need an
 attribution. `entry.mjs` runs it before a `retro-scheduled` agent starts and puts the

@@ -35,10 +35,10 @@ export const FAILURE_RULES = [
     // (feature, pr-review) every run burns a turn discovering that. High-signal
     // prompt/norms gap, so it gets its own class instead of hiding in `path-missing`.
     // Narrow on purpose: the ENOENT must be *about* the skill file (pi's read tool
-    // emits `ENOENT ... access '<path>.md'`), not a command that happened to print a
-    // path next to an unrelated failure.
+    // emits `ENOENT ... access '<path>.md'`) and it must start a line, so a run that
+    // merely reads a report or a test fixture quoting this text is not a failure.
     test: (t, toolName) => !['bash', 'sh', 'shell'].includes(String(toolName ?? '').toLowerCase())
-      && /access '[^']*SKILL\.md'/i.test(t),
+      && /(^|\n)ENOENT: no such file or directory, access '[^']*SKILL\.md'/i.test(t),
   },
   {
     category: 'edit-mismatch',
@@ -83,10 +83,38 @@ function promptText(rows) {
   return messageText(first?.message);
 }
 
-const oneLine = (s, max = 160) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+const oneLineRaw = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+
+/**
+ * Secrets must not reach the report: the retro agent reads it and may quote it into a
+ * proposal PR body, and tool errors routinely echo an env line. Patterns are the
+ * credential shapes this repo's loop can actually hold, plus `NAME=value` pairs for
+ * the names it uses.
+ */
+export const SECRET_PATTERNS = [
+  /gh[pousr]_[A-Za-z0-9]{20,}/g,
+  /github_pat_[A-Za-z0-9_]{20,}/g,
+  /\bAKIA[0-9A-Z]{16}\b/g,
+  /\bsk-[A-Za-z0-9_-]{16,}\b/g,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+  /\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)\s*[=:]\s*\S+/g,
+  /\b(?:R2|AWS|GH|GITHUB|DEEPSEEK)_[A-Z0-9_]*(?:ID|ACCOUNT)\s*[=:]\s*\S+/g,
+];
+
+/** Strip credential shapes before any text is stored or rendered. */
+export function redact(s) {
+  return SECRET_PATTERNS.reduce((acc, re) => acc.replace(re, '[redacted]'), String(s ?? ''));
+}
+
+const oneLine = (s, max = 160) => redact(oneLineRaw(s)).slice(0, max);
 
 /** Classify one failed tool result; `null` means "not a failure". */
 export function classifyFailure(toolName, text, isError = false) {
+  // A successful tool result is never a failure, however much failure *text* it
+  // contains: an agent reading this very spec, a report, or a log quotes `ENOENT …
+  // SKILL.md`, `fatal:`, `Command exited with code 1` and would otherwise fabricate
+  // signals. Only the tool's own `isError` flag can open the content heuristics.
+  if (isError !== true) return null;
   const t = String(text ?? '');
   for (const rule of FAILURE_RULES) {
     if (rule.test(t, toolName, isError)) return rule.category;
@@ -244,7 +272,7 @@ const sum = (xs, pick = (x) => x) => xs.reduce((n, x) => n + (pick(x) ?? 0), 0);
  * attributes outcomes and exposes how far the recorded `tokens` value is from the
  * tokens the session actually processed.
  */
-export function aggregate(sessions, { runRows = [], generatedAt = new Date().toISOString() } = {}) {
+export function aggregate(sessions, { runRows = [], generatedAt = new Date().toISOString(), artifacts = null } = {}) {
   const ends = new Map();
   for (const row of runRows) {
     if (row?.event === 'end' && row.runId) ends.set(row.runId, row);
@@ -328,6 +356,10 @@ export function aggregate(sessions, { runRows = [], generatedAt = new Date().toI
     generatedAt,
     corpus: {
       sessions: sessions.length,
+      // What the collector attempted vs read. `null` when the input was a local tree,
+      // where there is nothing to skip. A partial corpus must never be presented as a
+      // complete one: "0 signals" and "12 of 50 artifacts unread" are different facts.
+      artifacts,
       window: {
         from: sessionStarts[0] ?? null,
         to: sessionStarts[sessionStarts.length - 1] ?? null,
@@ -368,6 +400,16 @@ export function renderMarkdown(agg) {
   L.push(`Generated ${agg.generatedAt}. Source: \`loop-sessions-<run_id>\` artifacts `
     + `(${fmt(c.sessions)} sessions).`);
   L.push('');
+  if (c.artifacts) {
+    const { attempted, read, skipped } = c.artifacts;
+    L.push(`Corpus completeness: read ${fmt(read)}/${fmt(attempted)} artifacts`
+      + (skipped
+        ? `, **${fmt(skipped)} skipped** (download failure or an oversize zip) — every`
+          + ' signal below covers only the artifacts that were read'
+        : ' (none skipped)')
+      + '.');
+    L.push('');
+  }
   L.push(`Window: ${c.window.from ?? '?'} → ${c.window.to ?? '?'}. `
     + `${c.joinedSessions}/${c.sessions} sessions joined to a run \`end\` row by runId.`);
   L.push('');
@@ -377,7 +419,12 @@ export function renderMarkdown(agg) {
     + `${fmt(c.billedTokens)} processed vs ${fmt(c.recordedTokens)} recorded `
     + `(${(c.billedTokens / Math.max(1, c.recordedTokens)).toFixed(1)}×) across the joined sessions.`);
   L.push('');
-  L.push('| stage | sessions | processed tokens | median | final context | recorded | tool calls | tool-error rate | engine faults | est. cost |');
+  L.push('Units differ by construction: `processed tokens` sums every assistant call of each');
+  L.push('session; `final context` is that session\'s last non-zero usage; `recorded` is the');
+  L.push('run row\'s own `tokens` (for `pr-review`, the sum over both reviewers), so it covers');
+  L.push('sessions this artifact may not contain.');
+  L.push('');
+  L.push('| stage | sessions | processed tokens | median | final context | recorded (run row) | tool calls | tool-error rate | engine faults | est. cost |');
   L.push('| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (const s of agg.stages) {
     L.push(`| ${cell(s.stage)} | ${s.sessions} | ${fmt(s.billedTokens)} | ${fmt(s.billedMedian)} | `

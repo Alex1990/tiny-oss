@@ -115,19 +115,79 @@ describe('session miner', () => {
   })
 
   it('classifies the specific CLI/tool failure modes the loop actually hits', () => {
-    expect(classifyFailure('bash', 'Unknown JSON field: "authorAssociation"')).toBe('gh-field')
-    expect(classifyFailure('bash', 'specify only one of --comments or --json')).toBe('gh-flag')
-    expect(classifyFailure('bash', 'fatal: not a git repository')).toBe('git')
-    expect(classifyFailure('edit', 'Could not find edits[2] in state/ANOMALIES.md')).toBe(
+    expect(classifyFailure('bash', 'Unknown JSON field: "authorAssociation"', true)).toBe(
+      'gh-field',
+    )
+    expect(classifyFailure('bash', 'specify only one of --comments or --json', true)).toBe(
+      'gh-flag',
+    )
+    expect(classifyFailure('bash', 'fatal: not a git repository', true)).toBe('git')
+    expect(classifyFailure('edit', 'Could not find edits[2] in state/ANOMALIES.md', true)).toBe(
       'edit-mismatch',
     )
     expect(
       classifyFailure(
         'read',
         "ENOENT: no such file or directory, access '/repo/skills/x/SKILL.md'",
+        true,
       ),
     ).toBe('missing-skill')
-    expect(classifyFailure('read', 'src/index.ts ...')).toBe(null)
+    expect(classifyFailure('read', 'src/index.ts ...', false)).toBe(null)
+  })
+
+  it('never classifies a successful tool result, however much failure text it quotes', () => {
+    // #82 review: these are exactly the strings a *read* of a log/test/fixture prints,
+    // and the heuristic used to count them as failures (phantom missing-skill rows).
+    const quoted = "ENOENT: no such file or directory, access '/repo/skills/feature/SKILL.md'"
+    expect(classifyFailure('read', quoted, false)).toBe(null)
+    expect(classifyFailure('bash', 'fatal: not a git repository', false)).toBe(null)
+    expect(classifyFailure('bash', 'Command exited with code 1', false)).toBe(null)
+
+    const text = [
+      line({ type: 'session', version: 3 }),
+      line(user),
+      line(
+        assistant(
+          'q1',
+          [{ id: 'cq', name: 'read', arguments: { path: 'test/sessions.spec.ts' } }],
+          10,
+        ),
+      ),
+      line(toolResult('cq', 'read', quoted, false)),
+    ].join('\n')
+    expect(parseSessionText(text).failures).toEqual([])
+  })
+
+  it('redacts credentials before a detail reaches the report', () => {
+    const text = [
+      line({ type: 'session', version: 3 }),
+      line(user),
+      line(assistant('r1', [{ id: 'cr', name: 'bash', arguments: { command: 'cat .env' } }], 10)),
+      line(
+        toolResult(
+          'cr',
+          'bash',
+          'GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123\n' +
+            'DEEPSEEK_API_KEY=sk-abcdefghijklmnopqrstuvwx\n\nCommand exited with code 1',
+        ),
+      ),
+    ].join('\n')
+    const failure = parseSessionText(text).failures[0]
+    expect(failure.category).toBe('command-failed')
+    expect(failure.detail).not.toContain('ghp_')
+    expect(failure.detail).not.toContain('sk-abcdefghij')
+    expect(failure.detail).toContain('[redacted]')
+  })
+
+  it('states how much of the corpus was actually read', () => {
+    const agg = aggregate([parsed], {
+      artifacts: { attempted: 5, read: 4, skipped: 1 },
+      generatedAt: '2026-10-01T00:00:03.000Z',
+    })
+    const md = renderMarkdown(agg)
+    expect(md).toContain('read 4/5 artifacts')
+    expect(md).toContain('1 skipped')
+    expect(md).toContain('only the artifacts that were read')
   })
 
   it('surfaces a retry loop once and attributes missing skills by path', () => {

@@ -83,12 +83,32 @@ export function selectArtifacts(artifacts, { limit = 50, since = null } = {}) {
     .slice(0, limit);
 }
 
+/**
+ * Every artifact of the repository, page by page. A single `per_page=100` request used
+ * to silently truncate the corpus (the repo already holds >100), which made `--limit`
+ * and `--since` lie about what was available.
+ */
+function listArtifacts(repo) {
+  const perPage = 100;
+  const all = [];
+  for (let page = 1; page <= 100; page += 1) {
+    const body = JSON.parse(gh(['api', `repos/${repo}/actions/artifacts?per_page=${perPage}&page=${page}`]));
+    const batch = body.artifacts ?? [];
+    all.push(...batch);
+    if (batch.length < perPage || all.length >= Number(body.total_count ?? 0)) break;
+  }
+  return all;
+}
+
 /** Download one artifact zip and return its `.jsonl` members as `{name, text}`. */
 function readArtifactZip(repo, artifact, tmpDir) {
   const zip = path.join(tmpDir, `${artifact.id}.zip`);
-  // `gh api` has no `--output`: the zip comes back on stdout as a Buffer.
+  // `gh api` has no `--output`: the zip comes back on stdout as a Buffer. The cap is
+  // generous but finite; an artifact above it is skipped *and counted* by the caller,
+  // so a partial corpus is never presented as complete.
+  const maxMb = Number(process.env.LOOP_SESSION_ZIP_MAX_MB ?? 256);
   const r = spawnSync('gh', ['api', `repos/${repo}/actions/artifacts/${artifact.id}/zip`], {
-    maxBuffer: 64 * 1024 * 1024,
+    maxBuffer: (Number.isFinite(maxMb) && maxMb > 0 ? maxMb : 256) * 1024 * 1024,
   });
   if (r.error || r.status !== 0) {
     throw new Error(`artifact ${artifact.name} download failed: `
@@ -104,24 +124,44 @@ function readArtifactZip(repo, artifact, tmpDir) {
 }
 
 async function collectFromGitHub({ repo, limit, since }) {
-  const raw = gh(['api', `repos/${repo}/actions/artifacts?per_page=100`]);
-  const artifacts = selectArtifacts(JSON.parse(raw).artifacts ?? [], { limit, since });
+  const artifacts = selectArtifacts(listArtifacts(repo), { limit, since });
   if (!artifacts.length) throw new Error(`no unexpired loop-sessions-* artifacts in ${repo}`);
   log(`downloading ${artifacts.length} artifacts from ${repo}`);
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'loop-sessions-'));
+  let skipped = 0;
   try {
     const files = [];
     for (const a of artifacts) {
       try {
         files.push(...readArtifactZip(repo, a, tmpDir));
       } catch (e) {
-        warn(`artifact ${a.name} skipped: ${e.message}`);
+        skipped += 1;
+        warn(`artifact ${a.name} skipped (${skipped} of ${artifacts.length}): ${e.message}`);
       }
     }
-    return files;
+    return {
+      files,
+      artifacts: { attempted: artifacts.length, read: artifacts.length - skipped, skipped },
+    };
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
   }
+}
+
+/** Local tree input: newest first, honouring `--limit` exactly as the GitHub path does. */
+async function collectFromDir(dir, limit) {
+  const paths = await findSessions(dir);
+  const withMtime = await Promise.all(paths.map(async (p) => ({
+    p, mtime: (await fs.stat(p)).mtimeMs,
+  })));
+  const chosen = withMtime
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, limit)
+    .map((x) => x.p);
+  return {
+    files: await Promise.all(chosen.map(async (p) => ({ name: p, text: await fs.readFile(p, 'utf8') }))),
+    artifacts: null,
+  };
 }
 
 /**
@@ -141,14 +181,13 @@ export async function mineSessions({
   if (!Number.isInteger(limit) || limit < 1) {
     throw new Error(`--limit must be a positive integer (got: ${limit})`);
   }
-  let files;
-  if (dir) {
-    const paths = await findSessions(dir);
-    files = await Promise.all(paths.map(async (p) => ({ name: p, text: await fs.readFile(p, 'utf8') })));
-  } else {
-    if (!repo) throw new Error('no --repo and LOOP_REPO is unset');
-    files = await collectFromGitHub({ repo, limit, since });
-  }
+  const collected = dir
+    ? await collectFromDir(dir, limit)
+    : await (async () => {
+      if (!repo) throw new Error('no --repo and LOOP_REPO is unset');
+      return collectFromGitHub({ repo, limit, since });
+    })();
+  const { files, artifacts } = collected;
   if (!files.length) throw new Error('no session files found');
 
   const sessions = files
@@ -163,7 +202,7 @@ export async function mineSessions({
     warn(`run rows unavailable at ${runsDir}; the recorded-token comparison will be empty`);
   }
 
-  const agg = aggregate(sessions, { runRows, generatedAt });
+  const agg = aggregate(sessions, { runRows, generatedAt, artifacts });
   const markdown = renderMarkdown(agg);
 
   if (out) {
@@ -179,13 +218,25 @@ export async function mineSessions({
 
 /* ------------------------------------------------------------------- CLI */
 
+const USAGE = 'usage: node scripts/loop/sessions.mjs [--limit N] [--since ISO] '
+  + '[--out FILE.md] [--json FILE.json] [--dir SESSION_TREE] [--repo OWNER/NAME]\n'
+  + '  --limit N   newest N inputs (artifacts from GitHub, or files under --dir; default 50)\n'
+  + '  --since ISO only artifacts created at/after this time (GitHub input only)\n';
+
+/** `--flag` with no value parses as `true`; reject it instead of letting it become NaN. */
+function requireValue(args, flags) {
+  for (const flag of flags) {
+    if (args[flag] === true) throw new Error(`--${flag} needs a value\n${USAGE}`);
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
-    process.stdout.write('usage: node scripts/loop/sessions.mjs [--limit N] [--since ISO] '
-      + '[--out FILE.md] [--json FILE.json] [--dir SESSION_TREE] [--repo OWNER/NAME]\n');
+    process.stdout.write(USAGE);
     return;
   }
+  requireValue(args, ['limit', 'since', 'out', 'json', 'dir', 'repo']);
   const { dir = null, limit = '50', since = null, out = null, json: jsonOut = null } = args;
   const repo = args.repo ?? process.env.LOOP_REPO ?? null;
   const { markdown, aggregate: agg } = await mineSessions({
@@ -193,9 +244,13 @@ async function main() {
   });
   if (!out) process.stdout.write(markdown);
   const c = agg.corpus;
+  const corpus = c.artifacts
+    ? `, artifacts ${c.artifacts.read}/${c.artifacts.attempted} read`
+      + (c.artifacts.skipped ? ` (${c.artifacts.skipped} skipped)` : '')
+    : '';
   log(`${c.sessions} sessions, ${c.toolCalls} tool calls, ${c.toolErrors} failures, `
     + `${c.engineFaults} engine faults, ${c.billedTokens.toLocaleString('en-US')} tokens processed`
-    + `${out ? ` → ${out}` : ''}`);
+    + `${corpus}${out ? ` → ${out}` : ''}`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

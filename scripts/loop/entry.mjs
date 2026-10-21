@@ -347,9 +347,12 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
         limit: Number(process.env.LOOP_SESSION_ARTIFACTS ?? 50),
       });
       const c = mined.aggregate.corpus;
+      const art = c.artifacts;
       lead.push(`session mining report: \`${mined.outPath}\` — ${c.sessions} sessions, `
-        + `${c.engineFaults} engine faults, ${c.toolErrors} failed tool calls. It is the `
-        + 'evidence base for scheduled-mode step 1; read it before the metrics.');
+        + `${c.engineFaults} engine faults, ${c.toolErrors} failed tool calls`
+        + (art ? `; artifacts read ${art.read}/${art.attempted}`
+          + (art.skipped ? ` (${art.skipped} skipped — a partial corpus, not "no signals")` : '') : '')
+        + '. It is the evidence base for scheduled-mode step 0; read it before the metrics.');
     } catch (e) {
       warn(`session mining skipped: ${e.message}`);
       lead.push('session mining report: UNAVAILABLE this run (see the log warning). Do not '
