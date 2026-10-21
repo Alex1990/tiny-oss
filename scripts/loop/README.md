@@ -333,7 +333,7 @@ corpus must never read as "no signals". What the report contains:
 | retry loops | the same (tool, command) failing more than once in one session |
 | missing skills | reads of `skills/<stage>/SKILL.md` for a stage that has no skill — the opening ritual names it on every such run |
 | per-stage cost/outcome | the same table the retro used to build by hand, with outcomes joined from the end rows |
-| credential redaction | tool errors echo env lines; before any text reaches the report or the prompt, `ghp_*` / `github_pat_*` / `AKIA*` / `sk-*` / private-key blocks and `*_KEY|TOKEN|SECRET=PASSWORD` assignments are replaced with `[redacted]` |
+| credential redaction | tool errors echo env lines; before any text reaches the report or the prompt, `ghp_*` / `github_pat_*` / `AKIA*` / `sk-*` / private-key blocks and any `NAME=value` whose name contains `KEY`, `TOKEN`, `SECRET` or `PASSWORD` (also `*_ID`/`*_ACCOUNT` for R2/AWS/GH/DEEPSEEK) are replaced with `[redacted]` |
 
 The miner has no judgment: its final section lists the signals that still need an
 attribution. `entry.mjs` runs it before a `retro-scheduled` agent starts and puts the

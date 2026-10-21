@@ -225,4 +225,33 @@ describe('session miner', () => {
     expect(md).toContain('2.0×')
     expect(md).toContain('Stream ended without finish_reason')
   })
+
+  it('joins one run row once, however many sessions share its runId', () => {
+    // `pr-review` runs two reviewers in one run and stores one end row summing both
+    // (#82 review): joining per session doubled `recorded` and counted the outcome twice.
+    const a = parseSessionText(sessionText, 'artifact/reviewer-a.jsonl')
+    const b = { ...a, name: 'artifact/reviewer-b.jsonl' }
+    const agg = aggregate([a, b], {
+      runRows: [{ runId: a.runId, event: 'end', outcome: 'rejected', tokens: 300 }],
+      generatedAt: '2026-10-01T00:00:03.000Z',
+    })
+    expect(agg.corpus.recordedTokens).toBe(300)
+    expect(agg.corpus.joinedSessions).toBe(1)
+    expect(agg.stages[0]).toMatchObject({
+      sessions: 2,
+      recordedTokens: 300,
+      outcomes: { rejected: 1 },
+    })
+  })
+
+  it('says when files were parsed but kept as no loop session, and when no run row joined', () => {
+    const agg = aggregate([parsed], {
+      inputFiles: 3,
+      generatedAt: '2026-10-01T00:00:03.000Z',
+    })
+    const md = renderMarkdown(agg)
+    expect(md).toContain('3 file(s) parsed → 1 loop session(s)')
+    expect(md).toContain('2 not a loop session')
+    expect(md).toContain('Recorded-token comparison unavailable')
+  })
 })

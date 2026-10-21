@@ -202,7 +202,9 @@ export async function mineSessions({
     warn(`run rows unavailable at ${runsDir}; the recorded-token comparison will be empty`);
   }
 
-  const agg = aggregate(sessions, { runRows, generatedAt, artifacts });
+  const agg = aggregate(sessions, {
+    runRows, generatedAt, artifacts, inputFiles: files.length,
+  });
   const markdown = renderMarkdown(agg);
 
   if (out) {

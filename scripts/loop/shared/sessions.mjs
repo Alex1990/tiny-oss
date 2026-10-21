@@ -62,7 +62,7 @@ export const FAILURE_RULES = [
     test: (t, toolName) => /(^|\n)ENOENT: no such file or directory, (access|open|stat) '/.test(t)
       && !['bash', 'sh', 'shell'].includes(String(toolName ?? '').toLowerCase()),
   },
-  { category: 'command-failed', test: (t) => /Command exited with code [1-9]\d*/i.test(t) },
+  { category: 'command-failed', test: (t) => /(^|\n)Command exited with code [1-9]\d*/i.test(t) },
   { category: 'tool-error', test: (_t, _tool, isError) => isError === true },
 ];
 
@@ -266,13 +266,19 @@ const median = (xs) => {
 
 const sum = (xs, pick = (x) => x) => xs.reduce((n, x) => n + (pick(x) ?? 0), 0);
 
+/** `end` rows for the distinct run ids that are present, in first-seen order. */
+const uniqueEnds = (runIds, ends) => [...new Set(runIds.filter((id) => id && ends.has(id)))]
+  .map((id) => ends.get(id));
+
 /**
  * Aggregate parsed sessions. `runRows` are the state layer's run `end` rows
  * (`{runId, stage, outcome, tokens, durationMs}`); joining them by run id both
  * attributes outcomes and exposes how far the recorded `tokens` value is from the
  * tokens the session actually processed.
  */
-export function aggregate(sessions, { runRows = [], generatedAt = new Date().toISOString(), artifacts = null } = {}) {
+export function aggregate(sessions, {
+  runRows = [], generatedAt = new Date().toISOString(), artifacts = null, inputFiles = null,
+} = {}) {
   const ends = new Map();
   for (const row of runRows) {
     if (row?.event === 'end' && row.runId) ends.set(row.runId, row);
@@ -287,7 +293,11 @@ export function aggregate(sessions, { runRows = [], generatedAt = new Date().toI
   }
 
   const stages = [...byStage.values()].map(({ stage, sessions: ss }) => {
-    const joined = ss.map((s) => ends.get(s.runId)).filter(Boolean);
+    // One `end` row per *run*, not per session. `pr-review` runs two reviewers that share
+    // a runId and whose row is already the sum over both (shared/review.mjs); joining per
+    // session counted that row twice — doubling `recorded` and reporting `rejected×2` for
+    // one review (found in #82's second review).
+    const joined = uniqueEnds(ss.map((s) => s.runId), ends);
     return {
       stage,
       sessions: ss.length,
@@ -347,15 +357,16 @@ export function aggregate(sessions, { runRows = [], generatedAt = new Date().toI
 
   const sessionStarts = sessions.map((s) => s.startedAt).filter(Boolean).sort();
   const totalBilled = sum(sessions, (s) => s.billedTokens);
-  const totalRecorded = sum(
-    sessions.map((s) => ends.get(s.runId)).filter(Boolean),
-    (r) => r.tokens,
-  );
+  const joinedEnds = uniqueEnds(sessions.map((s) => s.runId), ends);
+  const totalRecorded = sum(joinedEnds, (r) => r.tokens);
 
   return {
     generatedAt,
     corpus: {
       sessions: sessions.length,
+      // Files kept as loop sessions vs files parsed at all. Without it, a prompt-format
+      // drift would shrink the corpus silently (same class as a skipped artifact).
+      inputFiles,
       // What the collector attempted vs read. `null` when the input was a local tree,
       // where there is nothing to skip. A partial corpus must never be presented as a
       // complete one: "0 signals" and "12 of 50 artifacts unread" are different facts.
@@ -371,7 +382,7 @@ export function aggregate(sessions, { runRows = [], generatedAt = new Date().toI
       contextTokens: sum(sessions, (s) => s.contextTokens),
       recordedTokens: totalRecorded,
       costUsd: Number(sum(sessions, (s) => s.costUsd).toFixed(4)),
-      joinedSessions: sessions.filter((s) => ends.has(s.runId)).length,
+      joinedSessions: joinedEnds.length,
     },
     stages,
     engineFaults,
@@ -411,13 +422,21 @@ export function renderMarkdown(agg) {
     L.push('');
   }
   L.push(`Window: ${c.window.from ?? '?'} → ${c.window.to ?? '?'}. `
-    + `${c.joinedSessions}/${c.sessions} sessions joined to a run \`end\` row by runId.`);
+    + `${c.joinedSessions} run \`end\` row(s) joined by runId`
+    + (c.inputFiles ? `; ${fmt(c.inputFiles)} file(s) parsed → ${fmt(c.sessions)} loop session(s)`
+      + (c.inputFiles > c.sessions ? ` (${fmt(c.inputFiles - c.sessions)} not a loop session — a prompt-format drift shrinks the corpus silently)` : '')
+      : '')
+    + '.');
   L.push('');
   L.push('## Cost — processed tokens vs the recorded `tokens` value');
   L.push('');
-  L.push(`The run \`end\` row stores the **final context size**, not the tokens processed: `
-    + `${fmt(c.billedTokens)} processed vs ${fmt(c.recordedTokens)} recorded `
-    + `(${(c.billedTokens / Math.max(1, c.recordedTokens)).toFixed(1)}×) across the joined sessions.`);
+  if (!c.joinedSessions) {
+    L.push('Recorded-token comparison unavailable: no session joined a run `end` row.');
+  } else {
+    L.push(`The run \`end\` row stores the **final context size**, not the tokens processed: `
+      + `${fmt(c.billedTokens)} processed vs ${fmt(c.recordedTokens)} recorded `
+      + `(${(c.billedTokens / Math.max(1, c.recordedTokens)).toFixed(1)}×) across the joined sessions.`);
+  }
   L.push('');
   L.push('Units differ by construction: `processed tokens` sums every assistant call of each');
   L.push('session; `final context` is that session\'s last non-zero usage; `recorded` is the');
