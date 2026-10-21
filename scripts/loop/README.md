@@ -330,7 +330,7 @@ commit/push instructions are suppressed for it (the reviewer's job is the verdic
 | Event | Action |
 | --- | --- |
 | `issues` opened/reopened | run(triage) |
-| `issues` labeled `ready-for-agent` | run(bugfix/feature) — the claim signal; fires only for labels applied by **people**, since GitHub suppresses runs for `GITHUB_TOKEN`-raised events |
+| `issues` labeled `ready-for-agent` | run(bugfix/feature) — the claim signal; fires only for labels applied by **people**, since GitHub suppresses runs for `GITHUB_TOKEN`-raised events. By hand it is also the inbox's exit: a `waiting-human` task is moved to `ready` first (D37) |
 | `issues` edited, `issue_comment` created | inbox first (never silently dropped), then run per task status |
 | loop PR (`loop/<n>-*` **and** `loop-task: #<n>`) opened/synchronize | run(pr-review) |
 | same-repo PR, other branches | run(triage) — PRs are a triage surface |
@@ -803,7 +803,9 @@ the first `auto` run is a verification step rather than a milestone.
       the state actually requires (inbox → a human decides first; waiting-merge →
       awaiting merge). Verified across five scenarios: inbox and awaiting-merge
       are refused without touching the decision, `closed` + a genuinely reopened
-      GitHub item is still let through, and `closed` + a closed item is not.
+      GitHub item is still let through, and `closed` + a closed item is not. The
+      inbox's one legitimate exit — a maintainer applying `ready-for-agent` by
+      hand — was still missing and is D37.
 - [x] D30 (A1) Gate events recorded the acceptance row but never moved the task:
       `handleMetrics` appended to `metrics/acceptance.jsonl` and returned, so a
       loop PR that merged was counted for the auto-acceptance rate while its task
@@ -907,6 +909,23 @@ the first `auto` run is a verification step rather than a milestone.
       absence a `request-changes` gate before line-level review. The four headings
       live in `PR_CONTRACT_SECTIONS` (`shared/state.mjs`) and the maker prompt imports
       them, so the check and the template cannot drift.
+- [x] D37 (#77) The inbox had no exit door. `ops.md` promises that a maintainer
+      applying `ready-for-agent` by hand *is* the claim, and `route()` does return
+      `run(bugfix/feature)` for `issues.labeled` — but `claimability` refuses
+      `waiting-human` (D29), so the run logged
+      `skip: task #77 not claimable (status=waiting-human)` and the task stayed in
+      the inbox forever. Meanwhile `issue_comment.created` on a `waiting-human`
+      task only lands in `eventInbox` (`handleInbox` re-runs for `new`/`ready`/
+      `waiting-info` only), so *both* things a human can do to an inbox task —
+      comment, then apply the claim label — were no-ops, and the only remaining
+      entry was `workflow_dispatch`, which hits the same claim check.
+      `humanClaimOf` (`shared/route.mjs`) now recognises exactly that event —
+      `issues.labeled`, the claim label, applied by an OWNER/MEMBER/COLLABORATOR,
+      out of `waiting-human` — and `doRun` moves the task to `ready` (timeline
+      `claimed`, labels refreshed from the event) before claiming it. Narrow on
+      purpose: D29's repair path, `start --task` and PR `synchronize` still cannot
+      convert an inbox item, so the cognitive guard is unchanged and only an
+      explicit human act opens it.
 
 ## Environment facts
 
