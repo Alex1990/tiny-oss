@@ -35,7 +35,7 @@ import {
   nowIso, outcomeAllowed, allowedOutcomes, describeActions, LOOP_BRANCH_RE,
   missingPrContractSections,
 } from './shared/state.mjs';
-import { route, eventKey, stageForIssue } from './shared/route.mjs';
+import { route, eventKey, stageForIssue, humanClaimOf, CLAIM_LABEL } from './shared/route.mjs';
 import { buildPrompt, runPi, parseEvents, summarize, classify } from './shared/agent.mjs';
 import { runDoubleReview } from './shared/review.mjs';
 
@@ -285,6 +285,27 @@ async function doRun({ decision, ctx, repo, writeLevel }) {
   if (!isSystem) {
     const kind = decision.kind ?? 'issue';
     task = await prepareTask({ taskId: decision.taskId, kind, repo });
+    // A maintainer's claim label is the inbox's exit (D37): `waiting-human` is
+    // deliberately not claimable (D29), so without this the `issues.labeled` run
+    // that route() just produced would be skipped and the task would sit in the
+    // inbox forever. Only this explicit human act converts it; every routine path
+    // still cannot.
+    const claimedBy = humanClaimOf(ctx, task.status);
+    if (claimedBy) {
+      log(`human claim: task #${task.id} waiting-human → ready `
+        + `(${CLAIM_LABEL} applied by ${claimedBy} — the label is the inbox decision)`);
+      task.status = 'ready';
+      task.labels = (ctx.event.issue?.labels ?? [])
+        .map((l) => (typeof l === 'string' ? l : l?.name));
+      task.timeline = [...(task.timeline ?? []), {
+        at: nowIso(),
+        event: 'claimed',
+        by: claimedBy,
+        detail: `applied ${CLAIM_LABEL} by hand: inbox (waiting-human) → claimable`,
+      }];
+      task.updatedAt = nowIso();
+      await saveTask(S, task);
+    }
     const claim = claimability(task);
     if (!claim.ok) {
       // A skip must be logged: during an event storm, a human must see at a glance in the

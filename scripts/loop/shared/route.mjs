@@ -66,6 +66,32 @@ export const stageForIssue = (labels = []) =>
   labelNames(labels).some((n) => BUG_LABELS.includes(n)) ? 'bugfix' : 'feature';
 
 /**
+ * The human inbox's exit door: a maintainer applying the claim label by hand *is*
+ * the decision the inbox exists to await (ops.md "The claim signal").
+ *
+ * The event still routes to `run(stage)`, but `waiting-human` is deliberately not
+ * claimable (D29), so without this the run is skipped and the task stays in the
+ * inbox forever — the only door a human has was locked from the inside. Observed
+ * on #77: the owner applying `ready-for-agent` produced
+ * `skip: task #77 not claimable (status=waiting-human)`.
+ *
+ * Deliberately narrow — an `issues.labeled` event, the claim label, applied by a
+ * repository owner/member/collaborator, for that very issue, out of
+ * `waiting-human` only. The routine paths (D9's reopen repair, `start --task`,
+ * PR synchronize) keep D29's guarantee that an inbox item never becomes
+ * claimable without a human saying so.
+ *
+ * @returns {string|null} the maintainer's login when this event is the claim.
+ */
+export function humanClaimOf({ eventName, action, event = {} }, status) {
+  if (eventName !== 'issues' || action !== 'labeled') return null;
+  if (event.label?.name !== CLAIM_LABEL) return null;
+  if (status !== 'waiting-human') return null;
+  if (!OWNER_ROLES.includes(event.sender?.author_association ?? '')) return null;
+  return event.sender?.login ?? 'a maintainer';
+}
+
+/**
  * Idempotency key: skip an event whose key has already been consumed.
  * Prefer immutable identifiers (PR head sha / comment id), falling back to the
  * issue's updated_at revision.
