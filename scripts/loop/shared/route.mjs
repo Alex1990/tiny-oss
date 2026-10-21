@@ -87,8 +87,15 @@ export function humanClaimOf({ eventName, action, event = {} }, status) {
   if (eventName !== 'issues' || action !== 'labeled') return null;
   if (event.label?.name !== CLAIM_LABEL) return null;
   if (status !== 'waiting-human') return null;
-  if (!OWNER_ROLES.includes(event.sender?.author_association ?? '')) return null;
-  return event.sender?.login ?? 'a maintainer';
+  // Who may apply it is settled by GitHub, not by this predicate: editing labels
+  // needs triage/write access, so the existence of an `issues.labeled` run is
+  // already a maintainer's act (a `GITHUB_TOKEN`-raised one never runs at all).
+  // Only bots are excluded. Do **not** test `sender.author_association`: that
+  // field lives on the issue, not on the sender, so the first version of this
+  // predicate could never be true and #77 kept skipping (D37).
+  const sender = event.sender ?? {};
+  if (sender.type === 'Bot' || String(sender.login ?? '').endsWith('[bot]')) return null;
+  return sender.login ?? null;
 }
 
 /**
