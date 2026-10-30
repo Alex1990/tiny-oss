@@ -121,6 +121,11 @@ describe('getAwsSignature matches the official AWS SDK v2 (oracle)', () => {
     [
       { name: 'plain GET', verb: 'GET', key: 'exampleobject' },
       { name: 'object key with non-ASCII characters', verb: 'GET', key: '中文 文件.txt' },
+      {
+        name: "object key with ! ' ( ) characters (RFC 3986)",
+        verb: 'GET',
+        key: "photo (1) 你好's!.txt",
+      },
       { name: 'object key with subdirectories', verb: 'GET', key: 'dir/sub dir/file.txt' },
       {
         name: 'uploadPart with partNumber and uploadId',
@@ -212,11 +217,27 @@ describe('awsSignUrl matches the official AWS SDK v2 (oracle)', () => {
       urlOptions: { expires: 60 },
     },
     {
+      name: "object key with ! ' ( ) characters (RFC 3986)",
+      key: "photo (1) 你好's!.txt",
+      urlOptions: { expires: 60 },
+    },
+    {
       name: 'response-* headers',
       key: 'exampleobject',
       urlOptions: {
         expires: 60,
         response: { 'content-disposition': 'attachment', 'content-type': 'text/plain' },
+      },
+    },
+    {
+      name: "response-* value with ! ' ( ) characters (RFC 3986)",
+      key: 'exampleobject',
+      urlOptions: {
+        expires: 60,
+        response: {
+          'content-disposition': `attachment; filename="o'brien (1).txt"`,
+          'content-type': 'text/plain',
+        },
       },
     },
     { name: 'custom expires', key: 'exampleobject', urlOptions: { expires: 300 } },
@@ -272,6 +293,11 @@ describe('awsUriEscape and canonicalQueryString', () => {
   it('escapes * but keeps unreserved characters', () => {
     expect(awsUriEscape('a b*c')).toBe('a%20b%2Ac')
     expect(awsUriEscape('a/b')).toBe('a%2Fb')
+  })
+
+  it('escapes the RFC 3986 characters encodeURIComponent leaves literal', () => {
+    expect(awsUriEscape("a!b'c(d)e*f")).toBe('a%21b%27c%28d%29e%2Af')
+    expect(awsUriEscape('AZaz09-._~')).toBe('AZaz09-._~')
   })
 
   it('sorts and escapes query params', () => {
