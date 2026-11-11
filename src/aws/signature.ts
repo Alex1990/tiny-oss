@@ -24,9 +24,16 @@ import { encodeUtf8 } from '../utils/utf8'
  * signable headers, and every query parameter participates.
  */
 
-/** URI-escape per the AWS SDK: encodeURIComponent plus '*' -> %2A. */
+/**
+ * URI-escape per SigV4 / the AWS SDK (aws-sdk v2 AWS.util.uriEscape):
+ * encodeURIComponent plus the RFC 3986 characters it leaves literal:
+ * `!`, `'`, `(`, `)` and `*` become %21 %27 %28 %29 %2A.
+ */
 export function awsUriEscape(str: string): string {
-  return encodeURIComponent(str).replace(/\*/g, '%2A')
+  return encodeURIComponent(str).replace(
+    /[!'()*]/g,
+    (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase(),
+  )
 }
 
 /** URI-escape a path segment by segment so '/' is preserved (aws-sdk uriEscapePath). */

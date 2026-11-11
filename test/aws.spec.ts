@@ -137,6 +137,18 @@ describe('aws request', () => {
     )
   })
 
+  it("encodes ! ' ( ) in the object key in the sent URL, matching the signature", async () => {
+    const calls: any[] = []
+    setTransport(async (url: string, opts: any) => {
+      calls.push({ url, opts })
+      return { data: '', headers: {}, status: 200, statusText: 'OK' }
+    })
+    await request(OPTIONS, { verb: 'PUT', objectName: "photo (1) 你好's!.jpg" })
+    expect(calls[0].url).toBe(
+      'https://examplebucket.s3.us-west-2.amazonaws.com/photo%20%281%29%20%E4%BD%A0%E5%A5%BD%27s%21.jpg',
+    )
+  })
+
   it('path-style addressing puts the bucket in the URL path', async () => {
     const calls: any[] = []
     setTransport(async (url: string, opts: any) => {
