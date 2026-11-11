@@ -1,6 +1,39 @@
 # Changelog
 
 
+## v1.2.1
+
+[compare changes](https://github.com/Alex1990/tiny-oss/compare/v1.2.0...v1.2.1)
+
+### 🩹 Fixes
+
+- **aws:** Percent-encode ! ' ( ) in SigV4 URI escaping ([#86](https://github.com/Alex1990/tiny-oss/pull/86))
+
+### 📖 Documentation
+
+- Replace broken bundlephobia badge with bundlejs ([85c83a0](https://github.com/Alex1990/tiny-oss/commit/85c83a0))
+
+### 🏡 Chore
+
+- **norms:** Rename docs/agents to docs/norms ([7909054](https://github.com/Alex1990/tiny-oss/commit/7909054))
+- **loop:** Run two isolated reviewers for pr-review ([#71](https://github.com/Alex1990/tiny-oss/pull/71))
+- **norms:** Reword review skill for host-driven double review ([#71](https://github.com/Alex1990/tiny-oss/pull/71))
+- **norms:** Require the four-section loop PR contract ([#73](https://github.com/Alex1990/tiny-oss/pull/73))
+- **loop:** Enforce the PR contract at PR creation and in the maker prompt ([#73](https://github.com/Alex1990/tiny-oss/pull/73))
+- **norms:** Forbid weakening checks to reach green ([#75](https://github.com/Alex1990/tiny-oss/pull/75))
+- **deps-dev:** Bump hono from 4.13.5 to 4.13.11 ([dee9ec1](https://github.com/Alex1990/tiny-oss/commit/dee9ec1))
+- **loop:** Let a maintainer's claim label exit the waiting-human inbox ([#80](https://github.com/Alex1990/tiny-oss/pull/80))
+- **loop:** Drop the nonexistent sender.author_association claim test ([#81](https://github.com/Alex1990/tiny-oss/pull/81))
+- **loop:** Re-open a loop PR's review when a new commit arrives ([#83](https://github.com/Alex1990/tiny-oss/pull/83))
+- **loop:** Mine the uploaded agent sessions and feed them to retro ([#82](https://github.com/Alex1990/tiny-oss/pull/82))
+- **deps-dev:** Bump vite from 7.3.6 to 7.3.7 ([#84](https://github.com/Alex1990/tiny-oss/pull/84))
+- **deps-dev:** Bump playwright to 1.65.0 for Ubuntu 26.04 CI ([#89](https://github.com/Alex1990/tiny-oss/pull/89))
+- **deps-dev:** Bump @hono/node-server from 1.19.17 to 2.1.3 ([#90](https://github.com/Alex1990/tiny-oss/pull/90))
+
+### ❤️ Contributors
+
+- Alex Chao ([@Alex1990](https://github.com/Alex1990))
+
 ## v1.2.0
 
 [compare changes](https://github.com/Alex1990/tiny-oss/compare/v1.1.0...v1.2.0)
