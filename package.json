@@ -38,6 +38,7 @@
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
   },
+  "packageManager": "pnpm@12.18.0",
   "files": [
     "dist",
     "UPGRADING.md"
@@ -47,7 +48,7 @@
     "lint": "oxlint src test",
     "fmt": "oxfmt src test",
     "fmt:check": "oxfmt --check src test",
-    "build": "tsup && npm run build:types:default && npm run build:types:cos && npm run build:types:obs && npm run build:types:tos && npm run build:types:aws && npm run build:types:azure && npm run build:types:protocol",
+    "build": "tsup && pnpm build:types:default && pnpm build:types:cos && pnpm build:types:obs && pnpm build:types:tos && pnpm build:types:aws && pnpm build:types:azure && pnpm build:types:protocol",
     "build:types:default": "dts-bundle-generator src/index.ts -o dist/tiny-oss.es.d.ts --project tsconfig.json --sort",
     "build:types:cos": "dts-bundle-generator src/cos/index.ts -o dist/tiny-oss.cos.es.d.ts --project tsconfig.json --sort",
     "build:types:obs": "dts-bundle-generator src/obs/index.ts -o dist/tiny-oss.obs.es.d.ts --project tsconfig.json --sort",
